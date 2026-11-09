@@ -42,12 +42,27 @@ def _format_seconds(seconds):
     return f"{seconds // 3600:02}:{(seconds % 3600) // 60:02}:{seconds % 60:02}"
 
 
-def _todays_activities(employee):
-    return list(
+def _working_activities(employee):
+    """
+    Punches for the attendance day the employee is on right now.
+
+    A night shift that started yesterday still has that attendance date after
+    midnight. If that day has an open punch, it is the working day — otherwise
+    the button would offer Check-in while the punch API still says they are in.
+    A finished yesterday is not shown once today has started.
+    """
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    rows = list(
         AttendanceActivity.objects.filter(
-            employee_id=employee, attendance_date=date.today()
-        ).order_by("in_datetime")
+            employee_id=employee,
+            attendance_date__gte=yesterday,
+            attendance_date__lte=today,
+        ).order_by("clock_in_date", "clock_in", "id")
     )
+    open_row = next((row for row in reversed(rows) if not row.clock_out), None)
+    day = open_row.attendance_date if open_row is not None else today
+    return [row for row in rows if row.attendance_date == day]
 
 
 def _moment(day, moment):
@@ -86,24 +101,33 @@ def _break_seconds(activities):
     return int(total)
 
 
+def _hhmm(value):
+    return value.strftime("%H:%M") if value else None
+
+
 def _punch_block(employee, activities):
     open_activity = next((a for a in activities if not a.clock_out), None)
     first = activities[0] if activities else None
     last_out = next((a for a in reversed(activities) if a.clock_out), None)
+    started = (
+        _moment(open_activity.clock_in_date, open_activity.clock_in)
+        if open_activity
+        else None
+    )
     return {
         "is_clocked_in": open_activity is not None,
-        "clock_in_time": first.clock_in.strftime("%H:%M") if first else None,
-        "clock_out_time": (
-            last_out.clock_out.strftime("%H:%M")
-            if last_out and open_activity is None
-            else None
-        ),
-        "last_activity_at": (
-            _moment(open_activity.clock_in_date, open_activity.clock_in).isoformat()
-            if open_activity
-            and _moment(open_activity.clock_in_date, open_activity.clock_in)
-            else None
-        ),
+        "clock_in_time": _hhmm(first.clock_in) if first else None,
+        "clock_out_time": _hhmm(last_out.clock_out) if last_out else None,
+        "last_activity_at": started.isoformat() if started else None,
+        "activities": [
+            {
+                "id": activity.id,
+                "clock_in": _hhmm(activity.clock_in),
+                "clock_out": _hhmm(activity.clock_out),
+                "open": activity.clock_out is None,
+            }
+            for activity in activities
+        ],
     }
 
 
@@ -276,15 +300,15 @@ def _new_hires(employee, limit=5, within_days=30):
 
 def _geofence_block(employee):
     """Config only. The client sends coordinates and the punch endpoint rules."""
-    from geofencing.models import GeoFencing
+    from geofencing.models import enforceable_fence, fence_label
 
-    company = employee.get_company()
-    # the company's own fence, else the global one
-    fence = GeoFencing.for_company(company) if company else None
-    if fence is None or not fence.start:
+    # Assigned work site when its fence is on, otherwise the company/global fence.
+    fence = enforceable_fence(employee)
+    if fence is None:
         return {"enabled": False}
     return {
         "enabled": True,
+        "name": fence_label(fence),
         "latitude": fence.latitude,
         "longitude": fence.longitude,
         "radius_in_meters": fence.radius_in_meters,
@@ -433,13 +457,17 @@ class MobileHomeAPIView(APIView):
 
     def get(self, request):
         employee = request.user.employee_get
-        activities = _todays_activities(employee)
-
+        activities = _working_activities(employee)
+        working_day = (
+            activities[0].attendance_date if activities else date.today()
+        )
         attendance_today = Attendance.objects.filter(
-            employee_id=employee, attendance_date=date.today()
+            employee_id=employee, attendance_date=working_day
         ).first()
-        worked_seconds = employee.get_forecasted_at_work().get(
-            "forecasted_at_work_seconds", 0
+        worked_seconds = (
+            int(attendance_today.get_at_work_from_activities())
+            if attendance_today is not None
+            else 0
         )
 
         return Response(
@@ -501,3 +529,60 @@ class MobileHomeAPIView(APIView):
             },
             status=200,
         )
+
+
+class MobileWorkSiteAPIView(APIView):
+    """
+    Where the signed-in employee is expected to work.
+
+    ``MobileHomeAPIView`` only carries a ``geofence`` block while a fence is
+    being *enforced*, which loses the site name the moment an admin switches the
+    fence off. This always answers "which site am I assigned to", and whether a
+    punch is checked against it.
+
+    ``kind`` is ``site`` (assigned work site), ``company`` (the company / global
+    fence, when no site is assigned) or ``null`` (nothing configured).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from geofencing.models import GeoFencing, fence_label
+
+        employee = request.user.employee_get
+        try:
+            work_info = employee.employee_work_info
+        except Exception:
+            work_info = None
+
+        site = getattr(work_info, "work_site", None)
+        if site is not None and site.is_active:
+            return Response(
+                {
+                    "kind": "site",
+                    "name": fence_label(site),
+                    "company": getattr(site.company_id, "company", None),
+                    "latitude": site.latitude,
+                    "longitude": site.longitude,
+                    "radius_in_meters": site.radius_in_meters,
+                    "geofence_enabled": bool(site.start),
+                    "location": getattr(work_info, "location", None) or None,
+                }
+            )
+
+        company = employee.get_company()
+        fence = GeoFencing.for_company(company) if company is not None else None
+        if fence is not None:
+            return Response(
+                {
+                    "kind": "company",
+                    "name": fence_label(fence),
+                    "company": getattr(company, "company", None),
+                    "latitude": fence.latitude,
+                    "longitude": fence.longitude,
+                    "radius_in_meters": fence.radius_in_meters,
+                    "geofence_enabled": bool(fence.start),
+                    "location": getattr(work_info, "location", None) or None,
+                }
+            )
+        return Response({"kind": None})

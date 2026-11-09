@@ -1,0 +1,86 @@
+{% load widget_tweaks i18n %}
+<div class="work-sites">
+    {% if form %}
+        <form
+            hx-post="{% if editing %}{% url 'work-site-update' editing.pk %}{% else %}{% url 'work-sites' %}{% endif %}"
+            hx-target="#work-sites"
+            hx-swap="innerHTML"
+            hx-on::after-request="$('#reloadMessagesButton').click();"
+        >
+            {% csrf_token %}
+            <div class="grid grid-cols-12 gap-3">
+                {% for field in form.visible_fields %}
+                    <div class="col-span-12 md:col-span-6">
+                        <label class="oh-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {% if field.field.widget.input_type == 'checkbox' %}
+                            <div class="oh-switch w-[30px]">{{ field|add_class:'oh-switch__checkbox' }}</div>
+                        {% else %}
+                            {{ field|add_class:"form-control oh-input" }}
+                        {% endif %}
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="d-flex flex-row-reverse gap-2">
+                {% if editing %}
+                    <a
+                        class="oh-btn oh-btn--light mt-2"
+                        hx-get="{% url 'work-sites' %}"
+                        hx-target="#work-sites"
+                        hx-swap="innerHTML"
+                    >{% trans "Cancel" %}</a>
+                {% endif %}
+                <button type="submit" class="oh-btn oh-btn--secondary mt-2">{% trans "Save" %}</button>
+            </div>
+        </form>
+    {% else %}
+        <p class="text-xs text-gray-500">{% trans "Select a single company in the header to add work sites." %}</p>
+    {% endif %}
+
+    {% if sites %}
+        <table class="oh-table oh-table--sortable mt-3 w-full text-sm">
+            <thead>
+                <tr>
+                    <th>{% trans "Work Site" %}</th>
+                    <th>{% trans "Latitude" %}</th>
+                    <th>{% trans "Longitude" %}</th>
+                    <th>{% trans "Radius" %}</th>
+                    <th>{% trans "Geofence" %}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for site in sites %}
+                    <tr>
+                        <td>{{ site.name }}</td>
+                        <td>{{ site.latitude }}</td>
+                        <td>{{ site.longitude }}</td>
+                        <td>{{ site.radius_in_meters }} m</td>
+                        <td>{% if site.start %}{% trans "On" %}{% else %}{% trans "Off" %}{% endif %}</td>
+                        <td class="text-right">
+                            <a
+                                hx-get="{% url 'work-site-update' site.pk %}"
+                                hx-target="#work-sites"
+                                hx-swap="innerHTML"
+                            >{% trans "Edit" %}</a>
+                            <form
+                                method="post"
+                                action="{% url 'work-site-delete' site.pk %}"
+                                hx-post="{% url 'work-site-delete' site.pk %}"
+                                hx-target="#work-sites"
+                                hx-swap="innerHTML"
+                                class="inline"
+                                onsubmit="return confirm('{% trans "Remove this work site?" %}');"
+                            >
+                                {% csrf_token %}
+                                <button type="submit" class="oh-btn oh-btn--light-bkg oh-btn--small">{% trans "Remove" %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% elif form %}
+        <p class="text-xs text-gray-500 mt-2">{% trans "No work sites yet." %}</p>
+    {% endif %}
+</div>

@@ -57,6 +57,35 @@ from horilla_widgets.widgets.select_widgets import HorillaMultiSelectWidget
 logger = logging.getLogger(__name__)
 
 
+def _limit_work_site_choices(form):
+    """Offer only active sites of the employee's company."""
+    field = form.fields.get("work_site")
+    if field is None:
+        return
+    from geofencing.models import WorkSite
+
+    company_id = getattr(form.instance, "company_id_id", None)
+    if form.data:
+        posted = form.data.get("company_id")
+        if posted:
+            company_id = posted
+    sites = WorkSite.objects.filter(is_active=True)
+    if company_id:
+        sites = sites.filter(company_id=company_id)
+    field.queryset = sites
+    field.required = False
+
+
+def _work_site_belongs_to_company(form, cleaned_data):
+    site = cleaned_data.get("work_site")
+    company = cleaned_data.get("company_id")
+    if site and company and site.company_id_id != company.id:
+        form.add_error(
+            "work_site",
+            _("Work site must belong to the employee's company."),
+        )
+
+
 class ModelForm(forms.ModelForm):
     """
     Override of Django ModelForm to add initial styling and defaults.
@@ -377,6 +406,7 @@ class EmployeeWorkInformationForm(ModelForm):
             self.fields[field].widget.attrs["placeholder"] = self.fields[field].label
             if disable:
                 self.fields[field].disabled = True
+        _limit_work_site_choices(self)
         # Pay is kept on the contract. A disabled field ignores what is posted and
         # keeps the stored value, so saving this form never changes the old copy.
         for name in ("basic_salary", "salary_hour"):
@@ -429,6 +459,7 @@ class EmployeeWorkInformationForm(ModelForm):
         cleaned_data = super().clean()
         if "employee_id" in self.errors:
             del self.errors["employee_id"]
+        _work_site_belongs_to_company(self, cleaned_data)
         return cleaned_data
 
     def as_p(self, *args, **kwargs):
@@ -493,6 +524,12 @@ class EmployeeWorkInformationUpdateForm(ModelForm):
                 "hx-get": "/employee/get-job-roles-hx",
             }
         )
+        _limit_work_site_choices(self)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        _work_site_belongs_to_company(self, cleaned_data)
+        return cleaned_data
 
     def as_p(self, *args, **kwargs):
         context = {"form": self}

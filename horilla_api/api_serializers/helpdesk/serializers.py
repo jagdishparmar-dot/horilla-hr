@@ -86,6 +86,10 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = "__all__"
+        # ``ticket_id`` above is the writable form of this relation. Left
+        # writable, the auto-generated ``ticket`` field was also required, so
+        # every POST failed with {"ticket": ["This field is required."]}.
+        extra_kwargs = {"ticket": {"read_only": True}}
 
     def get_employee_id(self, obj):
         if obj.employee_id:

@@ -195,17 +195,16 @@ def geofence_denial_web(request, company):
     """
     from geopy.distance import geodesic
 
-    from geofencing.models import GeoFencing
+    from geofencing.models import enforceable_fence
 
-    if company is None:
+    user = getattr(request, "user", None)
+    employee = getattr(user, "employee_get", None) if user is not None else None
+    if company is None and employee is not None:
         # "All companies" is selected, so the clock-in/out view has no company of its own. The
         # punch still belongs to the employee, whose own company decides which fence applies.
-        employee = getattr(request.user, "employee_get", None)
-        company = employee.get_company() if employee else None
-    if company is None:
-        return None
-    fence = GeoFencing.for_company(company)
-    if fence is None or not fence.start:
+        company = employee.get_company()
+    fence = enforceable_fence(employee, company)
+    if fence is None:
         return None
 
     try:
@@ -219,6 +218,56 @@ def geofence_denial_web(request, company):
     distance = geodesic((fence.latitude, fence.longitude), (latitude, longitude)).meters
     if distance > fence.radius_in_meters:
         return _("Check-In Restricted: You are outside the permitted work location.")
+    return None
+
+
+def punch_coordinates(request):
+    """Latitude and longitude submitted with a punch, or (None, None)."""
+
+    def _read(source, name):
+        if source is None:
+            return None
+        if source is request:
+            value = getattr(request, name, None)
+        else:
+            value = source.get(name)
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    sources = []
+    data = getattr(request, "data", None)
+    if hasattr(data, "get"):
+        sources.append(data)
+    query = getattr(request, "GET", None)
+    if query is not None:
+        sources.append(query)
+    sources.append(request)
+
+    def pick(name):
+        for source in sources:
+            value = _read(source, name)
+            if value is not None:
+                return value
+        return None
+
+    return pick("latitude"), pick("longitude")
+
+
+def assigned_work_site(employee):
+    """The employee's active work site at punch time, if one is assigned."""
+    if employee is None:
+        return None
+    try:
+        work_info = employee.employee_work_info
+    except Exception:
+        return None
+    site = getattr(work_info, "work_site", None)
+    if site is not None and getattr(site, "is_active", True):
+        return site
     return None
 
 
@@ -621,6 +670,8 @@ class Request:
         date,
         time,
         datetime,
+        latitude=None,
+        longitude=None,
     ) -> None:
         self.user = user
         self.path = "/"
@@ -628,6 +679,8 @@ class Request:
         self.date = date
         self.time = time
         self.datetime = datetime
+        self.latitude = latitude
+        self.longitude = longitude
         self.META = META()
         # Empty dict stands in for Django's QueryDict here -- only .get() is
         # ever called on request.GET (e.g. horilla_crumbs' breadcrumbs context

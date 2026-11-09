@@ -196,6 +196,32 @@ def employee_by_department(request):
     return JsonResponse({"items": _distribution("department")})
 
 
+@login_required
+@manager_can_enter(EMPLOYEE_PERM)
+def employee_by_work_site(request):
+    """Active employees by assigned work site."""
+    key_id = "employee_work_info__work_site_id"
+    key_label = "employee_work_info__work_site__name"
+    rows = (
+        _active_employees()
+        .values(key_id, key_label)
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+    return JsonResponse(
+        {
+            "items": [
+                {
+                    "id": row[key_id],
+                    "label": row[key_label] or _("Unassigned"),
+                    "count": row["count"],
+                }
+                for row in rows
+            ]
+        }
+    )
+
+
 REPORTING_MANAGER_LIMIT = 10
 
 

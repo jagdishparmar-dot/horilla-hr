@@ -3296,7 +3296,7 @@ class PassWordResetForm(forms.Form):
     def get_branding(employee):
         """
         The name and logo the mail is sent under: the headquarters company
-        when WHITE_LABELLING is on, Horilla when it is off or there is no HQ
+        when WHITE_LABELLING is on, ClockMe when it is off or there is no HQ
         company.
 
         Always the HQ company -- never the employee's own company or
@@ -3304,7 +3304,7 @@ class PassWordResetForm(forms.Form):
         a white-labelled client's mail always reads as coming from their
         own organisation regardless of who triggers it.
         """
-        name = "Horilla"
+        name = getattr(settings, "PRODUCT_NAME", "ClockMe")
         logo_path = finders.find("images/ui/horilla-sticker-round.png")
         if getattr(settings, "WHITE_LABELLING", False):
             company = Company.objects.filter(hq=True).last()

@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 from datetime import date, datetime, timedelta
 
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
@@ -24,8 +25,10 @@ from attendance.methods.utils import (
     activity_datetime,
     employee_exists,
     format_time,
+    assigned_work_site,
     geofence_denial_web,
     get_client_ip,
+    punch_coordinates,
     overtime_calculation,
     shift_schedule_today,
     strtime_seconds,
@@ -131,6 +134,9 @@ def clock_in_attendance_and_activity(
     start_time,
     end_time,
     in_datetime,
+    latitude=None,
+    longitude=None,
+    work_site=None,
 ):
     """
     This method is used to create attendance activity or attendance when an employee clocks-in
@@ -146,58 +152,67 @@ def clock_in_attendance_and_activity(
         end_time        : end time in shift schedule
     """
 
-    # attendance activity create
-    activity = AttendanceActivity.objects.filter(
-        employee_id=employee,
-        attendance_date=attendance_date,
-        clock_in_date=date_today,
-        shift_day=day,
-        clock_out=None,
-    ).first()
+    # Close every still-open punch before starting another. The old filter
+    # required the same clock-in date and shift day, so a later check-in left
+    # the previous punch open while the day row was marked out.
+    out_time = in_datetime.time().replace(microsecond=0) if isinstance(in_datetime, datetime) else in_datetime
+    with transaction.atomic():
+        for activity in AttendanceActivity.objects.filter(
+            employee_id=employee, clock_out__isnull=True
+        ):
+            activity.clock_out = out_time
+            activity.clock_out_date = date_today
+            activity.out_datetime = in_datetime
+            activity.save()
 
-    if activity and not activity.clock_out:
-        activity.clock_out = in_datetime
-        activity.clock_out_date = date_today
-        activity.save()
-
-    new_activity = AttendanceActivity.objects.create(
-        employee_id=employee,
-        attendance_date=attendance_date,
-        clock_in_date=date_today,
-        shift_day=day,
-        clock_in=in_datetime,
-        in_datetime=in_datetime,
-    )
-    # create attendance if not exist
-    attendance = Attendance.objects.filter(
-        employee_id=employee, attendance_date=attendance_date
-    )
-    if not attendance.exists():
-        attendance = Attendance()
-        attendance.employee_id = employee
-        attendance.shift_id = shift
-        attendance.work_type_id = attendance.employee_id.employee_work_info.work_type_id
-        attendance.attendance_date = attendance_date
-        attendance.attendance_day = day
-        attendance.attendance_clock_in = now
-        attendance.attendance_clock_in_date = date_today
-        attendance.minimum_hour = minimum_hour
-        attendance.save()
-        # check here late come or not
-
-        attendance = Attendance.find(attendance.id)
-        late_come(
-            attendance=attendance, start_time=start_time, end_time=end_time, shift=shift
+        new_activity = AttendanceActivity.objects.create(
+            employee_id=employee,
+            attendance_date=attendance_date,
+            clock_in_date=date_today,
+            shift_day=day,
+            clock_in=in_datetime,
+            in_datetime=in_datetime,
+            work_site=work_site,
+            clock_in_latitude=latitude,
+            clock_in_longitude=longitude,
         )
-    else:
-        attendance = attendance[0]
-        attendance.attendance_clock_out = None
-        attendance.attendance_clock_out_date = None
-        attendance.save()
-        # delete if the attendance marked the early out
-        early_out_instance = attendance.late_come_early_out.filter(type="early_out")
-        if early_out_instance.exists():
-            early_out_instance[0].delete()
+        # create attendance if not exist
+        attendance = Attendance.objects.filter(
+            employee_id=employee, attendance_date=attendance_date
+        )
+        if not attendance.exists():
+            attendance = Attendance()
+            attendance.employee_id = employee
+            attendance.shift_id = shift
+            attendance.work_type_id = (
+                attendance.employee_id.employee_work_info.work_type_id
+            )
+            attendance.attendance_date = attendance_date
+            attendance.attendance_day = day
+            attendance.attendance_clock_in = now
+            attendance.attendance_clock_in_date = date_today
+            attendance.minimum_hour = minimum_hour
+            attendance.save()
+            # check here late come or not
+
+            attendance = Attendance.find(attendance.id)
+            late_come(
+                attendance=attendance,
+                start_time=start_time,
+                end_time=end_time,
+                shift=shift,
+            )
+        else:
+            attendance = attendance[0]
+            attendance.attendance_clock_out = None
+            attendance.attendance_clock_out_date = None
+            attendance.save()
+            # delete if the attendance marked the early out
+            early_out_instance = attendance.late_come_early_out.filter(
+                type="early_out"
+            )
+            if early_out_instance.exists():
+                early_out_instance[0].delete()
     return attendance
 
 
@@ -307,6 +322,7 @@ def clock_in(request):
                     )
                     attendance_date = date_yesterday
                     day = day_yesterday
+            latitude, longitude = punch_coordinates(request)
             attendance = clock_in_attendance_and_activity(
                 employee=employee,
                 date_today=date_today,
@@ -318,6 +334,9 @@ def clock_in(request):
                 start_time=start_time_sec,
                 end_time=end_time_sec,
                 in_datetime=datetime_now,
+                latitude=latitude,
+                longitude=longitude,
+                work_site=assigned_work_site(employee),
             )
             # Refresh employee from DB so template re-evaluates is_clocked_in correctly
             employee.refresh_from_db()
@@ -341,7 +360,9 @@ def clock_in(request):
         return HorillaRedirect(request)
 
 
-def clock_out_attendance_and_activity(employee, date_today, now, out_datetime=None):
+def clock_out_attendance_and_activity(
+    employee, date_today, now, out_datetime=None, latitude=None, longitude=None
+):
     """
     Clock out the attendance and activity
     args:
@@ -359,29 +380,55 @@ def clock_out_attendance_and_activity(employee, date_today, now, out_datetime=No
         attendance_activity = attendance_activities.filter(
             clock_out__isnull=True
         ).last()
-        attendance_activity.clock_out = out_datetime
+        attendance_activity.clock_out = (
+            out_datetime.time().replace(microsecond=0)
+            if isinstance(out_datetime, datetime)
+            else out_datetime
+        )
         attendance_activity.clock_out_date = date_today
         attendance_activity.out_datetime = out_datetime
+        if latitude is not None:
+            attendance_activity.clock_out_latitude = latitude
+        if longitude is not None:
+            attendance_activity.clock_out_longitude = longitude
         attendance_activity.save()
 
-        attendance_activities = attendance_activities.filter(
-            attendance_date=attendance_activity.attendance_date
+        attendance_activities = AttendanceActivity.objects.filter(
+            employee_id=employee,
+            attendance_date=attendance_activity.attendance_date,
         )
-        # Here calculate the total durations between the attendance activities
+        # Sum only punches that have both ends. Another still-open row must
+        # not abort this check-out.
 
         duration = 0
         for activity in attendance_activities:
-            in_datetime, out_datetime = activity_datetime(activity)
-            difference = out_datetime - in_datetime
+            if not (
+                activity.clock_in
+                and activity.clock_in_date
+                and activity.clock_out
+                and activity.clock_out_date
+            ):
+                continue
+            in_datetime, out_dt = activity_datetime(activity)
+            difference = out_dt - in_datetime
             days_second = difference.days * 24 * 3600
             seconds = difference.seconds
             total_seconds = days_second + seconds
             duration = duration + total_seconds
         duration = format_time(duration)
-        # update clock out of attendance
-        attendance = Attendance.objects.filter(employee_id=employee).order_by(
-            "-attendance_date", "-id"
-        )[0]
+        # update clock out of the day this punch belongs to
+        attendance = (
+            Attendance.objects.filter(
+                employee_id=employee,
+                attendance_date=attendance_activity.attendance_date,
+            )
+            .order_by("-id")
+            .first()
+        )
+        if attendance is None:
+            attendance = Attendance.objects.filter(employee_id=employee).order_by(
+                "-attendance_date", "-id"
+            )[0]
         attendance.attendance_clock_out = now + ":00"
         attendance.attendance_clock_out_date = date_today
         attendance.attendance_worked_hour = duration
@@ -561,8 +608,14 @@ def clock_out(request):
         minimum_hour, start_time_sec, end_time_sec = shift_schedule_today(
             day=day, shift=shift
         )
+        latitude, longitude = punch_coordinates(request)
         attendance = clock_out_attendance_and_activity(
-            employee=employee, date_today=date_today, now=now, out_datetime=datetime_now
+            employee=employee,
+            date_today=date_today,
+            now=now,
+            out_datetime=datetime_now,
+            latitude=latitude,
+            longitude=longitude,
         )
         if attendance:
             early_out_instance = attendance.late_come_early_out.filter(type="early_out")

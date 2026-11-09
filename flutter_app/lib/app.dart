@@ -16,9 +16,7 @@ class HorillaApp extends ConsumerWidget {
     Widget home;
     switch (auth.status) {
       case AuthStatus.unknown:
-        home = const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        home = const Scaffold(body: Center(child: CircularProgressIndicator()));
       case AuthStatus.unauthenticated:
         home = const LoginScreen();
       case AuthStatus.authenticated:
@@ -26,7 +24,7 @@ class HorillaApp extends ConsumerWidget {
     }
 
     return MaterialApp(
-      title: 'Horilla Employee',
+      title: 'ClockMe',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: home,

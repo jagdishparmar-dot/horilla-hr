@@ -1,6 +1,7 @@
 from django.urls import path
 
 from ...api_views.employee import views as views
+from ...api_views.employee.directory import EmployeeDirectoryAPIView
 
 urlpatterns = [
     # path('employees/', views.EmployeeAPIView.as_view(), name='api-employees-list'),
@@ -20,6 +21,16 @@ urlpatterns = [
         views.EmployeeListAPIView.as_view(),
         name="api-employee-list-detailed",
     ),  # Alternative endpoint for listing employees
+    path(
+        "directory/",
+        EmployeeDirectoryAPIView.as_view(),
+        name="api-employee-directory",
+    ),
+    path(
+        "directory/<int:pk>/",
+        EmployeeDirectoryAPIView.as_view(),
+        name="api-employee-directory-detail",
+    ),
     path(
         "employee-bank-details/<int:pk>/",
         views.EmployeeBankDetailsAPIView.as_view(),

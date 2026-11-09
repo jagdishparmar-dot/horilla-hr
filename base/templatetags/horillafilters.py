@@ -371,20 +371,17 @@ def is_geofencing_enabled(request):
     check-in/out buttons only need to capture the browser's location (and
     the backend only needs to enforce it) when this is true.
     """
-    from geofencing.models import GeoFencing
+    from geofencing.models import enforceable_fence
 
     selected_company = request.session.get("selected_company")
+    employee = getattr(request.user, "employee_get", None)
     if selected_company and selected_company != "all":
         company = Company.objects.filter(id=selected_company).first()
     else:
         # "All companies" is selected: the punch is still checked against the employee's own
         # company (see geofence_denial_web), so the button has to send the location for it.
-        employee = getattr(request.user, "employee_get", None)
         company = employee.get_company() if employee else None
-    if not company:
-        return False
-    fence = GeoFencing.for_company(company)
-    return bool(fence and fence.start)
+    return enforceable_fence(employee, company) is not None
 
 
 @register.filter(name="is_asset_fine_enabled")

@@ -1,21 +1,129 @@
 {% load static i18n horillafilters %}
 {% get_company as theme_obj %}
 <style>
+    /* Shell width tokens live on :root so the header (sibling of #sidebar) can
+       read the same values — they were previously scoped only on #sidebar. */
+    :root {
+        --sidebar-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --sidebar-rail: 4rem;
+        --sidebar-expanded: 13.75rem;
+    }
     #sidebar,
     #sidebarFlyout {
         --sidebar-accent: {{ theme_obj.primary_600|default:'#E54F38' }};
         --sidebar-accent-dark: {{ theme_obj.primary_700|default:'#c73f2a' }};
         --sidebar-accent-soft: {{ theme_obj.primary_100|default:'#FEF6F5' }};
+        --sidebar-surface: #fbfcfd;
+        --sidebar-ink: #1f2937;
+        --sidebar-muted: #6b7280;
     }
-    /* === Sidebar collapse / expand === */
+
+    /* === Shell: soft rail + inset nav panel === */
     #sidebar {
-        width: 4rem !important; /* 64 px — collapsed default */
+        width: var(--sidebar-rail) !important;
         overflow: hidden !important;
-        transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        background: #eef1f6 !important;
+        border-right: 1px solid rgba(15, 23, 42, 0.05) !important;
+        box-shadow: none;
+        transition: width 0.34s var(--sidebar-ease) !important;
+    }
+    #sidebar::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--sidebar-accent) 55%, transparent),
+            var(--sidebar-accent),
+            color-mix(in srgb, var(--sidebar-accent) 65%, #111827)
+        );
+        opacity: 0.85;
+        pointer-events: none;
     }
     #sidebar:hover,
     #sidebar.sidebar-pinned {
-        width: 13rem !important; /* 208 px — expanded */
+        width: var(--sidebar-expanded) !important;
+    }
+    body.dark #sidebar {
+        background: #0b0f17 !important;
+        border-right-color: rgba(255, 255, 255, 0.06) !important;
+    }
+
+    #sidebar > .oh-sidebar__inner {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding: 0.75rem 0.5rem 0.65rem;
+        gap: 0.55rem;
+    }
+
+    #sidebar .oh-sidebar__brand-card {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-width: 0;
+        padding: 0.55rem 0.55rem 0.55rem 0.45rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.85);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+    }
+    body.dark #sidebar .oh-sidebar__brand-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.07);
+        box-shadow: none;
+    }
+
+    #sidebar .oh-sidebar__header {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin: 0;
+        padding: 0;
+    }
+    #sidebar .oh-sidebar__header::after {
+        content: none;
+    }
+
+    #sidebar .oh-sidebar__nav-panel {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        padding: 0.45rem;
+        border-radius: 1.15rem;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        box-shadow:
+            0 1px 0 rgba(255, 255, 255, 0.75) inset,
+            0 14px 36px -30px rgba(15, 23, 42, 0.45);
+    }
+  body.dark #sidebar .oh-sidebar__nav-panel {
+        background: rgba(17, 24, 39, 0.72);
+        border-color: rgba(255, 255, 255, 0.06);
+        box-shadow: none;
+    }
+
+    #sidebar .oh-sidebar__nav-label {
+        padding: 0.35rem 0.65rem 0.5rem;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s var(--sidebar-ease);
+    }
+    #sidebar:hover .oh-sidebar__nav-label,
+    #sidebar.sidebar-pinned .oh-sidebar__nav-label {
+        opacity: 1;
     }
 
     /* Labels & chevron: invisible when collapsed, fade in when expanded */
@@ -24,7 +132,10 @@
         white-space: nowrap;
         opacity: 0 !important;
         pointer-events: none !important;
-        transition: opacity 0.12s ease !important;
+        transition:
+            opacity 0.2s var(--sidebar-ease),
+            transform 0.28s var(--sidebar-ease) !important;
+        transform: translateX(-4px);
     }
     #sidebar:hover .oh-sidebar-label,
     #sidebar.sidebar-pinned .oh-sidebar-label,
@@ -32,17 +143,10 @@
     #sidebar.sidebar-pinned .sidebar-chevron {
         opacity: 1 !important;
         pointer-events: auto !important;
-        transition-delay: 0.06s;
+        transform: translateX(0);
+        transition-delay: 0.05s;
     }
 
-    /* Version marker. The nav above is a fixed calc() height and #sidebar is
-       overflow:hidden, so this block only exists on screen because that height
-       leaves room for it -- change one and change the other.
-
-       The word "Version" is hidden rather than faded when collapsed:
-       .oh-sidebar-label uses opacity, which keeps the text occupying width, and
-       in a 4rem rail that pushes the number itself out of view. Only the number
-       survives the collapse, centred. */
     .sidebar-version__label {
         display: none;
     }
@@ -56,30 +160,24 @@
         padding-right: 0.25rem;
     }
 
-    /* Hide open accordion subnavs when sidebar is collapsed so they
-       don't bleed through the narrow sidebar as clipped text */
     #sidebar:not(:hover):not(.sidebar-pinned) .sidebar-subnav:not(.hidden) {
         display: none !important;
     }
 
-    /* Current-page label / chevron: solid fill → white text */
     .sideboxmain.sidebox-current .oh-sidebar-label {
-        color: #fff;
+        color: var(--sidebar-accent);
+        font-weight: 600;
     }
     .sideboxmain.sidebox-current .sidebar-chevron {
         transform: rotate(180deg);
-        color: #fff;
+        color: var(--sidebar-accent);
     }
-    /* Hover label: soft tint → accent text (distinct from the solid current page) */
     .sideboxmain.sidebox-active:not(.sidebox-current) .oh-sidebar-label {
         color: var(--sidebar-accent);
     }
     body.dark .sideboxmain.sidebox-active:not(.sidebox-current) .oh-sidebar-label {
         color: #e5e7eb;
     }
-    /* Same label treatment for plain-hover items (e.g. Dashboard) that have no
-       JS-managed 'sidebox-active' class — keeps hover styling consistent
-       across every sidebar entry. */
     .sideboxmain:hover:not(.sidebox-current) .oh-sidebar-label {
         color: var(--sidebar-accent);
     }
@@ -87,46 +185,55 @@
         color: #e5e7eb;
     }
 
-    /* Main content margin: tracks sidebar pin state */
     .oh-main-content {
-        margin-left: 4rem; /* narrow when collapsed */
-        transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        margin-left: var(--sidebar-rail);
+        transition: margin-left 0.32s var(--sidebar-ease);
     }
-
-    /* Fixed navbar: align left edge and width with main content area */
     .oh-main-header {
         right: 0;
-        left: 4rem;
-        transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        left: var(--sidebar-rail);
+        width: auto;
+        margin-left: 0;
+        transition: left 0.32s var(--sidebar-ease);
     }
     #sidebar.sidebar-pinned ~ .oh-main-content .oh-main-header {
-        left: 13rem;
+        left: var(--sidebar-expanded);
     }
-
-    /* Floating action button: track sidebar width (collapsed / hover / pinned) */
+    @media (min-width: 992px) {
+        #sidebar:hover ~ .oh-main-content .oh-main-header {
+            left: var(--sidebar-expanded);
+        }
+    }
+    #sidebar.sidebar-pinned ~ .oh-main-content {
+        margin-left: var(--sidebar-expanded);
+    }
     #sidebar ~ #floating-buttons .fab-container {
-        left: 4rem;
-        transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s ease, box-shadow 0.3s ease;
+        left: var(--sidebar-rail);
+        transition:
+            left 0.32s var(--sidebar-ease),
+            transform 0.3s ease,
+            box-shadow 0.3s ease;
     }
     #sidebar:hover ~ #floating-buttons .fab-container,
     #sidebar.sidebar-pinned ~ #floating-buttons .fab-container {
-        left: 13rem;
+        left: var(--sidebar-expanded);
     }
 
-    /* Company name / link in sidebar header */
     #sidebar .oh-sidebar__company-details {
         display: flex;
         flex-direction: column;
         min-width: 0;
     }
     #sidebar .oh-sidebar__company-title {
-        color: #111827;
+        color: var(--sidebar-ink);
         font-weight: 600;
+        letter-spacing: -0.01em;
         line-height: 1.25;
     }
     #sidebar .oh-sidebar__company-link {
-        color: #6b7280;
+        color: var(--sidebar-muted);
         line-height: 1.25;
+        transition: color 0.18s ease;
     }
     #sidebar .oh-sidebar__company-link:hover {
         color: #374151;
@@ -142,13 +249,23 @@
         color: #e5e7eb;
     }
 
-    /* Pin button highlight when sidebar is pinned */
-    #sidebar.sidebar-pinned #sidebarPinBtn {
-        background-color: #f3f4f6;
-        color: #374151;
+    #sidebar #sidebarPinBtn {
+        border: 1px solid transparent;
+        border-radius: 0.75rem;
+        transition:
+            background-color 0.2s ease,
+            color 0.2s ease,
+            border-color 0.2s ease,
+            transform 0.2s var(--sidebar-ease);
     }
-
-    /* Pin button — dark mode */
+    #sidebar #sidebarPinBtn:hover {
+        transform: translateY(-1px);
+    }
+    #sidebar.sidebar-pinned #sidebarPinBtn {
+        background-color: color-mix(in srgb, var(--sidebar-accent) 12%, #ffffff);
+        border-color: color-mix(in srgb, var(--sidebar-accent) 22%, transparent);
+        color: var(--sidebar-accent);
+    }
     body.dark #sidebar #sidebarPinBtn {
         color: #9ca3af !important;
     }
@@ -157,12 +274,10 @@
         color: #e5e7eb !important;
     }
     body.dark #sidebar.sidebar-pinned #sidebarPinBtn {
-        background-color: rgba(255, 255, 255, 0.12) !important;
+        background-color: color-mix(in srgb, var(--sidebar-accent) 28%, transparent) !important;
+        border-color: color-mix(in srgb, var(--sidebar-accent) 40%, transparent) !important;
         color: #ffffff !important;
     }
-
-    /* Pin button icon: show the OPEN padlock when unpinned (hover-to-expand mode)
-       and the CLOSED padlock when pinned (locked open). */
     #sidebar #sidebarPinBtn .sidebar-lock-closed {
         display: none;
     }
@@ -176,109 +291,159 @@
         display: block;
     }
 
-    /* Module button transitions */
-    .sideboxmain {
-        transition: background-color 0.18s ease, box-shadow 0.18s ease;
+    #sidebar nav.sidebar-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
     }
-    /* sidebox-active = hover-only indicator (cleared on mouseleave) → soft accent tint + accent text.
-       sidebox-current = current page (persists) → solid accent fill + white text/icon.
-       Both derive from the selected company theme color via the --sidebar-accent vars. */
-    /* Hover indicator (temporary): soft tint, no elevation.
-       :not(.sidebox-current) so the current page keeps its solid fill even while hovered. */
-    .sideboxmain.sidebox-active:not(.sidebox-current) {
-        background-color: var(--sidebar-accent-soft) !important;
-        box-shadow: none;
+    #sidebar nav.sidebar-scroll::-webkit-scrollbar {
+        width: 4px;
     }
-    body.dark .sideboxmain.sidebox-active:not(.sidebox-current) {
-        background-color: rgba(255, 255, 255, 0.08) !important;
+    #sidebar nav.sidebar-scroll::-webkit-scrollbar-thumb {
+        background: rgba(15, 23, 42, 0.16);
+        border-radius: 999px;
     }
-    /* Plain-hover (top-level links like Dashboard with no JS-managed
-       'sidebox-active' class) — mirrors the soft-tint hover above. */
-    body.dark .sideboxmain:hover:not(.sidebox-current) {
-        background-color: rgba(255, 255, 255, 0.08) !important;
+    body.dark #sidebar nav.sidebar-scroll {
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
     }
-    /* Current page (persistent): solid accent fill + subtle elevation. */
-    .sideboxmain.sidebox-current {
-        background-color: var(--sidebar-accent) !important;
-        box-shadow: 0 4px 14px -4px rgba(20, 20, 30, 0.25);
-    }
-    body.dark .sideboxmain.sidebox-current {
-        background-color: var(--sidebar-accent-dark) !important;
+    body.dark #sidebar nav.sidebar-scroll::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.18);
     }
 
-    /* Submenu link hover (flyout + expanded accordion) — theme-tinted so it's
-       clearly visible instead of the near-white Tailwind hover:bg-gray-50.
-       No !important: id-scoped specificity beats the utility class in light
-       mode, while the dark rule below still wins under body.dark. */
+    .oh-sidebar-iconwell {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.125rem;
+        height: 2.125rem;
+        flex-shrink: 0;
+        border-radius: 0.72rem;
+        background: rgba(15, 23, 42, 0.05);
+        transition:
+            background-color 0.22s var(--sidebar-ease),
+            box-shadow 0.22s var(--sidebar-ease),
+            transform 0.22s var(--sidebar-ease);
+    }
+    body.dark .oh-sidebar-iconwell {
+        background: rgba(255, 255, 255, 0.07);
+    }
+
+    .sideboxmain {
+        position: relative;
+        border: 1px solid transparent;
+        border-radius: 0.82rem !important;
+        color: #475569;
+        transition:
+            background-color 0.22s var(--sidebar-ease),
+            border-color 0.2s ease,
+            color 0.18s ease;
+    }
+    .sideboxmain::before {
+        content: "";
+        position: absolute;
+        left: 0.2rem;
+        top: 50%;
+        width: 3px;
+        height: 0;
+        border-radius: 999px;
+        background: var(--sidebar-accent);
+        transform: translateY(-50%);
+        transition: height 0.22s var(--sidebar-ease), opacity 0.18s ease;
+        opacity: 0;
+    }
+    .sideboxmain:hover:not(.sidebox-current) {
+        background-color: color-mix(in srgb, var(--sidebar-accent-soft) 55%, transparent) !important;
+    }
+    .sideboxmain:hover:not(.sidebox-current) .oh-sidebar-iconwell {
+        background: color-mix(in srgb, var(--sidebar-accent) 14%, #ffffff);
+    }
+    .sideboxmain.sidebox-active:not(.sidebox-current) {
+        background-color: color-mix(in srgb, var(--sidebar-accent-soft) 70%, transparent) !important;
+    }
+    .sideboxmain.sidebox-active:not(.sidebox-current) .oh-sidebar-iconwell {
+        background: color-mix(in srgb, var(--sidebar-accent) 18%, #ffffff);
+    }
+    body.dark .sideboxmain.sidebox-active:not(.sidebox-current),
+    body.dark .sideboxmain:hover:not(.sidebox-current) {
+        background-color: rgba(255, 255, 255, 0.06) !important;
+    }
+    body.dark .sideboxmain.sidebox-active:not(.sidebox-current) .oh-sidebar-iconwell,
+    body.dark .sideboxmain:hover:not(.sidebox-current) .oh-sidebar-iconwell {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    .sideboxmain.sidebox-current {
+        background: color-mix(in srgb, var(--sidebar-accent) 11%, #ffffff) !important;
+        border-color: color-mix(in srgb, var(--sidebar-accent) 22%, transparent);
+    }
+    .sideboxmain.sidebox-current::before {
+        height: 58%;
+        opacity: 1;
+    }
+    .sideboxmain.sidebox-current .oh-sidebar-iconwell {
+        background: linear-gradient(
+            145deg,
+            var(--sidebar-accent),
+            color-mix(in srgb, var(--sidebar-accent) 75%, #111827)
+        );
+        box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--sidebar-accent) 65%, transparent);
+    }
+    body.dark .sideboxmain.sidebox-current {
+        background: color-mix(in srgb, var(--sidebar-accent) 22%, transparent) !important;
+        border-color: color-mix(in srgb, var(--sidebar-accent) 35%, transparent);
+    }
+
     #sidebarFlyout .sidebar-subnav-link:hover,
     #sidebar .sidebar-subnav-link:hover {
         background-color: var(--sidebar-accent-soft);
         color: var(--sidebar-accent) !important;
     }
-
-    /* Active submenu link highlight: solid accent fill, matching the
-       parent item's .sidebox-current weight so the active submenu reads
-       as clearly "selected" rather than a faint tint. */
     .oh-sidebar-active-link {
-        background-color: var(--sidebar-accent) !important;
-        color: #ffffff !important;
+        background-color: color-mix(in srgb, var(--sidebar-accent) 14%, #ffffff) !important;
+        color: var(--sidebar-accent) !important;
         font-weight: 600;
-        box-shadow: 0 4px 14px -4px rgba(20, 20, 30, 0.25);
+        box-shadow: none;
     }
-
-    /* Dark mode: mirror light-mode contrast — solid accent fill + bright text */
     body.dark #sidebar .sidebar-subnav-link:hover {
         background-color: rgba(255, 255, 255, 0.06) !important;
         color: #e5e7eb !important;
     }
     body.dark #sidebar .oh-sidebar-active-link {
-        background-color: var(--sidebar-accent-dark) !important;
+        background-color: color-mix(in srgb, var(--sidebar-accent) 28%, transparent) !important;
         color: #ffffff !important;
         font-weight: 600;
-        box-shadow: 0 4px 14px -4px rgba(20, 20, 30, 0.25);
+        box-shadow: none;
     }
 
-    /* Make icons visible: dark-gray by default (also on hover, where the soft
-       tint background keeps them readable), white only on the current page's
-       solid accent fill. Overrides the hardcoded fill="#ffffff" and Tailwind
-       group-hover utilities that would otherwise leave icons invisible. */
-    #sidebar nav .sideboxmain img,
+    #sidebar nav .sideboxmain .oh-sidebar-iconwell img,
     #sidebar nav .sideboxmain svg:not(.sidebar-chevron) {
-        filter: brightness(0) opacity(0.55) !important;
-        transition: filter 0.18s ease !important;
+        width: 1.05rem;
+        height: 1.05rem;
+        filter: brightness(0) opacity(0.62) !important;
+        transition: filter 0.2s ease, transform 0.22s var(--sidebar-ease) !important;
     }
-    #sidebar nav .sideboxmain.sidebox-current img,
-    #sidebar nav .sideboxmain.sidebox-current svg:not(.sidebar-chevron) {
+    #sidebar nav .sideboxmain:hover:not(.sidebox-current) .oh-sidebar-iconwell img,
+    #sidebar nav .sideboxmain.sidebox-active:not(.sidebox-current) .oh-sidebar-iconwell img {
+        filter: brightness(0) opacity(0.85) !important;
+        transform: scale(1.03);
+    }
+    #sidebar nav .sideboxmain.sidebox-current .oh-sidebar-iconwell img {
         filter: brightness(0) invert(1) !important;
+        transform: none;
     }
-
-    /* Dark mode: the resting `brightness(0)` (pure black) icons are invisible on
-       the dark sidebar. Invert to a muted light glyph at rest (also on hover, over
-       the subtle white-overlay tint), full white on the current page's solid fill. */
-    body.dark #sidebar nav .sideboxmain img,
+    body.dark #sidebar nav .sideboxmain .oh-sidebar-iconwell img,
     body.dark #sidebar nav .sideboxmain svg:not(.sidebar-chevron) {
-        filter: brightness(0) invert(1) opacity(0.65) !important;
+        filter: brightness(0) invert(1) opacity(0.72) !important;
     }
-    body.dark #sidebar nav .sideboxmain.sidebox-current img,
-    body.dark #sidebar nav .sideboxmain.sidebox-current svg:not(.sidebar-chevron) {
+    body.dark #sidebar nav .sideboxmain.sidebox-current .oh-sidebar-iconwell img {
         filter: brightness(0) invert(1) opacity(1) !important;
     }
 
-    /* Collapsed: minimal horizontal padding → 56 px inner width for icon circles.
-       0.25 rem (4 px) each side gives the 2.5 rem (40 px) circle 8 px breathing
-       room per side, and removes the scrollbar-width problem on Windows. */
-    #sidebar:not(:hover):not(.sidebar-pinned) > div {
+    #sidebar:not(:hover):not(.sidebar-pinned) > .oh-sidebar__inner {
         padding-right: 0.25rem !important;
         padding-left: 0.25rem !important;
     }
-
-    /* Collapsed: increase spacing between icon circles from 4 px to 10 px. */
     #sidebar:not(:hover):not(.sidebar-pinned) nav > * + * {
         margin-top: 0.625rem !important;
     }
-
-    /* Collapsed: hide the scrollbar so it doesn't consume horizontal space
-       and clip the right edge of circles on Windows / Linux. */
     #sidebar:not(:hover):not(.sidebar-pinned) nav {
         scrollbar-width: none;
         -ms-overflow-style: none;
@@ -286,106 +451,125 @@
     #sidebar:not(:hover):not(.sidebar-pinned) nav::-webkit-scrollbar {
         display: none;
     }
-
-    /* Collapsed header: centre the row and collapse the gap so the logo
-       sits alone, centred, with no phantom space from the hidden hamburger. */
-    #sidebar:not(:hover):not(.sidebar-pinned) > div > div:first-child {
+    #sidebar:not(:hover):not(.sidebar-pinned) .oh-sidebar__brand-card .oh-sidebar__header {
         justify-content: center !important;
         gap: 0 !important;
+        width: 100%;
     }
-    #sidebar:not(:hover):not(.sidebar-pinned) > div > div:first-child > div {
+    #sidebar:not(:hover):not(.sidebar-pinned) .oh-sidebar__brand-card .oh-sidebar__header > div {
         flex: 0 0 auto !important;
         justify-content: center !important;
         gap: 0 !important;
     }
-
-    /* Collapsed: hide the hamburger (pin button); user hovers to expand, then
-       clicks the hamburger that appears in expanded state. */
     #sidebar:not(:hover):not(.sidebar-pinned) #sidebarPinBtn {
         display: none !important;
     }
-
-    /* Collapsed: show the brand logo centred at the top of the rail, overriding
-       the general oh-sidebar-label opacity:0 rule just for this element. */
-    #sidebar:not(:hover):not(.sidebar-pinned) > div > div:first-child img.oh-sidebar-label {
+    #sidebar:not(:hover):not(.sidebar-pinned) .oh-sidebar__brand-card {
+        justify-content: center;
+        padding: 0.35rem;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
+    #sidebar:not(:hover):not(.sidebar-pinned) > .oh-sidebar__inner > .oh-sidebar__brand-card img.oh-sidebar-label {
         flex: 0 0 auto !important;
-        width: 2rem !important;
-        height: 2rem !important;
+        width: 2.15rem !important;
+        height: 2.15rem !important;
         overflow: visible !important;
         opacity: 1 !important;
+        transform: none !important;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.65), 0 0 0 4px rgba(15, 23, 42, 0.05);
     }
-
-    /* Collapsed: circular icon buttons — full-circle, centred within the 48 px
-       inner container with 4 px breathing room each side.
-       The oh.css gray background is preserved (no override here) so buttons
-       look identical to the reference design: gray circles, active = red circle. */
+    #sidebar:not(:hover):not(.sidebar-pinned) .oh-sidebar__nav-panel {
+        padding: 0.3rem;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+        border-radius: 0.75rem;
+    }
     #sidebar:not(:hover):not(.sidebar-pinned) .sideboxmain {
         justify-content: center !important;
-        width: 2.5rem !important;
-        height: 2.5rem !important;
+        width: 2.65rem !important;
+        height: 2.65rem !important;
         margin: 0 auto !important;
         padding: 0 !important;
         overflow: hidden !important;
         gap: 0 !important;
-        border-radius: 9999px !important;
+        border-radius: 0.95rem !important;
+        transform: none !important;
     }
-
-    /* Collapse label/chevron to zero-width so justify-content:center only sees
-       the icon. The invisible label still occupies flex space without this. */
+    #sidebar:not(:hover):not(.sidebar-pinned) .sideboxmain .oh-sidebar-iconwell {
+        width: 2.05rem;
+        height: 2.05rem;
+        border-radius: 0.7rem;
+    }
     #sidebar:not(:hover):not(.sidebar-pinned) .oh-sidebar-label,
     #sidebar:not(:hover):not(.sidebar-pinned) .sidebar-chevron {
         flex: 0 0 0 !important;
         width: 0 !important;
         overflow: hidden !important;
+        transform: none !important;
     }
 
-    /* Chevron hidden — accordion is replaced by hover flyout */
     .sidebar-chevron {
         display: none !important;
     }
 
-    /* Flyout submenu panel */
     #sidebarFlyout {
         visibility: hidden;
         z-index: 10060;
         position: fixed;
-        min-width: 200px;
-        max-width: 260px;
-        padding: 6px;
-        transform: translateX(-6px);
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        background: #ffffff;
-        box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.12), 0 2px 8px -2px rgba(15, 23, 42, 0.06);
+        min-width: 212px;
+        max-width: 280px;
+        padding: 0.5rem;
+        transform: translateX(-8px) scale(0.98);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow:
+            0 18px 40px -24px rgba(15, 23, 42, 0.45),
+            0 4px 14px -8px rgba(15, 23, 42, 0.18);
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+        transition:
+            opacity 0.2s var(--sidebar-ease),
+            transform 0.2s var(--sidebar-ease),
+            visibility 0s linear 0.2s;
     }
     #sidebarFlyout.is-visible {
         visibility: visible;
-        transform: translateX(0);
+        transform: translateX(0) scale(1);
         opacity: 1;
         pointer-events: auto;
-        transition: opacity 0.15s ease, transform 0.15s ease;
+        transition:
+            opacity 0.2s var(--sidebar-ease),
+            transform 0.2s var(--sidebar-ease);
     }
     body.dark #sidebarFlyout {
-        border-color: #374151;
-        background: #1f2937;
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(17, 24, 39, 0.92);
     }
-    /* Flyout link hover highlight */
     #sidebarFlyout a.sidebar-subnav-link {
         color: #374151;
-        transition: background-color 0.12s ease, color 0.12s ease;
+        border-radius: 0.65rem;
+        transition:
+            background-color 0.16s ease,
+            color 0.16s ease,
+            transform 0.16s var(--sidebar-ease);
     }
     #sidebarFlyout a.sidebar-subnav-link:hover {
-        background-color: color-mix(in srgb, {{ theme_obj.primary_600|default:"#E54F38" }} 8%, transparent) !important;
+        background-color: color-mix(in srgb, {{ theme_obj.primary_600|default:"#E54F38" }} 10%, transparent) !important;
         color: {{ theme_obj.primary_600|default:"#E54F38" }} !important;
+        transform: translateX(2px);
     }
     #sidebarFlyout a.sidebar-subnav-link.oh-sidebar-active-link {
-        background-color: var(--sidebar-accent) !important;
-        color: #ffffff !important;
+        background-color: color-mix(in srgb, var(--sidebar-accent) 14%, #ffffff) !important;
+        color: var(--sidebar-accent) !important;
         font-weight: 600;
-        box-shadow: 0 4px 14px -4px rgba(20, 20, 30, 0.25);
+        box-shadow: none;
+        transform: none;
     }
     body.dark #sidebarFlyout a.sidebar-subnav-link {
         color: #d1d5db;
@@ -395,62 +579,81 @@
         color: {{ theme_obj.primary_400|default:"#F87060" }} !important;
     }
     body.dark #sidebarFlyout a.sidebar-subnav-link.oh-sidebar-active-link {
-        background-color: var(--sidebar-accent-dark) !important;
+        background-color: color-mix(in srgb, var(--sidebar-accent) 28%, transparent) !important;
         color: #ffffff !important;
         font-weight: 600;
-        box-shadow: 0 4px 14px -4px rgba(20, 20, 30, 0.25);
+        box-shadow: none;
+    }
+
+    #sidebar .sidebar-version {
+        margin-top: auto;
+        border-top: 0 !important;
+        color: #9aa3af !important;
+        letter-spacing: 0.01em;
+    }
+    #sidebar .sidebar-version::before {
+        content: "";
+        display: block;
+        height: 1px;
+        margin: 0 0 0.75rem;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(15, 23, 42, 0.1),
+            transparent
+        );
+    }
+    body.dark #sidebar .sidebar-version::before {
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.12),
+            transparent
+        );
     }
 
     @media (prefers-reduced-motion: reduce) {
-        #sidebar, .oh-main-content, .oh-main-header, .sideboxmain, #sidebarFlyout {
+        #sidebar,
+        .oh-main-content,
+        .oh-main-header,
+        .sideboxmain,
+        #sidebarFlyout,
+        .oh-sidebar-label,
+        .sidebar-chevron {
             animation: none !important;
             transition: none !important;
+            transform: none !important;
         }
     }
 
-    /* Narrow viewports: the "pinned open" (13rem, labels visible) sidebar state
-       leaves too little room for the main content — headers, tables, and the
-       employee-profile card overflow the viewport instead of wrapping. Below
-       tablet width, keep the sidebar in its collapsed icon rail regardless of
-       pin state; hover/tap still reveals the flyout submenu for navigation. */
     @media (max-width: 991.98px) {
-        /* Every state, :hover included. The base rule is `#sidebar:hover`,
-           which outranks a bare `#sidebar` here regardless of the media query,
-           so hovering expanded the rail to 13rem while .oh-main-content kept
-           its 4rem margin -- 144px of the page vanished underneath it. */
         #sidebar,
         #sidebar:hover,
         #sidebar.sidebar-pinned,
         #sidebar.sidebar-pinned:hover {
-            width: 4rem !important;
+            width: var(--sidebar-rail) !important;
         }
         #sidebar .oh-sidebar-label,
         #sidebar.sidebar-pinned .oh-sidebar-label,
         #sidebar .sidebar-chevron,
-        #sidebar.sidebar-pinned .sidebar-chevron {
-            opacity: 0 !important;
-            pointer-events: none !important;
-        }
-        /* Labels stay hidden even on hover: there is no room in a 4rem rail,
-           and navigation at this width is the hover flyout, which is what the
-           breakpoint was written for. Revealing them here was what made the
-           rail look broken -- text with nowhere to go. */
+        #sidebar.sidebar-pinned .sidebar-chevron,
         #sidebar:hover .oh-sidebar-label,
         #sidebar:hover .sidebar-chevron {
             opacity: 0 !important;
             pointer-events: none !important;
+            transform: none !important;
         }
         .oh-main-content,
         #sidebar.sidebar-pinned ~ .oh-main-content {
-            margin-left: 4rem !important;
+            margin-left: var(--sidebar-rail) !important;
         }
         .oh-main-header,
         #sidebar.sidebar-pinned ~ .oh-main-content .oh-main-header {
-            left: 4rem !important;
+            left: var(--sidebar-rail) !important;
         }
         #sidebar ~ #floating-buttons .fab-container,
         #sidebar.sidebar-pinned ~ #floating-buttons .fab-container {
-            left: 4rem !important;
+            left: var(--sidebar-rail) !important;
         }
         #sidebar .sidebar-version__label,
         #sidebar:hover .sidebar-version__label,
@@ -462,15 +665,7 @@
             padding-left: 0.25rem;
             padding-right: 0.25rem;
         }
-        /* A pinned sidebar is forced to the 4rem rail above, but every
-           collapsed-rail rule is keyed on :not(.sidebar-pinned), so none of
-           them applied: the items kept their 13rem layout squeezed into 64px
-           -- 31px-wide square tiles with the icon jammed against the left edge
-           instead of 40px centred circles. Below this breakpoint a pinned,
-           unhovered sidebar has to be styled as the rail it is being rendered
-           as. Pre-existing; visible only once the viewport crosses 992px with
-           the sidebar pinned. */
-        #sidebar > div {
+        #sidebar > .oh-sidebar__inner {
             padding-right: 0.25rem !important;
             padding-left: 0.25rem !important;
         }
@@ -484,31 +679,44 @@
         #sidebar nav::-webkit-scrollbar {
             display: none;
         }
-        #sidebar > div > div:first-child {
+        #sidebar .oh-sidebar__brand-card {
+            justify-content: center !important;
+            padding: 0.35rem !important;
+            background: transparent !important;
+            border-color: transparent !important;
+        }
+        #sidebar .oh-sidebar__brand-card .oh-sidebar__header {
             justify-content: center !important;
             gap: 0 !important;
+            width: 100%;
         }
-        #sidebar > div > div:first-child > div {
-            flex: 0 0 auto !important;
-            justify-content: center !important;
-            gap: 0 !important;
-        }
-        #sidebar > div > div:first-child img.oh-sidebar-label {
+        #sidebar .oh-sidebar__brand-card img.oh-sidebar-label {
             flex: 0 0 auto !important;
             width: 2rem !important;
             height: 2rem !important;
             overflow: visible !important;
             opacity: 1 !important;
+            transform: none !important;
+        }
+        #sidebar .oh-sidebar__nav-panel {
+            padding: 0.3rem !important;
+            background: transparent !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+        }
+        #sidebar .oh-sidebar__nav-label {
+            display: none !important;
         }
         #sidebar .sideboxmain {
             justify-content: center !important;
-            width: 2.5rem !important;
-            height: 2.5rem !important;
+            width: 2.65rem !important;
+            height: 2.65rem !important;
             margin: 0 auto !important;
             padding: 0 !important;
             overflow: hidden !important;
             gap: 0 !important;
             border-radius: 9999px !important;
+            transform: none !important;
         }
         #sidebar .oh-sidebar-label,
         #sidebar .sidebar-chevron {
@@ -524,17 +732,17 @@
         }
     }
 </style>
-<div id="sidebar" class="fixed inset-y-0 left-0 bg-white border-r border-r-dark-50 z-50">
-    <div class="p-4">
-        <!-- Header: hamburger pin toggle + company logo -->
-        <div class="flex items-center gap-3 mb-6">
+<div id="sidebar" class="fixed inset-y-0 left-0 z-50 oh-sidebar--modern">
+    <div class="oh-sidebar__inner">
+        <div class="oh-sidebar__brand-card">
+            <div class="oh-sidebar__header flex items-center gap-2 min-w-0 flex-1 w-full">
             <button
                 id="sidebarPinBtn"
                 title="{% trans 'Lock sidebar open' %}"
                 aria-label="{% trans 'Lock sidebar open' %}"
                 data-pin-label="{% trans 'Lock sidebar open' %}"
                 data-unpin-label="{% trans 'Unlock sidebar (auto-collapses on hover-out)' %}"
-                class="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors duration-150"
+                class="flex-shrink-0 p-1.5 rounded-xl text-gray-400 hover:bg-gray-100/80 hover:text-gray-700"
             >
                 <!-- Unlocked padlock: shown when the sidebar is NOT pinned (hover-to-expand mode) -->
                 <svg
@@ -571,7 +779,7 @@
                 {% if request.session.selected_company_instance %}
                     <img
                         src="{% if request.session.selected_company_instance.icon and request.session.selected_company_instance.icon != '/404/' %}{{ request.session.selected_company_instance.icon }}{% else %}/static/horilla_theme/assets/img/horilla-logo.png{% endif %}"
-                        class="oh-sidebar-label w-7 h-7 rounded-full flex-shrink-0"
+                        class="oh-sidebar-label w-8 h-8 rounded-xl object-cover flex-shrink-0 ring-1 ring-black/5"
                         title="{{ request.session.selected_company_instance.company }}"
                         alt="{{ request.session.selected_company_instance.company }}"
                     >
@@ -588,7 +796,7 @@
                     <img
                         src="{% if request.user.employee_get.employee_work_info.company_id.icon %}{{ request.user.employee_get.employee_work_info.company_id.icon.url }}{% else %}/static/horilla_theme/assets/img/horilla-logo.png{% endif %}"
                         alt="{% trans 'Company logo' %}"
-                        class="oh-sidebar-label w-7 h-7 rounded-full flex-shrink-0"
+                        class="oh-sidebar-label w-8 h-8 rounded-xl object-cover flex-shrink-0 ring-1 ring-black/5"
                     >
                     <div class="oh-sidebar__company-details oh-sidebar-label min-w-0">
                         <span
@@ -600,6 +808,7 @@
                         </a>
                     </div>
                 {% endif %}
+            </div>
             </div>
         </div>
 
@@ -626,28 +835,31 @@
             })();
         </script>
 
-        <nav
-            class="space-y-1 overflow-hidden overflow-y-auto h-[calc(100vh_-_140px)] sidebar-scroll"
-            role="navigation"
-            aria-label="{% trans 'Main navigation' %}"
-        >
+        <div class="oh-sidebar__nav-panel">
+            <p class="oh-sidebar__nav-label">{% trans "Menu" %}</p>
+            <nav
+                class="space-y-1 overflow-hidden overflow-y-auto flex-1 min-h-0 sidebar-scroll"
+                role="navigation"
+                aria-label="{% trans 'Main navigation' %}"
+            >
             {% include "horilla_theme/components/sidebar/top_menu.html" %}
             {% for menues in sidebar %}
                 <div class="sidebar-item">
                     <button
-                        class="sideboxmain group flex items-center gap-3 px-3 py-2.5 rounded-lg w-full transition duration-300"
+                        class="sideboxmain group flex items-center gap-2.5 px-2.5 py-2 rounded-xl w-full"
                         data-menu="{{ menues.menu }}"
                         aria-label="{{ menues.menu }}"
                         aria-expanded="false"
                         aria-haspopup="true"
                     >
-                        <img
-                            src="{% static menues.img_src %}"
-                            alt=""
-                            class="w-4.5 h-4.5 flex-shrink-0 transition duration-300 group-hover:filter group-hover:brightness-0 group-hover:invert"
-                        >
+                        <span class="oh-sidebar-iconwell" aria-hidden="true">
+                            <img
+                                src="{% static menues.img_src %}"
+                                alt=""
+                            >
+                        </span>
                         <span
-                            class="oh-sidebar-label text-sm font-medium truncate flex-1 text-left"
+                            class="oh-sidebar-label text-[13px] font-medium tracking-tight truncate flex-1 text-left"
                         >{{ menues.menu }}</span>
                         <svg
                             class="sidebar-chevron w-3.5 h-3.5 flex-shrink-0"
@@ -666,7 +878,7 @@
                                 <a
                                     href="{{ submenu.redirect }}"
                                     {% if submenu.match_prefixes %}data-match-prefixes="{{ submenu.match_prefixes|join:',' }}"{% endif %}
-                                    class="sidebar-subnav-link block text-[13px] text-gray-600 px-3 py-1.5 rounded-md hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150 truncate"
+                                    class="sidebar-subnav-link block text-[13px] text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors duration-150 truncate"
                                     hx-get="{{ submenu.redirect }}"
                                     hx-target="#ohMainContent"
                                     hx-select="#ohMainContent > *"
@@ -680,7 +892,8 @@
             {% endfor %}
             {% comment %} {{ request.active_company }} {% endcomment %}
             {% comment %} {% include "horilla_theme/components/sidebar/bottom_menu.html" %} {% endcomment %}
-        </nav>
+            </nav>
+        </div>
         {% comment %}
             Version marker. Every support thread starts with "which version are
             you on?", and a branch name does not answer it -- one branch spans
@@ -689,8 +902,8 @@
             answers the question without anyone having to ask.
             Collapses to just the number when the sidebar is unpinned.
         {% endcomment %}
-        <div class="sidebar-version px-4 pt-3 pb-6 border-t border-t-dark-50 text-[11px] leading-none text-[#999] select-text"
-             title="{% trans 'Horilla HR version' %} {{ horilla_version }}">
+        <div class="sidebar-version px-3 pt-2 pb-3 text-[11px] leading-none select-text"
+             title="{% trans 'ClockMe version' %} {{ horilla_version }}">
             <span class="sidebar-version__label">{% trans "Version" %}</span>
             <span class="font-medium">{{ horilla_version }}</span>
         </div>
@@ -848,7 +1061,7 @@
           // is in hover/pinned state so the flyout never lands inside it.
           if (sidebarEl.matches(':hover') || sidebarEl.classList.contains('sidebar-pinned')) {
             var rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            var expandedRight = sidebarRect.left + rootFontSize * 13; /* 13rem */
+            var expandedRight = sidebarRect.left + rootFontSize * 13.75; /* --sidebar-expanded */
             if (expandedRight > sidebarRight) sidebarRight = expandedRight;
           }
 
@@ -1059,7 +1272,7 @@
           if (!animate && content) content.style.transition = "none";
 
           sidebarEl.classList.toggle("sidebar-pinned", pinned);
-          if (content) content.style.marginLeft = pinned ? "13rem" : "";
+          if (content) content.style.marginLeft = "";
 
           // Keep the lock button's tooltip/aria-label in sync with the state.
           // (The open vs closed padlock icon itself is swapped via CSS on .sidebar-pinned.)

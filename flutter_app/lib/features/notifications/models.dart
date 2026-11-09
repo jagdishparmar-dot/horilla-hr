@@ -1,9 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 
-import '../../core/theme.dart';
-
 enum NotificationLevel { success, info, warning, error }
+
+/// Where a notification comes from. Drives the icon, color and filter chips.
+enum NotificationCategory { requests, attendance, updates, general }
+
+extension NotificationCategoryX on NotificationCategory {
+  String get label => switch (this) {
+    NotificationCategory.requests => 'Requests',
+    NotificationCategory.attendance => 'Attendance',
+    NotificationCategory.updates => 'Updates',
+    NotificationCategory.general => 'General',
+  };
+
+  Color get color => switch (this) {
+    NotificationCategory.requests => const Color(0xFF8B5CF6),
+    NotificationCategory.attendance => const Color(0xFF22B8E8),
+    NotificationCategory.updates => const Color(0xFFF59E0B),
+    NotificationCategory.general => const Color(0xFF2F6BFF),
+  };
+
+  List<List<dynamic>> get icon => switch (this) {
+    NotificationCategory.requests => HugeIcons.strokeRoundedFile02,
+    NotificationCategory.attendance => HugeIcons.strokeRoundedCalendarCheckIn01,
+    NotificationCategory.updates => HugeIcons.strokeRoundedMegaphone01,
+    NotificationCategory.general => HugeIcons.strokeRoundedNotification03,
+  };
+}
 
 class AppNotification {
   const AppNotification({
@@ -63,6 +87,17 @@ class AppNotification {
     );
   }
 
+  AppNotification copyWith({bool? unread}) => AppNotification(
+    id: id,
+    verb: verb,
+    description: description,
+    unread: unread ?? this.unread,
+    deleted: deleted,
+    timestamp: timestamp,
+    level: level,
+    data: data,
+  );
+
   String get title {
     final fromData = data?['title'] ?? data?['subject'];
     if (fromData is String && fromData.trim().isNotEmpty) {
@@ -81,66 +116,79 @@ class AppNotification {
     return desc;
   }
 
+  String get _haystack {
+    final redirect = data?['redirect'];
+    return '${verb.toLowerCase()} ${(description ?? '').toLowerCase()} '
+        '${redirect is String ? redirect.toLowerCase() : ''}';
+  }
+
+  NotificationCategory get category {
+    final text = _haystack;
+    if (text.contains('attendance') ||
+        text.contains('check-in') ||
+        text.contains('check-out') ||
+        text.contains('clock') ||
+        text.contains('overtime') ||
+        text.contains('late come') ||
+        text.contains('early out')) {
+      return NotificationCategory.attendance;
+    }
+    if (text.contains('leave') ||
+        text.contains('request') ||
+        text.contains('shift') ||
+        text.contains('work type') ||
+        text.contains('reimburse') ||
+        text.contains('asset') ||
+        text.contains('approv') ||
+        text.contains('reject')) {
+      return NotificationCategory.requests;
+    }
+    if (text.contains('announce') ||
+        text.contains('policy') ||
+        text.contains('document') ||
+        text.contains('holiday') ||
+        text.contains('birthday')) {
+      return NotificationCategory.updates;
+    }
+    return NotificationCategory.general;
+  }
+
+  bool get _rejected {
+    final text = _haystack;
+    return text.contains('reject') || text.contains('declin');
+  }
+
+  bool get _approved {
+    final text = _haystack;
+    return text.contains('approv') || text.contains('success');
+  }
+
+  /// Outcome colors win (rejected red, approved green). Otherwise the
+  /// category color applies, with warning/error levels overriding general.
   Color get accent {
-    final lower = verb.toLowerCase();
-    if (lower.contains('reject') || lower.contains('declin')) {
-      return AppColors.red;
+    if (_rejected || level == NotificationLevel.error) {
+      return const Color(0xFFEF4444);
     }
-    if (lower.contains('approv') ||
-        lower.contains('success') ||
-        lower.contains('updated')) {
-      return AppColors.green;
+    if (_approved || level == NotificationLevel.success) {
+      return const Color(0xFF16A34A);
     }
-    if (lower.contains('remind') || lower.contains('check-out')) {
-      return AppColors.red;
-    }
-    if (lower.contains('shift') || lower.contains('check-in')) {
-      return AppColors.green;
-    }
-    if (lower.contains('announce')) {
-      return AppColors.navBlue;
-    }
-    return switch (level) {
-      NotificationLevel.success => AppColors.green,
-      NotificationLevel.warning => AppColors.orange,
-      NotificationLevel.error => AppColors.red,
-      NotificationLevel.info => AppColors.navBlue,
-    };
+    if (level == NotificationLevel.warning) return const Color(0xFFF59E0B);
+    return category.color;
   }
 
   List<List<dynamic>> get icon {
-    final lower = verb.toLowerCase();
-    if (lower.contains('reject') || lower.contains('declin')) {
-      return HugeIcons.strokeRoundedCancel01;
+    if (_rejected) return HugeIcons.strokeRoundedCancelCircle;
+    if (_approved) return HugeIcons.strokeRoundedCheckmarkCircle02;
+    if (level == NotificationLevel.warning ||
+        level == NotificationLevel.error) {
+      return HugeIcons.strokeRoundedAlert02;
     }
-    if (lower.contains('announce')) {
-      return HugeIcons.strokeRoundedMegaphone01;
-    }
-    if (lower.contains('profile') || lower.contains('phone')) {
-      return HugeIcons.strokeRoundedUserCircle;
-    }
-    if (lower.contains('shift') ||
-        lower.contains('check') ||
-        lower.contains('remind')) {
-      return HugeIcons.strokeRoundedAlarmClock;
-    }
-    if (lower.contains('leave') || lower.contains('request')) {
-      return HugeIcons.strokeRoundedFile02;
-    }
-    return switch (level) {
-      NotificationLevel.success => HugeIcons.strokeRoundedCheckmarkCircle02,
-      NotificationLevel.warning => HugeIcons.strokeRoundedAlert02,
-      NotificationLevel.error => HugeIcons.strokeRoundedCancel01,
-      NotificationLevel.info => HugeIcons.strokeRoundedNotification03,
-    };
+    return category.icon;
   }
 }
 
 class NotificationSection {
-  const NotificationSection({
-    required this.label,
-    required this.items,
-  });
+  const NotificationSection({required this.label, required this.items});
 
   final String label;
   final List<AppNotification> items;

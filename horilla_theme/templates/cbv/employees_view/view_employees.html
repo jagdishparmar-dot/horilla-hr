@@ -1,0 +1,550 @@
+{% extends "index.html" %}
+{% load i18n static horillafilters %}
+{% get_company as theme_obj %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token }}">
+
+<style>
+    /* ── Employee directory (UI only; scoped to this page) ─────────────── */
+    #employeeViewPage {
+        --emp-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --emp-accent: {{ theme_obj.primary_600|default:'#E54F38' }};
+        --emp-accent-soft: {{ theme_obj.primary_100|default:'#FEF6F5' }};
+        --emp-surface: #ffffff;
+        --emp-border: rgba(15, 23, 42, 0.07);
+    }
+    #employeeViewPage {
+        margin-top: -0.5rem;
+    }
+
+    /* Page header / toolbar (htmx-loaded nav) */
+    #employeeViewPage #employeeListNavBar {
+        margin-bottom: 0.5rem;
+    }
+    #employeeViewPage #employeeListNavBar > div > .flex.flex-wrap.justify-between {
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.7rem;
+        border-radius: 0.75rem;
+        border: 1px solid var(--emp-border);
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        box-shadow: 0 8px 24px -22px rgba(15, 23, 42, 0.4);
+    }
+    #employeeViewPage #employeeListNavBar h3.text-lg {
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.2;
+    }
+    #employeeViewPage #employeeListNavBar .flex.flex-wrap.gap-1 {
+        gap: 0.3rem !important;
+    }
+    #employeeViewPage #employeeListNavBar .tab-btn {
+        padding: 0.35rem 0.55rem !important;
+        font-size: 0.7rem !important;
+    }
+    #employeeViewPage #employeeListNavBar #modernFilterTrigger {
+        padding: 0.4rem 0.65rem !important;
+        font-size: 0.7rem !important;
+    }
+    #employeeViewPage #employeeListNavBar .navFilterForm input[name="search"] {
+        min-width: 11.5rem;
+        height: 2rem;
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+        font-size: 0.78rem !important;
+        border-radius: 0.55rem !important;
+        border-color: rgba(15, 23, 42, 0.1) !important;
+        background: #fff;
+        transition: border-color 0.2s var(--emp-ease), box-shadow 0.2s var(--emp-ease);
+    }
+    #employeeViewPage #employeeListNavBar .navFilterForm input[name="search"]:focus {
+        border-color: color-mix(in srgb, var(--emp-accent) 45%, #cbd5e1) !important;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--emp-accent) 16%, transparent);
+    }
+    #employeeViewPage #employeeListNavBar .tab-btn,
+    #employeeViewPage #employeeListNavBar #modernFilterTrigger,
+    #employeeViewPage #employeeListNavBar .oh-btn,
+    #employeeViewPage #employeeListNavBar button.bg-white {
+        border-radius: 0.75rem !important;
+        transition: transform 0.18s var(--emp-ease), box-shadow 0.18s var(--emp-ease),
+            border-color 0.18s ease, background-color 0.18s ease;
+    }
+    #employeeViewPage #employeeListNavBar .tab-btn.oh-view-btn--active {
+        background: color-mix(in srgb, var(--emp-accent) 12%, #fff) !important;
+        border-color: color-mix(in srgb, var(--emp-accent) 35%, transparent) !important;
+        color: var(--emp-accent) !important;
+    }
+
+    /* List container shell */
+    #employeeViewPage #listContainer.oh-wrapper {
+        max-width: none;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    /* Data table card */
+    #employeeViewPage #view-container .bg-white.p-2.rounded-md,
+    #employeeViewPage #listContainer .hlv-container > .bg-white {
+        border-radius: 0.75rem !important;
+        border: 1px solid var(--emp-border);
+        background: var(--emp-surface) !important;
+        box-shadow: 0 10px 28px -24px rgba(15, 23, 42, 0.5);
+        padding: 0.15rem !important;
+    }
+    #employeeViewPage #view-container .heightContainer,
+    #employeeViewPage #listContainer .heightContainer {
+        max-height: calc(100vh - 188px) !important;
+    }
+    #employeeViewPage #listContainer .h-\[calc\(100vh_-_210px\)\] {
+        height: calc(100vh - 188px) !important;
+        max-height: calc(100vh - 188px) !important;
+    }
+    #employeeViewPage #view-container table.fixed-table thead {
+        background: #f8fafc !important;
+    }
+    #employeeViewPage #view-container table.fixed-table thead th {
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #64748b;
+        font-weight: 600;
+        border-bottom: 1px solid var(--emp-border);
+        padding: 0.38rem 0.45rem !important;
+    }
+    #employeeViewPage #view-container table.fixed-table tbody tr {
+        transition: background-color 0.16s ease;
+    }
+    #employeeViewPage #view-container table.fixed-table tbody tr:hover {
+        background: color-mix(in srgb, var(--emp-accent-soft) 65%, #fff);
+    }
+    #employeeViewPage #view-container table.fixed-table tbody td {
+        font-size: 0.75rem;
+        color: #334155;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+        padding: 0.35rem 0.45rem !important;
+        vertical-align: middle;
+        line-height: 1.25;
+    }
+    #employeeViewPage #view-container .oh-profile__avatar {
+        width: 1.35rem !important;
+        height: 1.35rem !important;
+        margin-right: 0.25rem !important;
+    }
+    #employeeViewPage #view-container .avatar-thumb {
+        box-shadow: 0 0 0 1px #fff, 0 0 0 2px rgba(15, 23, 42, 0.06);
+    }
+
+    /* Quick actions / filter chips row */
+    #employeeViewPage #view-container .hlv-quick-actions,
+    #employeeViewPage #listContainer .hlv-quick-actions {
+        margin-bottom: 0.35rem !important;
+        gap: 0.35rem;
+    }
+    #employeeViewPage #filterTagContainerSection,
+    #employeeViewPage #filterTagContainerSectionNav {
+        margin-bottom: 0.35rem !important;
+    }
+
+    /* Card grid */
+    #employeeViewPage #listContainer .grid.grid-cols-4,
+    #employeeViewPage #gridView .grid.grid-cols-4 {
+        gap: 0.45rem !important;
+    }
+    #employeeViewPage #gridView {
+        padding: 0.55rem !important;
+    }
+    #employeeViewPage #listContainer .grid.grid-cols-4 > div,
+    #employeeViewPage #gridView .grid.grid-cols-4 > div {
+        border-radius: 0.65rem !important;
+        border: 1px solid var(--emp-border) !important;
+        background: #fff;
+        padding: 0.5rem 0.6rem !important;
+        box-shadow: 0 6px 18px -16px rgba(15, 23, 42, 0.45);
+        transition: border-color 0.16s ease, background-color 0.16s ease;
+    }
+    #employeeViewPage #listContainer .grid.grid-cols-4 > div:hover,
+    #employeeViewPage #gridView .grid.grid-cols-4 > div:hover {
+        transform: none;
+        border-color: color-mix(in srgb, var(--emp-accent) 22%, var(--emp-border)) !important;
+        background: color-mix(in srgb, var(--emp-accent-soft) 35%, #fff);
+    }
+    #employeeViewPage #listContainer .bg-white.rounded-md.shadow-card:has(#gridView) {
+        border-radius: 0.75rem !important;
+        border: 1px solid var(--emp-border);
+        box-shadow: 0 10px 28px -24px rgba(15, 23, 42, 0.5);
+    }
+
+    /* Row actions column */
+    #employeeViewPage #view-container .oh-btn--light-bkg,
+    #employeeViewPage #view-container .oh-btn--sq-sm {
+        border-radius: 0.65rem;
+        transition: transform 0.16s var(--emp-ease), background-color 0.16s ease;
+    }
+    #employeeViewPage #view-container .oh-btn--light-bkg:hover {
+        transform: translateY(-1px);
+    }
+    #employeeViewPage .emp-row-actions {
+        padding: 0.05rem;
+        gap: 0.15rem !important;
+        border-radius: 0.5rem;
+        background: color-mix(in srgb, #f8fafc 80%, transparent);
+    }
+    #employeeViewPage .emp-row-actions .oh-btn--sq-sm {
+        width: 1.55rem;
+        height: 1.55rem;
+        font-size: 0.68rem;
+    }
+    #employeeViewPage #view-container table.fixed-table th:last-child,
+    #employeeViewPage #view-container table.fixed-table td:last-child {
+        padding-left: 0.25rem !important;
+        padding-right: 0.25rem !important;
+    }
+
+    #employeeViewPage .emp-card-body__main {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        padding-top: 0;
+        padding-right: 0.85rem;
+    }
+    #employeeViewPage .emp-card-body__avatar-wrap {
+        position: relative;
+        flex-shrink: 0;
+        width: 2.1rem;
+        height: 2.1rem;
+    }
+    #employeeViewPage .emp-card-body__avatar {
+        width: 2.1rem;
+        height: 2.1rem;
+        border-radius: 0.55rem;
+        box-shadow: 0 0 0 1px #fff, 0 0 0 2px rgba(15, 23, 42, 0.06);
+    }
+    #employeeViewPage .emp-card-body__status-dot {
+        position: absolute;
+        right: -0.1rem;
+        bottom: -0.1rem;
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 999px;
+        border: 1.5px solid #fff;
+    }
+    #employeeViewPage .emp-card-body__name {
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: #0f172a;
+        line-height: 1.15;
+    }
+    #employeeViewPage .emp-card-body__details {
+        display: grid;
+        gap: 0;
+        font-size: 0.68rem;
+        color: #64748b;
+        line-height: 1.2;
+    }
+
+    /* Status / presence helpers (existing classes, refined colors) */
+    #employeeViewPage .online--dot {
+        background-color: #22c55e;
+    }
+    #employeeViewPage .offline--dot {
+        background-color: #94a3b8;
+    }
+    #employeeViewPage .hired-True {
+        border-left: 3px solid #22c55e !important;
+        border-radius: 0.85rem 0 0 0.85rem;
+    }
+    #employeeViewPage .profile-picture {
+        transition: transform 0.28s var(--emp-ease);
+        z-index: 20;
+    }
+    #employeeViewPage .profile-picture:hover {
+        transform: scale(2.15);
+    }
+    #employeeViewPage .custom-swal-container .swal2-styled {
+        display: block;
+        width: 70%;
+    }
+
+    body.dark #employeeViewPage #employeeListNavBar > div > .flex.flex-wrap.justify-between {
+        background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+    body.dark #employeeViewPage #employeeListNavBar h3.text-lg {
+        color: #f8fafc;
+    }
+    body.dark #employeeViewPage #view-container .bg-white,
+    body.dark #employeeViewPage #listContainer .hlv-container > .bg-white,
+    body.dark #employeeViewPage #listContainer .grid.grid-cols-4 > div {
+        background: #111827 !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+    }
+    body.dark #employeeViewPage #view-container table.fixed-table thead {
+        background: #0f172a !important;
+    }
+    body.dark #employeeViewPage #view-container table.fixed-table tbody tr:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+    body.dark #employeeViewPage .emp-card-body__name { color: #f8fafc; }
+    body.dark #employeeViewPage .emp-card-body__details { color: #94a3b8; }
+    body.dark #employeeViewPage .emp-row-actions { background: rgba(255, 255, 255, 0.04); }
+
+    #employeeViewPage #listContainer .grid.grid-cols-4,
+    #employeeViewPage #gridView .grid.grid-cols-4 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    @media (max-width: 1536px) {
+        #employeeViewPage #listContainer .grid.grid-cols-4,
+        #employeeViewPage #gridView .grid.grid-cols-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 1280px) {
+        #employeeViewPage #listContainer .grid.grid-cols-4,
+        #employeeViewPage #gridView .grid.grid-cols-4 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 900px) {
+        #employeeViewPage #listContainer .grid.grid-cols-4,
+        #employeeViewPage #gridView .grid.grid-cols-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+
+<div id="employeeViewPage" class="employee-view-page">
+    <div id="employeeListNavBar">
+        <div hx-get="{% url 'employees-nav' %}?{{ initial_nav_query|default:request.GET.urlencode }}" hx-trigger="load[this.children.length===0]"></div>
+    </div>
+
+    {% include "generic/components.html" %}
+
+    <div class="oh-checkpoint-badge mb-2" id="selectedInstances" data-ids="[]" data-clicked="" style="display: none"></div>
+
+    <div class="oh-wrapper" id="listContainer"></div>
+</div>
+
+<div id="relatedModel"></div>
+
+<div class="oh-modal" id="workInfoImport" role="dialog" aria-labelledby="workInfoImport" aria-hidden="true">
+  <div class="oh-modal__dialog">
+    <div class="oh-modal__dialog-header">
+      <h2 class="oh-modal__dialog-title" id="workInfoImportLavel">{% trans "Import Employee" %}</h2>
+      <button class="oh-modal__close" aria-label="{% trans 'Close' %}"><ion-icon name="close-outline"></ion-icon></button>
+      <div class="oh-modal__dialog-body p-0 pt-2" id="workInfoImportModalBody">
+        <form action="#" id="workInfoImportForm" enctype="multipart/form-data">
+          <div class="oh-modal__dialog-body mr-5" id="uploading" style="display: none">
+            <div class="loader-container"><div class="loader"></div><div class="loader-text">{% trans "Uploading..." %}</div></div>
+          </div>
+          <div id="error-container" style="color: red"></div>
+          <div class="modal-body">
+            {% csrf_token %}
+            <div class="oh-dropdown__import-form">
+              <label class="oh-dropdown__import-label" for="workInfoImportFile">
+                <ion-icon name="cloud-upload" class="oh-dropdown__import-form-icon md hydrated" role="img" aria-label="{% trans 'cloud upload' %}"></ion-icon>
+                <span class="oh-dropdown__import-form-title">{% trans "Upload a File" %}</span>
+                <span class="oh-dropdown__import-form-text">{% trans "Drag and drop files here" %}</span>
+              </label>
+              <input type="file" name="file" id="workInfoImportFile" />
+            </div>
+          </div>
+          <div class="modal-footer d-flex flex-row-reverse">
+            <input onclick="validateFile($(this),'workInfoImportFile',true);" type="submit" class="oh-btn oh-btn--small oh-btn--secondary w-100 mt-3" value="{% trans 'Upload' %}" />
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="oh-modal" id="employeeExport" role="dialog" aria-labelledby="employeeExport" aria-hidden="true">
+  <div class="oh-modal__dialog" style="max-width: 750px">
+    <div class="oh-modal__dialog-header">
+      <h2 class="oh-modal__dialog-title" id="employeeExportLavel">{% trans "Export Employees" %}</h2>
+      <button class="oh-modal__close" aria-label="{% trans 'Close' %}"><ion-icon name="close-outline"></ion-icon></button>
+      <div class="oh-modal__dialog-body p-0 pt-2" id="employeeExportModalBody">
+        <form action="{% url 'work-info-export' %}" method="get" onsubmit="event.stopPropagation();$(this).find('[name=instance_ids]').val($('#selectedInstances').attr('data-ids') || '[]');$(this).parents().find('.oh-modal--show').last().toggleClass('oh-modal--show');" id="employeeExportForm">
+          {% csrf_token %}
+          {% include 'cbv/employees_view/employee_export.html' %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="oh-modal" id="sendMailModal" role="dialog" aria-labelledby="sendMailModal" aria-hidden="true">
+  <div class="oh-modal__dialog">
+    <div class="oh-modal__dialog-header">
+      <span class="oh-modal__dialog-title" id="sendMailModalLabel"><h5>{% trans 'Send Mail' %}</h5></span>
+      <button class="oh-modal__close" aria-label="{% trans 'Close' %}"><ion-icon name="close-outline"></ion-icon></button>
+    </div>
+    <div class="oh-modal__dialog-body" id="mail-content"></div>
+  </div>
+</div>
+<div class="oh-modal" id="bulkUpdateModal" role="dialog" aria-labelledby="bulkUpdateModal" aria-hidden="true">
+  <div class="oh-modal__dialog" style="max-width: 750px">
+    <div class="oh-modal__dialog-header">
+      <h2 class="oh-modal__dialog-title" id="bulkUpdateModalLavel">{% trans "Bulk Update Employees" %}</h2>
+      <button class="oh-modal__close" aria-label="{% trans 'Close' %}"><ion-icon name="close-outline"></ion-icon></button>
+      <div class="oh-modal__dialog-body p-0 pt-2" id="bulkUpdateModalBody">
+        <form action="{% url 'employee-bulk-update' %}" method="post" onsubmit="event.stopPropagation();$(this).parents().find('.oh-modal--show').last().toggleClass('oh-modal--show');" id="bulkUpdateModalForm">
+          {% csrf_token %} {{ update_fields_form.update_fields.label }}
+          {{ update_fields_form.update_fields }}
+          {{ update_fields_form.bulk_employee_ids }}
+          <div class="oh-dropdown__filter-footer">
+            <button class="oh-btn oh-btn--secondary oh-btn--small w-100">{% trans "Update" %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="oh-modal" id="dataExport" role="dialog" aria-labelledby="dataExport" aria-hidden="true">
+  <div class="oh-modal__dialog">
+    <div class="oh-modal__dialog-header">
+      <span class="oh-modal__dialog-title" id="dataExport"><h5>{% trans 'Export Data' %}</h5></span>
+      <button class="oh-modal__close" aria-label="{% trans 'Close' %}"><ion-icon name="close-outline"></ion-icon></button>
+    </div>
+    <div class="oh-modal__dialog-body" id="export-content"></div>
+  </div>
+</div>
+
+<script src="{% static 'employee/importExport.js' %}"></script>
+<script src="{% static '/cbv/employee_view/actions.js' %}?v=9"></script>
+<script>
+  (function () {
+    function isEmployeeDetailPath() {
+      var path = window.location.pathname.replace(/\/$/, "");
+      return /\/employee\/employee-view\/\d+$/.test(path);
+    }
+    function isEmployeeEditPath() {
+      var path = window.location.pathname.replace(/\/$/, "");
+      return /\/employee\/employee-view-update\/\d+$/.test(path);
+    }
+    function getHtmxSwapTarget(e) {
+      if (!e || !e.detail) return null;
+      return e.detail.target || e.detail.elt || null;
+    }
+    function syncEmployeeListNavBar() {
+      var nav = document.getElementById("employeeListNavBar");
+      var list = document.getElementById("listContainer");
+      if (!nav || !list) return;
+      var hide = !!list.querySelector(".reload-profile-view") || !!list.querySelector("#employee-update-form-root") || isEmployeeDetailPath() || isEmployeeEditPath();
+      if (hide) {
+        nav.style.display = "none";
+        var tagRow = nav.querySelector("#filterTagContainerSectionNav");
+        if (tagRow) tagRow.innerHTML = "";
+      } else {
+        nav.style.display = "";
+      }
+    }
+    function onListContainerHtmxEvent(e) {
+      var t = getHtmxSwapTarget(e);
+      if (t && t.id === "listContainer") syncEmployeeListNavBar();
+    }
+    document.addEventListener("DOMContentLoaded", syncEmployeeListNavBar);
+    document.body.addEventListener("htmx:afterSwap", onListContainerHtmxEvent);
+    document.body.addEventListener("htmx:afterSettle", onListContainerHtmxEvent);
+    document.body.addEventListener("htmx:afterRequest", function (e) {
+      var url = (e.detail && e.detail.xhr && e.detail.xhr.responseURL) || "";
+      if (e.detail && e.detail.successful && (url.indexOf("/employee/profile/employee/employee-view/") !== -1 || url.indexOf("/employee/employee-view-update/") !== -1)) {
+        setTimeout(syncEmployeeListNavBar, 0);
+      }
+    });
+    window.addEventListener("popstate", function () { setTimeout(syncEmployeeListNavBar, 0); });
+  })();
+</script>
+<script>
+  (function () {
+    var ALLOCATION_URL_TEMPLATE = "{% url 'allocation-view' 0 %}";
+    function allocationUrlFor(id) { return ALLOCATION_URL_TEMPLATE.replace("/0/", "/" + id + "/"); }
+    function getAllocationIdFromUrl() {
+      var id = new URLSearchParams(window.location.search).get("allocation");
+      return id && /^\d+$/.test(id) ? id : null;
+    }
+    function openAllocationModal(id) {
+      var modal = document.getElementById("allocationModal");
+      if (!modal || !window.htmx) return;
+      htmx.ajax("GET", allocationUrlFor(id), { target: "#allocationModalBody", swap: "innerHTML" });
+      modal.classList.add("oh-modal--show");
+    }
+    function closeAllocationModal() {
+      var modal = document.getElementById("allocationModal");
+      if (modal) modal.classList.remove("oh-modal--show");
+    }
+    function stripAllocationParam() {
+      var url = new URL(window.location.href);
+      if (!url.searchParams.has("allocation")) return;
+      url.searchParams.delete("allocation");
+      history.pushState({}, "", url.pathname + url.search);
+    }
+    document.addEventListener("DOMContentLoaded", function () {
+      var id = getAllocationIdFromUrl();
+      if (id) openAllocationModal(id);
+    });
+    document.addEventListener("click", function (event) {
+      if (event.target.closest("#allocationModal .oh-modal__close, #allocationModal .oh-modal__cancel") && getAllocationIdFromUrl()) {
+        stripAllocationParam();
+      }
+    });
+    window.addEventListener("popstate", function () {
+      var id = getAllocationIdFromUrl();
+      var modal = document.getElementById("allocationModal");
+      var isShown = modal && modal.classList.contains("oh-modal--show");
+      if (id && !isShown) openAllocationModal(id);
+      else if (!id && isShown) closeAllocationModal();
+    });
+  })();
+</script>
+<script>
+  function getCSRFToken() {
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  }
+  function deleteEmployee(url) {
+    Swal.fire({
+      text: "{% trans 'All non-active contracts of the employee will also be deleted. Do you want to continue ?'|escapejs %}",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: i18nMessages.confirm
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const form = document.createElement('form');
+        form.setAttribute('action', url);
+        form.setAttribute('method', 'post');
+        const csrfTokenInput = document.createElement('input');
+        csrfTokenInput.setAttribute('type', 'hidden');
+        csrfTokenInput.setAttribute('name', 'csrfmiddlewaretoken');
+        csrfTokenInput.value = getCSRFToken();
+        form.appendChild(csrfTokenInput);
+        document.body.appendChild(form);
+        form.submit();
+      }
+    });
+  }
+</script>
+
+{% if request.GET.error_message %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const errorMessage = '{{ request.session.error_message|escapejs }}';
+        const formattedErrorMessage = errorMessage.replace(/,\s*/g, '<br>');
+        const finalErrorMessage = formattedErrorMessage.replace(/-\s*/g, '<span class="material-symbols-outlined me-2" style="font-size: 14px;">adjust</span>');
+        Swal.fire({
+            icon: 'error',
+            title: '{% trans "Error"|escapejs %}',
+            html: `
+              <div style='text-align:left;'>
+                  <h5 class='mb-2 fw-bold ms-2'>{% trans "This employee is already related in,"|escapejs %}</h5>
+                  <p class='ms-2'>${finalErrorMessage}</p>
+              </div>`,
+        });
+    });
+</script>
+{% endif %}
+{% endblock content %}

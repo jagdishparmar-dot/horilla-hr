@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../home/models.dart';
 
 enum AttendanceStatus { present, late, overtime, absent, weekend, none }
 
@@ -20,6 +21,7 @@ class AttendanceDay {
     this.shiftStart,
     this.shiftEnd,
     this.overtimeLabel,
+    this.punches = const [],
   });
 
   final DateTime date;
@@ -38,6 +40,9 @@ class AttendanceDay {
 
   /// Mirrors API `attendance_overtime`.
   final String? overtimeLabel;
+
+  /// Each check-in / check-out pair for the day.
+  final List<HomePunch> punches;
 
   bool get hasPunch => clockIn != null;
 
@@ -74,20 +79,26 @@ class AttendanceDay {
     }
   }
 
-  String get shiftTimingLabel {
-    final start = shiftStart ?? '09:00';
-    final end = shiftEnd ?? '05:00';
-    return '$start - $end';
+  bool get hasShiftTiming => shiftStart != null && shiftEnd != null;
+
+  String get shiftTimingLabel =>
+      hasShiftTiming ? '$shiftStart - $shiftEnd' : 'Timing not set';
+
+  String get displayShiftName =>
+      (shiftName != null && shiftName!.trim().isNotEmpty)
+      ? shiftName!
+      : 'No shift assigned';
+
+  bool get isToday {
+    final now = DateTime.now();
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 
-  String get displayShiftName => shiftName ?? 'General';
-
+  /// Short status word shown on the day pill.
   String get statusLine {
-    if (status == AttendanceStatus.none) return '';
-    if (statusDetail != null && workedLabel != null) {
-      return '$workedLabel / $statusDetail';
-    }
-    if (statusDetail != null) return statusDetail!;
+    if (statusDetail != null && statusDetail!.isNotEmpty) return statusDetail!;
     return switch (status) {
       AttendanceStatus.present => 'Present',
       AttendanceStatus.late => 'Late',
@@ -103,24 +114,16 @@ class AttendanceMonthStats {
   const AttendanceMonthStats({
     required this.presentDays,
     required this.absentDays,
-    required this.lateMinutes,
+    required this.lateDays,
     required this.overtimeHours,
   });
 
   final int presentDays;
   final int absentDays;
-  final int lateMinutes;
+
+  /// Days flagged late. The API reports late as a flag, not minutes.
+  final int lateDays;
   final int overtimeHours;
 
-  String get lateLabel {
-    if (lateMinutes >= 60) {
-      final h = lateMinutes ~/ 60;
-      final m = lateMinutes % 60;
-      return m == 0 ? '${h.toString().padLeft(2, '0')} hrs' : '${h}h ${m}m';
-    }
-    return '$lateMinutes mins';
-  }
-
-  String get overtimeLabel =>
-      '${overtimeHours.toString().padLeft(2, '0')} hrs';
+  String get overtimeLabel => '${overtimeHours.toString().padLeft(2, '0')} hrs';
 }

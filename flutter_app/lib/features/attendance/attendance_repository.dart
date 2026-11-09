@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/dio_client.dart';
+import '../home/models.dart';
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
   return AttendanceRepository(ref.watch(dioProvider));
@@ -25,6 +26,7 @@ class AttendanceRecord {
     this.shiftEnd,
     this.isLate = false,
     this.isHoliday = false,
+    this.punches = const [],
   });
 
   final int id;
@@ -42,6 +44,7 @@ class AttendanceRecord {
   final String? shiftEnd;
   final bool isLate;
   final bool isHoliday;
+  final List<HomePunch> punches;
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> json) {
     final dateRaw = json['attendance_date'] as String? ?? '';
@@ -61,6 +64,10 @@ class AttendanceRecord {
       shiftEnd: json['shift_end'] as String?,
       isLate: json['is_late'] as bool? ?? false,
       isHoliday: json['is_holiday'] as bool? ?? false,
+      punches: (json['activities'] as List<dynamic>? ?? [])
+          .whereType<Map>()
+          .map((e) => HomePunch.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
     );
   }
 
@@ -132,8 +139,9 @@ class AttendanceRepository {
       'attendance_date': _dateFmt.format(attendanceDate),
       'attendance_clock_in_date': _dateFmt.format(clockInDate),
       'attendance_clock_in': clockIn,
-      'attendance_clock_out_date':
-          clockOutDate == null ? '' : _dateFmt.format(clockOutDate),
+      'attendance_clock_out_date': clockOutDate == null
+          ? ''
+          : _dateFmt.format(clockOutDate),
       'attendance_clock_out': clockOut ?? '',
       'attendance_worked_hour': workedHour,
       'minimum_hour': minimumHour,

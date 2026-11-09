@@ -1,6 +1,6 @@
 {% load i18n basefilters horillafilters %}
 
-<div class="flex items-center justify-center gap-1" onclick="event.stopPropagation()">
+<div class="emp-row-actions flex items-center justify-center gap-0.5" onclick="event.stopPropagation()">
 	{% if "leave"|app_installed or "payroll"|app_installed or "attendance"|app_installed %}
         <button
             type="button"

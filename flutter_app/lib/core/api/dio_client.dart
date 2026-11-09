@@ -14,7 +14,10 @@ final dioProvider = Provider<Dio>((ref) {
       baseUrl: AppConfig.apiBaseUrl,
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 30),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
     ),
   );
 
@@ -107,7 +110,7 @@ String messageFromDio(DioException e) {
   }
   if (e.type == DioExceptionType.connectionError ||
       e.type == DioExceptionType.connectionTimeout) {
-    return 'Cannot reach Horilla server. Check API_BASE_URL and that runserver is up.';
+    return 'Cannot reach the ClockMe server. Check API_BASE_URL and that runserver is up.';
   }
   return e.message ?? 'Request failed';
 }

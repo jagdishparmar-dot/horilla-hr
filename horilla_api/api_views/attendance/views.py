@@ -21,6 +21,7 @@ from attendance.models import (
     AttendanceOverTime,
     EmployeeShiftDay,
 )
+from attendance.methods.utils import Request, punch_coordinates, assigned_work_site
 from attendance.views.clock_in_out import *
 from attendance.views.clock_in_out import clock_out
 from attendance.views.dashboard import (
@@ -85,19 +86,10 @@ def geofence_denial(request):
         # No employee record: nothing downstream can attribute a punch anyway.
         return None
 
-    company = employee.get_company()
-    if company is None:
-        return None
+    from geofencing.models import enforceable_fence
 
-    # The company's own fence, else the global one.
-    from geofencing.models import GeoFencing
-
-    geo_fencing = GeoFencing.for_company(company)
-    if geo_fencing is None:
-        # No GeoFencing row at all: the feature is not in use here.
-        return None
-
-    if not geo_fencing.start:
+    # Assigned work site (when its fence is on) wins over the company fence.
+    if enforceable_fence(employee) is None:
         return None
 
     from geofencing.views import GeoFencingEmployeeLocationCheckAPIView
@@ -182,6 +174,7 @@ class ClockInAPIView(APIView):
                         ) = shift_schedule_today(day=day_yesterday, shift=shift)
                         attendance_date = date_yesterday
                         day = day_yesterday
+                latitude, longitude = punch_coordinates(request)
                 clock_in_attendance_and_activity(
                     employee=employee,
                     date_today=date_today,
@@ -193,6 +186,9 @@ class ClockInAPIView(APIView):
                     start_time=start_time_sec,
                     end_time=end_time_sec,
                     in_datetime=datetime_now,
+                    latitude=latitude,
+                    longitude=longitude,
+                    work_site=assigned_work_site(employee),
                 )
                 return Response({"message": "Clocked-In"}, status=200)
             return Response(
@@ -219,25 +215,38 @@ class ClockOutAPIView(APIView):
         denial = geofence_denial(request)
         if denial is not None:
             return denial
-        if request.user.employee_get.check_online():
+        employee = request.user.employee_get
+        # An open activity is the source of truth. The day row can already
+        # have a check-out from an earlier session while a later punch is open,
+        # and check_online() only looks at that day row.
+        punch_open = AttendanceActivity.objects.filter(
+            employee_id=employee, clock_out__isnull=True
+        ).exists()
+        if punch_open or employee.check_online():
             current_date = date.today()
             current_time = datetime.now().time()
             current_datetime = datetime.now()
 
             try:
+                latitude, longitude = punch_coordinates(request)
                 clock_out(
                     Request(
                         user=request.user,
                         date=current_date,
                         time=current_time,
                         datetime=current_datetime,
+                        latitude=latitude,
+                        longitude=longitude,
                     )
                 )
                 return Response({"message": "Clocked-Out"}, status=200)
 
-            except Exception as error:
-                logger.error("Got an error in clock_out", error)
-            # return Response({"message": "Clocked-Out"}, status=200)
+            except Exception:
+                logger.exception("Got an error in clock_out")
+                return Response(
+                    {"error": _("Could not record check-out. Please try again.")},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
         return Response({"message": "Already clocked-out"}, status=400)
 
 
@@ -1205,8 +1214,22 @@ class UserAttendanceView(APIView):
         paginator = HorillaPageNumberPagination()
         paginator.page_size = 31
         page = paginator.paginate_queryset(attendance_queryset, request)
+        dates = [row.attendance_date for row in page]
+        activities_by_date = {}
+        if dates:
+            for activity in AttendanceActivity.objects.filter(
+                employee_id=employee_id,
+                attendance_date__in=dates,
+            ).order_by("clock_in_date", "clock_in", "id"):
+                activities_by_date.setdefault(activity.attendance_date, []).append(
+                    activity
+                )
 
-        serializer = self.serializer_class(page, many=True)
+        serializer = self.serializer_class(
+            page,
+            many=True,
+            context={"activities_by_date": activities_by_date},
+        )
         return paginator.get_paginated_response(serializer.data)
 
 

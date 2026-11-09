@@ -26,6 +26,7 @@ from base.models import (
     JobRole,
     WorkType,
 )
+from geofencing.models import WorkSite
 from employee.models import (
     Actiontype,
     DisciplinaryAction,
@@ -312,6 +313,7 @@ class EmployeeFilter(HorillaFilterSet):
             "employee_work_info__job_role_id",
             "employee_work_info__reporting_manager_id",
             "employee_work_info__company_id",
+            "employee_work_info__work_site",
             "employee_work_info__shift_id",
             "employee_work_info__tags",
             "employee_user_id__groups",
@@ -441,6 +443,13 @@ class EmployeeFilter(HorillaFilterSet):
             "display_fn": lambda obj: obj.department,
             "search_fields": ["department"],
             "placeholder": _("Select department..."),
+        },
+        "employee_work_info__work_site": {
+            "key": "employee-work-site",
+            "queryset_fn": lambda request: WorkSite.objects.filter(is_active=True),
+            "display_fn": lambda obj: obj.name,
+            "search_fields": ["name"],
+            "placeholder": _("Select work site..."),
         },
         "employee_work_info__job_position_id": {
             "key": "employee-job-position",

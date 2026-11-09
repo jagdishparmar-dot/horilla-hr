@@ -254,3 +254,24 @@ class UserAttendanceDetailedSerializer(serializers.ModelSerializer):
         schedule = self._schedule_for_day(obj)
         value = getattr(schedule, "end_time", None)
         return value.strftime("%H:%M") if value else None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        grouped = self.context.get("activities_by_date")
+        if grouped is None:
+            rows = AttendanceActivity.objects.filter(
+                employee_id=instance.employee_id,
+                attendance_date=instance.attendance_date,
+            ).order_by("clock_in_date", "clock_in", "id")
+        else:
+            rows = grouped.get(instance.attendance_date, [])
+        data["activities"] = [
+            {
+                "id": row.id,
+                "clock_in": row.clock_in.strftime("%H:%M") if row.clock_in else None,
+                "clock_out": row.clock_out.strftime("%H:%M") if row.clock_out else None,
+                "open": row.clock_out is None,
+            }
+            for row in rows
+        ]
+        return data

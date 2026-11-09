@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
+import '../home/home_provider.dart';
 import 'models.dart';
+import 'requests_provider.dart';
 import 'requests_repository.dart';
 
 Future<void> showRequestDetailsSheet(
@@ -31,6 +34,7 @@ class _RequestDetailsSheet extends ConsumerStatefulWidget {
 class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
   late LeaveRequestItem item;
   bool _loading = true;
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -40,9 +44,14 @@ class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
   }
 
   Future<void> _loadDetail() async {
+    if (item.source != RequestSource.leave) {
+      setState(() => _loading = false);
+      return;
+    }
     try {
-      final detailed =
-          await ref.read(requestsRepositoryProvider).fetchRequestDetail(item.id);
+      final detailed = await ref
+          .read(requestsRepositoryProvider)
+          .fetchRequestDetail(item.id);
       if (!mounted) return;
       setState(() {
         item = detailed;
@@ -54,83 +63,91 @@ class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
     }
   }
 
-  static List<ApprovalStep> _fallbackTimeline(RequestStatus status) {
-    switch (status) {
-      case RequestStatus.approved:
-        return const [
-          ApprovalStep(
-            title: 'Request Submitted',
-            state: ApprovalStepState.done,
-            subtitle: 'Completed',
+  String get _statusNote => switch (item.status) {
+    RequestStatus.pending => 'Waiting for approval.',
+    RequestStatus.approved => 'This request is approved.',
+    RequestStatus.rejected => 'This request was rejected.',
+    RequestStatus.cancelled => 'This request was cancelled.',
+    RequestStatus.cancelRequested => 'Cancellation is waiting for a manager.',
+  };
+
+  List<List<dynamic>> get _statusIcon => switch (item.status) {
+    RequestStatus.pending ||
+    RequestStatus.cancelRequested => HugeIcons.strokeRoundedTimer02,
+    RequestStatus.approved => HugeIcons.strokeRoundedCheckmarkCircle02,
+    RequestStatus.rejected => HugeIcons.strokeRoundedCancelCircle,
+    RequestStatus.cancelled => HugeIcons.strokeRoundedCancel01,
+  };
+
+  Future<void> _cancel() async {
+    final approvedLeave =
+        item.source == RequestSource.leave &&
+        item.status == RequestStatus.approved;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(item.cancelActionLabel),
+        content: Text(
+          approvedLeave
+              ? 'This asks your manager to cancel the approved leave.'
+              : 'This withdraws the request.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep'),
           ),
-          ApprovalStep(
-            title: 'Direct Manager Approval',
-            state: ApprovalStepState.done,
-            subtitle: 'Completed',
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              item.cancelActionLabel,
+              style: const TextStyle(color: AppColors.red),
+            ),
           ),
-          ApprovalStep(
-            title: 'HR Approval',
-            state: ApprovalStepState.done,
-            subtitle: 'Completed',
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _cancelling = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(requestsRepositoryProvider).cancelRequest(item);
+      invalidateRequests(ref);
+      ref.invalidate(mobileHomeProvider);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            approvedLeave ? 'Cancellation requested' : 'Request cancelled',
           ),
-        ];
-      case RequestStatus.rejected:
-        return const [
-          ApprovalStep(
-            title: 'Request Submitted',
-            state: ApprovalStepState.done,
-            subtitle: 'Completed',
-          ),
-          ApprovalStep(
-            title: 'Direct Manager Approval',
-            state: ApprovalStepState.rejected,
-            subtitle: 'Rejected',
-          ),
-          ApprovalStep(
-            title: 'HR Approval',
-            state: ApprovalStepState.rejected,
-            subtitle: 'Skipped',
-          ),
-        ];
-      case RequestStatus.pending:
-      case RequestStatus.cancelled:
-        return const [
-          ApprovalStep(
-            title: 'Request Submitted',
-            state: ApprovalStepState.done,
-            subtitle: 'Submitted',
-          ),
-          ApprovalStep(
-            title: 'Direct Manager Approval',
-            state: ApprovalStepState.pending,
-            subtitle: 'Pending',
-          ),
-          ApprovalStep(
-            title: 'HR Approval',
-            state: ApprovalStepState.waiting,
-            subtitle: 'Waiting',
-          ),
-        ];
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _cancelling = false);
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
+
+  bool get _singleDay =>
+      item.startDate.year == item.endDate.year &&
+      item.startDate.month == item.endDate.month &&
+      item.startDate.day == item.endDate.day;
 
   String get _dateRange {
-    final start = DateFormat('MMM d').format(item.startDate);
-    if (item.startDate.year == item.endDate.year &&
-        item.startDate.month == item.endDate.month &&
-        item.startDate.day == item.endDate.day) {
-      return DateFormat('MMM d').format(item.startDate);
-    }
-    final end = DateFormat('MMM d').format(item.endDate);
-    return '$start - $end';
+    final start = DateFormat('EEE, MMM d').format(item.startDate);
+    if (_singleDay) return start;
+    final end = DateFormat('EEE, MMM d').format(item.endDate);
+    return '$start  →  $end';
   }
-
-  String get _returnDate =>
-      DateFormat('MMM d').format(item.effectiveReturnDate);
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final status = item.status;
+    final accent = item.accent;
 
     return Container(
       constraints: BoxConstraints(
@@ -138,191 +155,259 @@ class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_loading) const LinearProgressIndicator(minHeight: 2),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
-            decoration: const BoxDecoration(
-              color: AppColors.navBlue,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            padding: const EdgeInsets.fromLTRB(20, 14, 8, 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.lerp(accent, Colors.black, 0.08)!,
+                  Color.lerp(accent, const Color(0xFF9B5CFF), 0.45)!,
+                ],
+              ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Expanded(
-                  child: Text(
-                    'Request Details',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
-                  ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: HugeIcon(
+                          icon: item.icon,
+                          color: accent,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.categoryLabel.toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 20,
+                              height: 1.15,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: status.pillBackground,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      HugeIcon(
+                        icon: _statusIcon,
+                        color: status.color,
+                        size: 15,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        status.label,
+                        style: TextStyle(
+                          color: status.color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
           Flexible(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, 18, 20, 16 + bottom),
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 20 + bottom),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Request type',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              item.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 18,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: item.status.color.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          item.status.label,
-                          style: TextStyle(
-                            color: item.status.color,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _InfoCell(
+                        child: _InfoTile(
+                          icon: HugeIcons.strokeRoundedClock01,
                           label: 'Duration',
                           value: item.durationLabel,
+                          color: const Color(0xFF2F6BFF),
                         ),
                       ),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: _InfoCell(
-                          label: 'Date',
+                        flex: 2,
+                        child: _InfoTile(
+                          icon: HugeIcons.strokeRoundedCalendar03,
+                          label: _singleDay ? 'Date' : 'Dates',
                           value: _dateRange,
-                        ),
-                      ),
-                      Expanded(
-                        child: _InfoCell(
-                          label: 'Return Date',
-                          value: _returnDate,
+                          color: const Color(0xFF8B5CF6),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Request Reason',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.reason?.isNotEmpty == true
-                        ? item.reason!
-                        : 'No reason provided.',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: AppColors.textPrimary,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Divider(height: 1, color: Color(0xFFE5E7EB)),
                   const SizedBox(height: 16),
-                  _ApprovalTimeline(
-                    steps: item.approvalSteps.isEmpty
-                        ? _fallbackTimeline(item.status)
-                        : item.approvalSteps,
+                  _SectionLabel(
+                    icon: HugeIcons.strokeRoundedNote01,
+                    text: 'Request reason',
                   ),
-                  if (item.status == RequestStatus.rejected &&
-                      item.rejectionReason != null) ...[
-                    const SizedBox(height: 16),
-                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Rejection Reason',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6F7FB),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      item.rejectionReason!,
-                      style: const TextStyle(
+                    child: Text(
+                      item.reason?.isNotEmpty == true
+                          ? item.reason!
+                          : 'No reason provided.',
+                      style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
-                        color: AppColors.textPrimary,
-                        height: 1.35,
+                        color: item.reason?.isNotEmpty == true
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: status.softBackground,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        HugeIcon(
+                          icon: _statusIcon,
+                          color: status.color,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _statusNote,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
+                              color: status.color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (status == RequestStatus.rejected &&
+                      item.rejectionReason != null &&
+                      item.rejectionReason!.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _SectionLabel(
+                      icon: HugeIcons.strokeRoundedAlert02,
+                      text: 'Rejection reason',
+                      color: AppColors.red,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDECEE),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        item.rejectionReason!,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ],
-                  if (item.status == RequestStatus.pending) ...[
+                  if (item.canCancel) ...[
                     const SizedBox(height: 22),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Cancel request coming soon'),
-                            ),
-                          );
-                        },
+                        onPressed: _cancelling ? null : _cancel,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.red,
                           side: const BorderSide(color: AppColors.red),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: const Text(
-                          'Cancel Request',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                        child: Text(
+                          _cancelling ? 'Working…' : item.cancelActionLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
                     ),
@@ -337,34 +422,28 @@ class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
   }
 }
 
-class _InfoCell extends StatelessWidget {
-  const _InfoCell({
-    required this.label,
-    required this.value,
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({
+    required this.icon,
+    required this.text,
+    this.color = AppColors.textSecondary,
   });
 
-  final String label;
-  final String value;
+  final List<List<dynamic>> icon;
+  final String text;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
+        HugeIcon(icon: icon, color: color, size: 15),
+        const SizedBox(width: 6),
         Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 13,
+          text,
+          style: TextStyle(
+            color: color,
+            fontSize: 12.5,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -373,106 +452,51 @@ class _InfoCell extends StatelessWidget {
   }
 }
 
-class _ApprovalTimeline extends StatelessWidget {
-  const _ApprovalTimeline({required this.steps});
-
-  final List<ApprovalStep> steps;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (var i = 0; i < steps.length; i++)
-          _TimelineRow(
-            step: steps[i],
-            isLast: i == steps.length - 1,
-          ),
-      ],
-    );
-  }
-}
-
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({
-    required this.step,
-    required this.isLast,
+class _InfoTile extends StatelessWidget {
+  const _InfoTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
   });
 
-  final ApprovalStep step;
-  final bool isLast;
-
-  Color get _color => switch (step.state) {
-        ApprovalStepState.done => AppColors.green,
-        ApprovalStepState.pending => const Color(0xFFF59E0B),
-        ApprovalStepState.waiting => const Color(0xFFF59E0B),
-        ApprovalStepState.rejected => AppColors.red,
-      };
-
-  IconData get _icon => switch (step.state) {
-        ApprovalStepState.done => Icons.check_rounded,
-        ApprovalStepState.pending => Icons.schedule_rounded,
-        ApprovalStepState.waiting => Icons.schedule_rounded,
-        ApprovalStepState.rejected => Icons.close_rounded,
-      };
+  final List<List<dynamic>> icon;
+  final String label;
+  final String value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 28,
-            child: Column(
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: _color,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(_icon, size: 15, color: Colors.white),
+          Row(
+            children: [
+              HugeIcon(icon: icon, color: color, size: 15),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
                 ),
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      color: const Color(0xFFE5E7EB),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    step.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    step.subtitle,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      color: step.state == ApprovalStepState.done
-                          ? AppColors.textSecondary
-                          : _color,
-                    ),
-                  ),
-                ],
               ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],

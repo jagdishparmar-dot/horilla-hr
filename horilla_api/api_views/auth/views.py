@@ -105,11 +105,10 @@ class LoginAPIView(APIView):
                         face_detection = company.face_detection.start
                     except (ObjectDoesNotExist, AttributeError):
                         pass
-                    # the company's own fence, else the global one
-                    from geofencing.models import GeoFencing
+                    # Work site fence when assigned and enabled, else company/global.
+                    from geofencing.models import enforceable_fence
 
-                    fence = GeoFencing.for_company(company)
-                    geo_fencing = bool(fence and fence.start)
+                    geo_fencing = enforceable_fence(employee) is not None
                 try:
                     face_detection_image = employee.face_detection.image.url
                 except (ObjectDoesNotExist, AttributeError, ValueError):

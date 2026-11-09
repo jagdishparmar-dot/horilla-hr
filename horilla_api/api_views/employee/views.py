@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import ProtectedError, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -778,8 +779,14 @@ class PolicyAPIView(APIView):
             raise Http404
 
     def get(self, request, pk=None):
+        # Same audience rule as the web policy pages: a policy that is not
+        # published to everyone is only readable by the people it targets.
+        from employee.policies import _visible_policies
+
         if pk:
-            policy = self.get_object(pk)
+            policy = _visible_policies(request, Policy.objects.filter(pk=pk)).first()
+            if policy is None:
+                raise Http404
             serializer = PolicySerializer(policy)
             return Response(serializer.data)
         else:
@@ -788,7 +795,7 @@ class PolicyAPIView(APIView):
                 policies = Policy.objects.filter(title__icontains=search)
             else:
                 policies = Policy.objects.all()
-            serializer = PolicySerializer(policies, many=True)
+            policies = _visible_policies(request, policies).order_by("-id")
             paginator = HorillaPageNumberPagination()
             page = paginator.paginate_queryset(policies, request)
             serializer = PolicySerializer(page, many=True)
@@ -1004,7 +1011,44 @@ class DocumentAPIView(APIView):
     # (wrong model), so removing them takes away misleading cover, not protection - get_object does the real check.
     def put(self, request, pk):
         document = self.get_object(pk, request, "horilla_documents.change_document")
-        serializer = DocumentSerializer(document, data=request.data)
+        data = request.data
+        if not request.user.has_perm("horilla_documents.change_document"):
+            # The owner (or their manager) may upload the file for a document
+            # that was requested from them. Approval is HR's call, so status,
+            # rejection reason and ownership are not theirs to set -- left
+            # open, an employee could mark their own upload "approved".
+            if document.status == "approved":
+                return Response(
+                    {"error": _("An approved document can't be replaced.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            allowed = ("title", "document", "issue_date", "expiry_date", "notify_before")
+            data = {key: request.data[key] for key in allowed if key in request.data}
+            data.setdefault("title", document.title)
+            data["employee_id"] = document.employee_id_id
+            data["document_request_id"] = document.document_request_id_id
+            if document.status == "rejected":
+                # A fresh upload goes back to review.
+                data["status"] = "requested"
+                data["reject_reason"] = None
+        # ModelSerializer never runs Model.clean(), which is where the request's
+        # format and size limits live -- so without this the API accepted any
+        # file type and size for a "pdf, 2 MB" request.
+        upload = data.get("document")
+        if upload is not None and hasattr(upload, "size"):
+            probe = Document(
+                title=data.get("title") or document.title,
+                document_request_id=document.document_request_id,
+            )
+            probe.document = upload
+            try:
+                probe.clean()
+            except DjangoValidationError as exc:
+                return Response(
+                    getattr(exc, "message_dict", {"error": exc.messages}),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        serializer = DocumentSerializer(document, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

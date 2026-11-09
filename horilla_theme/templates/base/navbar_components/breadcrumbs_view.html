@@ -47,7 +47,7 @@
     .dark .crumb-more-list { background: #242424; }
     .dark .crumb-more-list a, .dark .crumb-more-list span { color: #e2e8f0; }
 </style>
-<ul class="breadcrumb ms-4">
+<ul class="breadcrumb">
     {% with groups=breadcrumbs|unique_breadcrumbs|collapse_breadcrumbs %}
         {% if groups.collapsed %}
             {% include "base/navbar_components/_crumb.html" with breadcrumb=groups.first %}

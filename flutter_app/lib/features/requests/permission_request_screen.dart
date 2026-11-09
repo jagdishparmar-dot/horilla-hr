@@ -4,9 +4,11 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
+import '../home/home_provider.dart';
 import 'models.dart';
 import 'request_form_widgets.dart';
 import 'requests_provider.dart';
+import 'requests_repository.dart';
 
 class PermissionRequestScreen extends ConsumerStatefulWidget {
   const PermissionRequestScreen({super.key});
@@ -23,6 +25,7 @@ class _PermissionRequestScreenState
   DateTime? _date;
   int _fromMinutes = 9 * 60;
   int _toMinutes = 10 * 60;
+  bool _submitting = false;
   final _reasonController = TextEditingController();
 
   @override
@@ -38,31 +41,37 @@ class _PermissionRequestScreenState
   }
 
   LeaveBalance? get _permissionBalance {
-    final balances = ref.watch(leaveBalancesProvider).maybeWhen(
-          data: (v) => v,
-          orElse: () => const <LeaveBalance>[],
-        );
+    final balances = ref
+        .watch(leaveBalancesProvider)
+        .maybeWhen(data: (v) => v, orElse: () => const <LeaveBalance>[]);
     for (final b in balances) {
       if (b.kind == BalanceKind.permission) return b;
     }
-    return balances.isNotEmpty ? balances.first : null;
+    return null;
   }
 
-  bool get _canSubmit => _date != null && _durationMinutes > 0;
+  bool get _canSubmit =>
+      !_submitting &&
+      _permissionBalance != null &&
+      _date != null &&
+      _durationMinutes > 0;
 
   int get _durationMinutes {
     final diff = _toMinutes - _fromMinutes;
     return diff > 0 ? diff : 0;
   }
 
-  String get _remainingBalanceLabel {
+  String? get _balanceLabel {
     final balance = _permissionBalance;
-    final availableHours = (balance?.available ?? 2).toDouble();
-    final availableMins = (availableHours * 60).round();
-    final remaining = (availableMins - _durationMinutes).clamp(0, availableMins);
-    final h = remaining ~/ 60;
-    final m = remaining % 60;
-    return 'Remaining Balance: ${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} hrs';
+    if (balance == null) return null;
+    return 'Available balance: ${balance.availableLabel}';
+  }
+
+  String get _dayUseLabel {
+    if (_durationMinutes <= 4 * 60) {
+      return 'Uses a half day of permission leave.';
+    }
+    return 'Uses a full day of permission leave.';
   }
 
   Future<void> _pickDate() async {
@@ -98,12 +107,52 @@ class _PermissionRequestScreenState
     });
   }
 
+  String _clock(int minutes) {
+    final h = (minutes ~/ 60).toString().padLeft(2, '0');
+    final m = (minutes % 60).toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
   Future<void> _submit() async {
-    if (!_canSubmit) return;
+    final type = _permissionBalance;
+    if (!_canSubmit || type == null || _date == null) return;
     FocusScope.of(context).unfocus();
-    await showRequestSuccessDialog(context);
-    if (!mounted) return;
-    Navigator.of(context).pop(true);
+    setState(() => _submitting = true);
+    final window = '${_clock(_fromMinutes)}–${_clock(_toMinutes)}';
+    final note = _reasonController.text.trim();
+    final description = note.isEmpty
+        ? 'Permission $window'
+        : 'Permission $window. $note';
+    final halfDay = _durationMinutes <= 4 * 60;
+    final breakdown = !halfDay
+        ? 'full_day'
+        : _fromMinutes < 12 * 60
+        ? 'first_half'
+        : 'second_half';
+    try {
+      await ref
+          .read(requestsRepositoryProvider)
+          .createLeaveRequest(
+            leaveTypeId: type.leaveTypeId,
+            startDate: _date!,
+            endDate: _date!,
+            description: description,
+            startBreakdown: breakdown,
+            endBreakdown: breakdown,
+          );
+      invalidateRequests(ref);
+      ref.invalidate(mobileHomeProvider);
+      if (!mounted) return;
+      await showRequestSuccessDialog(context);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -202,16 +251,45 @@ class _PermissionRequestScreenState
                     ),
                   ],
                 ),
-                if (_date != null) ...[
-                  const SizedBox(height: 8),
+                const SizedBox(height: 8),
+                if (ref.watch(leaveBalancesProvider).isLoading)
+                  const Text(
+                    'Loading leave balances…',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  )
+                else if (_permissionBalance == null)
+                  const Text(
+                    'No Permission leave type is assigned. Ask HR to add one before filing this request.',
+                    style: TextStyle(
+                      color: AppColors.red,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  )
+                else ...[
                   Text(
-                    _remainingBalanceLabel,
+                    _balanceLabel!,
                     style: const TextStyle(
                       color: AppColors.green,
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
                   ),
+                  if (_date != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _dayUseLabel,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 18),
                 const Text(

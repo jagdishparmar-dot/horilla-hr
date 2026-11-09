@@ -7,6 +7,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link href="{% static 'horilla_theme/assets/css/tailwind.css' %}" rel="stylesheet">
+        {% include "includes/hr_type.html" %}
         <title>
             {% blocktrans with company_name=white_label_company_name %}Login - {{ company_name }}
                 Dashboard{% endblocktrans %}
@@ -144,7 +145,7 @@
             }
         </style>
     </head>
-    <body class="min-h-screen font-[Inter,_sans-serif] bg-[{{theme_obj.primary_200|default:'#FEF6F5'}}]">
+    <body class="hr-type min-h-screen bg-[#f4f5f7]">
         <div class="oh-alert-container">
             {% for message in messages %}
                 <div class="oh-alert oh-alert--animated {{ message.tags }}">
@@ -153,25 +154,21 @@
             {% endfor %}
         </div>
 
-        <div class="min-h-screen w-full flex items-center justify-center p-4"
-             style="background:
-                radial-gradient(1200px 500px at 10% -10%, rgba(229, 79, 56, 0.12), transparent 55%),
-                radial-gradient(900px 420px at 100% 0%, rgba(229, 79, 56, 0.08), transparent 50%),
-                {% if theme_obj.primary_200 %}{{ theme_obj.primary_200 }}{% else %}#FEF6F5{% endif %};">
-            <div class="bg-white px-8 py-10 sm:px-[50px] sm:py-[50px] rounded-2xl border border-brand-100/60 shadow-[0_1px_2px_rgba(25,9,6,0.04),0_12px_32px_rgba(229,79,56,0.08)] w-full max-w-[450px] animate-auth-in">
+        <div class="auth-shell">
+            {% include "auth/feature_panel.html" %}
+            <main class="auth-main">
+            <div class="auth-card">
                 <img
                     src="{% if white_label_company.icon %}{{white_label_company.icon.url}}{% else %}{% static 'horilla_theme/assets/img/logo.svg' %}{% endif %}"
                     alt="{{ white_label_company_name }}"
-                    class="m-auto mb-5"
-                    width="80"
+                    class="auth-card__logo"
+                    width="56"
                 >
-                <h1 class="text-3xl font-bold mb-2 text-center tracking-tight text-dark-500">
-                    {% trans "Welcome to" %}
-                    {{ white_label_company_name }}
-                    {% trans "HR" %}
+                <h1 class="hr-display">
+                    {% trans "Sign in" %}
                 </h1>
-                <p class="mb-7 text-center text-sm text-dark-100">
-                    {% trans "Please login to access the dashboard." %}
+                <p class="auth-card__sub">
+                    {{ white_label_company_name }} · {% trans "Use your work account." %}
                 </p>
                 <form method="post" class="oh-form-group">
                     {% csrf_token %}
@@ -185,7 +182,7 @@
                                 name="username"
                                 autocomplete="username"
                                 placeholder="{% trans 'Enter your username or email' %}"
-                                class="text-color-600 w-full border border-dark-50 rounded-xl pl-11 pr-3 py-3 mt-0 focus-visible:outline-0 placeholder:text-[#9ca3af] placeholder:font-normal text-sm transition duration-200 hover:border-dark-100 {% if theme_obj %} focus:border-[{{theme_obj.primary_600}}] focus:shadow-[0_0_0_3px_rgba(229,79,56,0.15)] {% else %} focus:border-primary-600 focus:shadow-[0_0_0_3px_rgba(229,79,56,0.15)] {% endif %}"
+                                class="text-color-600 w-full border border-[#e5e7eb] rounded-lg pl-11 pr-3 py-3 mt-0 focus-visible:outline-0 placeholder:text-[#9ca3af] placeholder:font-normal text-sm transition duration-200 hover:border-[#cbd5e1] focus:border-[#111827]"
                             >
                         </div>
                     </div>
@@ -199,7 +196,7 @@
                                 name="password"
                                 autocomplete="current-password"
                                 placeholder="{% trans 'Enter your password' %}"
-                                class="oh-input--password text-color-600 pl-11 pr-11 py-3 w-full border border-dark-50 rounded-xl mt-0 focus-visible:outline-0 placeholder:text-[#9ca3af] placeholder:font-normal text-sm transition duration-200 hover:border-dark-100 {% if theme_obj %} focus:border-[{{theme_obj.primary_600}}] focus:shadow-[0_0_0_3px_rgba(229,79,56,0.15)] {% else %} focus:border-primary-600 focus:shadow-[0_0_0_3px_rgba(229,79,56,0.15)] {% endif %}"
+                                class="oh-input--password text-color-600 pl-11 pr-11 py-3 w-full border border-[#e5e7eb] rounded-lg mt-0 focus-visible:outline-0 placeholder:text-[#9ca3af] placeholder:font-normal text-sm transition duration-200 hover:border-[#cbd5e1] focus:border-[#111827]"
                             >
                             <span
                                 role="button"
@@ -232,7 +229,7 @@
                     {% endif %}
                     <button
                         type="submit"
-                        class="p-3 mt-3 bg-brand-600 hover:bg-brand-800 hover:-translate-y-px active:translate-y-0 w-full flex gap-3 justify-center items-center rounded-xl text-[white] transition duration-200 shadow-sm hover:shadow-md"
+                        class="p-3 mt-3 bg-[#111827] hover:bg-[#1f2937] w-full flex gap-3 justify-center items-center rounded-lg text-[white] transition duration-200"
                     >
                         <img src='{% static "horilla_theme/assets/icons/sign.svg" %}' alt=""> {% trans "Sign In" %}
                     </button>
@@ -279,6 +276,7 @@
                     </div>
                 {% endif %}
             </div>
+            </main>
         </div>
 
         <script type="module" src="{% static 'images/ionicons/ui_icons/ionicons/ionicons.esm.js' %}"></script>

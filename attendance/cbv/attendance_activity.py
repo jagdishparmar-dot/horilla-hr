@@ -68,6 +68,9 @@ class AttendanceActivityListView(HorillaListView):
         (_("Check In"), "clock_in"),
         (_("Check Out"), "clock_out"),
         (_("Out Date"), "clock_out_date"),
+        (_("Work Site"), "work_site_label"),
+        (_("Check-in location"), "clock_in_coordinates"),
+        (_("Check-out location"), "clock_out_coordinates"),
         (_("Duration (HH:MM:SS)"), "duration_format"),
     ]
 
@@ -251,6 +254,9 @@ class AttendanceDetailView(HorillaDetailedView):
         (_("Check In Date"), "clock_in_date"),
         (_("Check Out"), "clock_out"),
         (_("Check Out Date"), "clock_out_date"),
+        (_("Work Site"), "work_site_label"),
+        (_("Check-in location"), "clock_in_coordinates"),
+        (_("Check-out location"), "clock_out_coordinates"),
         (_("Duration"), "duration_format"),
         (_("Shift"), "employee_id__employee_work_info__shift_id"),
         (_("Work Type"), "employee_id__employee_work_info__work_type_id"),

@@ -28,10 +28,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
-    final ok = await ref.read(authProvider.notifier).login(
-          _username.text.trim(),
-          _password.text,
-        );
+    final ok = await ref
+        .read(authProvider.notifier)
+        .login(_username.text.trim(), _password.text);
     if (!mounted) return;
     setState(() => _submitting = false);
     if (!ok) {
@@ -52,23 +51,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.fingerprint, size: 64, color: AppColors.purple),
+                  const Icon(
+                    Icons.fingerprint,
+                    size: 64,
+                    color: AppColors.purple,
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                    'Horilla Employee',
+                    'ClockMe',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Sign in to check in and out',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 32),
                   TextFormField(
@@ -92,7 +94,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       suffixIcon: IconButton(
                         onPressed: () => setState(() => _obscure = !_obscure),
                         icon: Icon(
-                          _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          _obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                         ),
                       ),
                     ),

@@ -308,6 +308,11 @@ urlpatterns = [
         name="employee-dashboard-dept",
     ),
     path(
+        "dashboard/api/work-sites/",
+        emp_dashboard.employee_by_work_site,
+        name="employee-dashboard-work-sites",
+    ),
+    path(
         "dashboard/api/department-positions/",
         emp_dashboard.employee_department_positions,
         name="employee-dashboard-dept-positions",

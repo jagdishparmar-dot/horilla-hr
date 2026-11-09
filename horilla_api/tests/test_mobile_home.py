@@ -119,6 +119,11 @@ class MobileHomeTests(TestCase):
             data["punch"]["is_clocked_in"],
             "the second activity has no clock_out, so the employee is still in",
         )
+        self.assertEqual(
+            [(row["clock_in"], row["clock_out"], row["open"]) for row in data["punch"]["activities"]],
+            [("09:00", "12:00", False), ("12:30", None, True)],
+        )
+        self.assertEqual(data["punch"]["clock_out_time"], "12:00")
 
     def test_a_clock_out_without_an_out_datetime_does_not_500(self):
         """
@@ -174,6 +179,44 @@ class MobileHomeTests(TestCase):
         self.assertTrue(
             response.data["punch"]["last_activity_at"].startswith(today.isoformat())
         )
+
+    def test_open_overnight_shift_stays_clocked_in(self):
+        """
+        After midnight a night shift still belongs to yesterday. Home must
+        keep offering check-out, matching the punch API's online check.
+        """
+        yesterday = FIXED_TODAY - timedelta(days=1)
+        base = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
+        AttendanceActivity.objects.create(
+            employee_id=self.employee,
+            attendance_date=yesterday,
+            clock_in_date=yesterday,
+            clock_in=(base + timedelta(hours=22)).time(),
+            in_datetime=base + timedelta(hours=22),
+        )
+
+        punch = self.client.get(HOME_URL).data["punch"]
+        self.assertTrue(punch["is_clocked_in"])
+        self.assertEqual(punch["activities"][0]["clock_in"], "22:00")
+        self.assertTrue(punch["activities"][0]["open"])
+
+    def test_finished_yesterday_is_not_todays_punch_list(self):
+        yesterday = FIXED_TODAY - timedelta(days=1)
+        base = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
+        AttendanceActivity.objects.create(
+            employee_id=self.employee,
+            attendance_date=yesterday,
+            clock_in_date=yesterday,
+            clock_in=(base + timedelta(hours=9)).time(),
+            in_datetime=base + timedelta(hours=9),
+            clock_out_date=yesterday,
+            clock_out=(base + timedelta(hours=17)).time(),
+            out_datetime=base + timedelta(hours=17),
+        )
+
+        punch = self.client.get(HOME_URL).data["punch"]
+        self.assertFalse(punch["is_clocked_in"])
+        self.assertEqual(punch["activities"], [])
 
     def test_single_open_activity_means_no_break(self):
         today = FIXED_TODAY

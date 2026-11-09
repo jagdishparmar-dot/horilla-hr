@@ -6,40 +6,44 @@ import 'attendance_correction_screen.dart';
 import 'leave_request_screen.dart';
 import 'permission_request_screen.dart';
 import 'remote_work_request_screen.dart';
+import 'shift_request_screen.dart';
 
 enum NewRequestType {
   leave,
   permission,
   remoteWork,
   attendanceCorrection,
+  shift,
 }
 
 Future<bool?> showNewRequestSheet(BuildContext context) async {
   final type = await showModalBottomSheet<NewRequestType>(
     context: context,
+    isScrollControlled: true,
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (context) => const _NewRequestSheet(),
   );
   if (type == null || !context.mounted) return null;
 
   return switch (type) {
-    NewRequestType.leave => Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const LeaveRequestScreen()),
-      ),
+    NewRequestType.leave => Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const LeaveRequestScreen())),
     NewRequestType.permission => Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const PermissionRequestScreen()),
-      ),
+      MaterialPageRoute(builder: (_) => const PermissionRequestScreen()),
+    ),
     NewRequestType.remoteWork => Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const RemoteWorkRequestScreen()),
-      ),
+      MaterialPageRoute(builder: (_) => const RemoteWorkRequestScreen()),
+    ),
     NewRequestType.attendanceCorrection => Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => const AttendanceCorrectionScreen(),
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => const AttendanceCorrectionScreen()),
+    ),
+    NewRequestType.shift => Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const ShiftRequestScreen())),
   };
 }
 
@@ -54,33 +58,40 @@ class _NewRequestSheet extends StatelessWidget {
         title: 'Leave Request',
         subtitle: 'Apply for annual, casual, or other leave',
         icon: HugeIcons.strokeRoundedSun03,
-        color: AppColors.orange,
+        color: const Color(0xFF22C55E),
       ),
       _Option(
         type: NewRequestType.permission,
         title: 'Permission',
         subtitle: 'Request short permission hours',
         icon: HugeIcons.strokeRoundedClock01,
-        color: AppColors.navBlue,
+        color: const Color(0xFFF59E0B),
       ),
       _Option(
         type: NewRequestType.remoteWork,
         title: 'Remote Work',
         subtitle: 'Request to work remotely',
         icon: HugeIcons.strokeRoundedHome01,
-        color: AppColors.green,
+        color: const Color(0xFF22B8E8),
       ),
       _Option(
         type: NewRequestType.attendanceCorrection,
         title: 'Attendance Correction',
         subtitle: 'Fix a missed or wrong punch',
         icon: HugeIcons.strokeRoundedCalendarCheckIn01,
-        color: AppColors.purple,
+        color: const Color(0xFF8B5CF6),
+      ),
+      _Option(
+        type: NewRequestType.shift,
+        title: 'Shift Change',
+        subtitle: 'Ask to work a different shift',
+        icon: HugeIcons.strokeRoundedTimer02,
+        color: const Color(0xFF6366F1),
       ),
     ];
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -97,21 +108,34 @@ class _NewRequestSheet extends StatelessWidget {
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'New Request',
+                'New request',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
+                  letterSpacing: -0.3,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 2),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'What would you like to request?',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
             for (final option in options) ...[
               _OptionTile(
                 option: option,
                 onTap: () => Navigator.of(context).pop(option.type),
               ),
-              if (option != options.last) const SizedBox(height: 8),
+              if (option != options.last) const SizedBox(height: 10),
             ],
           ],
         ),
@@ -137,10 +161,7 @@ class _Option {
 }
 
 class _OptionTile extends StatelessWidget {
-  const _OptionTile({
-    required this.option,
-    required this.onTap,
-  });
+  const _OptionTile({required this.option, required this.onTap});
 
   final _Option option;
   final VoidCallback onTap;
@@ -148,26 +169,33 @@ class _OptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF7F8FA),
-      borderRadius: BorderRadius.circular(14),
+      color: option.color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: option.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.lerp(option.color, Colors.white, 0.3)!,
+                      option.color,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Center(
                   child: HugeIcon(
                     icon: option.icon,
-                    color: option.color,
+                    color: Colors.white,
                     size: 22,
                   ),
                 ),

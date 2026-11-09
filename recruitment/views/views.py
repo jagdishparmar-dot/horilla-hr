@@ -28,6 +28,7 @@ import pymupdf  # type: ignore
 import spacy
 from dateutil import parser as dateutil_parser
 from django import template
+from django.conf import settings
 from django.contrib import messages
 from django.core import serializers
 from django.core.cache import cache
@@ -3449,7 +3450,7 @@ def candidate_send_invitation(request, cand_id):
     company = (
         candidate.recruitment_id.company_id if candidate.recruitment_id_id else None
     )
-    company_name = company.company if company else "Horilla"
+    company_name = company.company if company else getattr(settings, "PRODUCT_NAME", "ClockMe")
     body = render_to_string(
         "candidate/invitation_mail.html",
         {

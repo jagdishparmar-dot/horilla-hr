@@ -448,6 +448,9 @@ DJANGO_NOTIFICATIONS_CONFIG = {
 # HORILLA-SPECIFIC SETTINGS
 # ========================================
 WHITE_LABELLING = False
+# Name shown in the browser title, login, emails, and reports when white
+# labelling is off. Company records still supply their own name when it is on.
+PRODUCT_NAME = "ClockMe"
 NESTED_SUBORDINATE_VISIBILITY = False
 TWO_FACTORS_AUTHENTICATION = False
 # When True, /ready/ returns 503 until run_scheduler has registered jobs.

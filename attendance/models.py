@@ -76,6 +76,26 @@ class AttendanceActivity(HorillaModel):
     clock_out_date = models.DateField(null=True, verbose_name=_("Out Date"))
     out_datetime = models.DateTimeField(null=True)
     clock_out = models.TimeField(null=True, verbose_name=_("Check Out"))
+    work_site = models.ForeignKey(
+        "geofencing.WorkSite",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_activities",
+        verbose_name=_("Work Site"),
+    )
+    clock_in_latitude = models.FloatField(
+        null=True, blank=True, verbose_name=_("Check-in latitude")
+    )
+    clock_in_longitude = models.FloatField(
+        null=True, blank=True, verbose_name=_("Check-in longitude")
+    )
+    clock_out_latitude = models.FloatField(
+        null=True, blank=True, verbose_name=_("Check-out latitude")
+    )
+    clock_out_longitude = models.FloatField(
+        null=True, blank=True, verbose_name=_("Check-out longitude")
+    )
     objects = HorillaCompanyManager(
         related_company_field="employee_id__employee_work_info__company_id"
     )
@@ -182,8 +202,25 @@ class AttendanceActivity(HorillaModel):
 
         return formatted_duration
 
+    def work_site_label(self):
+        if self.work_site_id:
+            return self.work_site.name
+        return "—"
+
+    def clock_in_coordinates(self):
+        return _format_coordinates(self.clock_in_latitude, self.clock_in_longitude)
+
+    def clock_out_coordinates(self):
+        return _format_coordinates(self.clock_out_latitude, self.clock_out_longitude)
+
     def __str__(self):
         return f"{self.employee_id} - {self.attendance_date} - {self.clock_in} - {self.clock_out}"
+
+
+def _format_coordinates(latitude, longitude):
+    if latitude is None or longitude is None:
+        return "—"
+    return f"{latitude:.6f}, {longitude:.6f}"
 
 
 class BatchAttendance(HorillaModel):
@@ -1233,6 +1270,40 @@ class Attendance(HorillaModel):
                 raise ValidationError(
                     {"attendance_clock_out": "Check-out time cannot be in the future"}
                 )
+
+    def _day_activities(self):
+        if not hasattr(self, "_day_activity_cache"):
+            self._day_activity_cache = list(
+                AttendanceActivity.objects.filter(
+                    employee_id=self.employee_id,
+                    attendance_date=self.attendance_date,
+                )
+                .select_related("work_site")
+                .order_by("clock_in", "id")
+            )
+        return self._day_activity_cache
+
+    def punch_work_sites(self):
+        names = []
+        for activity in self._day_activities():
+            if activity.work_site_id and activity.work_site.name not in names:
+                names.append(activity.work_site.name)
+        return ", ".join(names) if names else "—"
+
+    def punch_in_coordinates(self):
+        for activity in self._day_activities():
+            label = activity.clock_in_coordinates()
+            if label != "—":
+                return label
+        return "—"
+
+    def punch_out_coordinates(self):
+        label = "—"
+        for activity in self._day_activities():
+            current = activity.clock_out_coordinates()
+            if current != "—":
+                label = current
+        return label
 
 
 class AttendanceRequestFile(HorillaModel):

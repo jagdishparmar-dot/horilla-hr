@@ -12,10 +12,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from base.models import Company
-from geofencing.forms import GeoFencingSetupForm
+from geofencing.forms import GeoFencingSetupForm, WorkSiteForm
 from horilla.decorators import login_required
 
-from .models import GeoFencing
+from .models import GeoFencing, WorkSite, enforceable_fence, fence_label
 from .serializers import EmployeeLocationSerializer, GeoFencingSetupSerializer
 
 
@@ -104,10 +104,10 @@ class GeoFencingEmployeeLocationCheckAPIView(APIView):
             raise serializers.ValidationError(e)
 
     def get_company_location(self, request):
-        company = self.get_company(request)
-        location = GeoFencing.for_company(company)
+        employee = getattr(request.user, "employee_get", None)
+        location = enforceable_fence(employee)
         if location is None:
-            raise serializers.ValidationError(_("No geofencing is configured."))
+            raise serializers.ValidationError(_("Geofencing is not yet started.."))
         return location
 
     def post(self, request):
@@ -124,12 +124,31 @@ class GeoFencingEmployeeLocationCheckAPIView(APIView):
                     request.data.get("longitude"),
                 )
                 distance = geodesic(geofence_center, employee_location).meters
-                if distance <= company_location.radius_in_meters:
+                allowed = company_location.radius_in_meters
+                site = fence_label(company_location)
+                if distance <= allowed:
                     return Response(
-                        {"message": "Inside the geofence"}, status=status.HTTP_200_OK
+                        {
+                            "message": "Inside the geofence",
+                            "site": site,
+                            "distance_m": int(round(distance)),
+                        },
+                        status=status.HTTP_200_OK,
                     )
                 return Response(
-                    {"message": "Outside the geofence"},
+                    {
+                        "message": _(
+                            "Outside the geofence. You are %(distance)s m from %(site)s "
+                            "(allowed %(allowed)s m)."
+                        )
+                        % {
+                            "distance": int(round(distance)),
+                            "site": site,
+                            "allowed": allowed,
+                        },
+                        "site": site,
+                        "distance_m": int(round(distance)),
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -183,3 +202,85 @@ def geo_location_config(request):
         else:
             messages.info(request, _("Not valid"))
     return render(request, "geo_config.html", {"form": form})
+
+
+@login_required
+@permission_required("geofencing.add_geofencing")
+def work_sites(request):
+    """List and create work sites for the company selected in the session."""
+    try:
+        company = get_company(request)
+    except serializers.ValidationError:
+        messages.error(request, _("Select a company first."))
+        return render(request, "work_sites.html", {"sites": [], "form": None})
+    if company is None:
+        messages.info(request, _("Select a company to manage its work sites."))
+        return render(request, "work_sites.html", {"sites": [], "form": None})
+
+    form = WorkSiteForm()
+    if request.method == "POST" and request.POST.get("action") != "delete":
+        form = WorkSiteForm(request.POST)
+        if form.is_valid():
+            site = form.save(commit=False)
+            site.company_id = company
+            site.save()
+            messages.success(request, _("Work site saved."))
+            form = WorkSiteForm()
+        else:
+            messages.error(request, _("Work site could not be saved."))
+    sites = WorkSite.objects.filter(company_id=company)
+    return render(
+        request,
+        "work_sites.html",
+        {"sites": sites, "form": form, "company": company},
+    )
+
+
+@login_required
+@permission_required("geofencing.change_geofencing")
+def work_site_update(request, pk):
+    try:
+        company = get_company(request)
+    except serializers.ValidationError:
+        messages.error(request, _("Select a company first."))
+        return redirect("work-sites")
+    if company is None:
+        messages.error(request, _("Select a company first."))
+        return redirect("work-sites")
+    site = get_object_or_404(WorkSite, pk=pk, company_id=company)
+    form = WorkSiteForm(instance=site)
+    if request.method == "POST":
+        form = WorkSiteForm(request.POST, instance=site)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _("Work site saved."))
+            return redirect("work-sites")
+        messages.error(request, _("Work site could not be saved."))
+    return render(
+        request,
+        "work_sites.html",
+        {
+            "sites": WorkSite.objects.filter(company_id=company),
+            "form": form,
+            "company": company,
+            "editing": site,
+        },
+    )
+
+
+@login_required
+@permission_required("geofencing.delete_geofencing")
+def work_site_delete(request, pk):
+    try:
+        company = get_company(request)
+    except serializers.ValidationError:
+        messages.error(request, _("Select a company first."))
+        return redirect("work-sites")
+    if company is None:
+        messages.error(request, _("Select a company first."))
+        return redirect("work-sites")
+    site = get_object_or_404(WorkSite, pk=pk, company_id=company)
+    if request.method == "POST":
+        site.delete()
+        messages.success(request, _("Work site removed."))
+    return redirect("work-sites")

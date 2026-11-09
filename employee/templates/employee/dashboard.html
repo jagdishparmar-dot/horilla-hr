@@ -924,6 +924,21 @@
                     </div>
                     <div
                         class="em-chart-card"
+                        data-accent="amber"
+                        data-cust-id="chart-work-site"
+                        data-cust-group="chart"
+                        data-cust-label="{% trans 'Work Site Distribution' %}"
+                    >
+                        <div class="em-chart-card__header">
+                            <div>
+                                <div class="em-chart-card__title">{% trans "Work Site Distribution" %}</div>
+                                <div class="em-chart-card__subtitle">{% trans "Active employees by assigned work site" %}</div>
+                            </div>
+                        </div>
+                        <div class="em-chart-card__body"><div id="chart-em-work-site"></div></div>
+                    </div>
+                    <div
+                        class="em-chart-card"
                         data-accent="blue"
                         data-cust-id="chart-managers"
                         data-cust-group="chart"
@@ -1497,6 +1512,7 @@
             donutChart('work-type', '#chart-em-work-type', "{% url 'employee-dashboard-work-type' %}", 'employee_work_info__work_type_id', "{% trans 'No work type data'|escapejs %}", "{% trans 'work types'|escapejs %}");
             donutChart('shift', '#chart-em-shift', "{% url 'employee-dashboard-shift' %}", 'employee_work_info__shift_id', "{% trans 'No shift data'|escapejs %}", "{% trans 'shifts'|escapejs %}");
             donutChart('dept', '#chart-em-dept', "{% url 'employee-dashboard-dept' %}", 'employee_work_info__department_id', "{% trans 'No department data'|escapejs %}", "{% trans 'departments'|escapejs %}");
+            donutChart('work-site', '#chart-em-work-site', "{% url 'employee-dashboard-work-sites' %}", 'employee_work_info__work_site', "{% trans 'No work site data'|escapejs %}", "{% trans 'work sites'|escapejs %}");
             loadEmployeeTurnover();
             loadDeptPositions();
             loadManagers();

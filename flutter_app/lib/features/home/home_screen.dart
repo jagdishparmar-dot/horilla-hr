@@ -10,6 +10,8 @@ import 'package:intl/intl.dart';
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../auth/auth_provider.dart';
+import '../shell/main_shell.dart';
+import 'fence_status_line.dart';
 import 'home_extra_sections.dart';
 import 'home_provider.dart';
 import 'models.dart';
@@ -25,6 +27,7 @@ class HomeScreen extends ConsumerWidget {
       backgroundColor: AppColors.scaffold,
       body: SafeArea(
         child: homeAsync.when(
+          skipLoadingOnReload: true,
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => _ErrorPane(
             message: e.toString(),
@@ -32,40 +35,73 @@ class HomeScreen extends ConsumerWidget {
             onLogout: () => ref.read(authProvider.notifier).logout(),
           ),
           data: (home) => RefreshIndicator(
-            onRefresh: () async => ref.invalidate(mobileHomeProvider),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              children: [
-                _Header(home: home),
-                const SizedBox(height: 20),
-                _AttendanceCard(home: home),
-                if (home.announcement != null) ...[
+            onRefresh: () async {
+              ref.invalidate(mobileHomeProvider);
+              ref.invalidate(punchFenceProvider);
+              await ref.read(mobileHomeProvider.future);
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  HomeReveal(index: 0, child: _Header(home: home)),
                   const SizedBox(height: 16),
-                  HomeAnnouncementSection(announcement: home.announcement!),
-                ],
-                const SizedBox(height: 16),
-                HomeWorkScheduleSection(schedule: home.workSchedule),
-                const SizedBox(height: 20),
-                HomeRecentRequestsSection(requests: home.recentRequests),
-                if (home.birthdays.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  HomePeopleMessageSection(
-                    title: 'Birthdays',
-                    colleague: home.birthdays.first,
-                    placeholder: 'Write a birthday wish...',
-                    avatarColor: AppColors.purple,
+                  HomeReveal(index: 1, child: _AttendanceCard(home: home)),
+                  const SizedBox(height: 16),
+                  HomeReveal(index: 2, child: _QuickActions(home: home)),
+                  if (home.announcement != null) ...[
+                    const SizedBox(height: 22),
+                    HomeReveal(
+                      index: 3,
+                      child: HomeAnnouncementSection(
+                        announcement: home.announcement!,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 22),
+                  HomeReveal(
+                    index: 4,
+                    child: HomeWorkScheduleSection(schedule: home.workSchedule),
                   ),
-                ],
-                if (home.newHires.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  HomePeopleMessageSection(
-                    title: 'New Hires',
-                    colleague: home.newHires.first,
-                    placeholder: 'Write a welcome message...',
-                    avatarColor: AppColors.navBlue,
+                  const SizedBox(height: 22),
+                  HomeReveal(
+                    index: 5,
+                    child: HomeRecentRequestsSection(
+                      requests: home.recentRequests,
+                    ),
                   ),
+                  if (home.birthdays.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    HomeReveal(
+                      index: 6,
+                      child: HomePeopleMessageSection(
+                        title: 'Birthdays',
+                        colleagues: home.birthdays,
+                        placeholder: 'Write a birthday wish...',
+                        avatarColor: const Color(0xFFEC4899),
+                        icon: HugeIcons.strokeRoundedGift,
+                      ),
+                    ),
+                  ],
+                  if (home.newHires.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    HomeReveal(
+                      index: 7,
+                      child: HomePeopleMessageSection(
+                        title: 'New Hires',
+                        colleagues: home.newHires,
+                        placeholder: 'Write a welcome message...',
+                        avatarColor: const Color(0xFF22B8E8),
+                        icon: HugeIcons.strokeRoundedUserAdd01,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -95,80 +131,388 @@ class _Header extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final avatar = _resolveAvatar(home.avatarUrl);
+    final role = home.roleLine;
+    final dateLabel = DateFormat('EEE, MMM d').format(DateTime.now());
 
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text.rich(
-                TextSpan(
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                  children: [
-                    TextSpan(text: '$_greeting, '),
-                    TextSpan(
-                      text: '${home.firstName} !',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  HugeIcon(
-                    icon: HugeIcons.strokeRoundedLocation01,
-                    size: 16,
-                    color: home.geofenceEnabled
-                        ? AppColors.blue
-                        : AppColors.textSecondary,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2F6BFF), Color(0xFF6D5CFF), Color(0xFF9B5CFF)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2F6BFF).withValues(alpha: 0.28),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$_greeting 👋',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(width: 4),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  home.firstName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    height: 1.1,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                if (role.isNotEmpty) ...[
+                  const SizedBox(height: 4),
                   Text(
-                    home.geofenceEnabled ? 'OFFICE' : 'REMOTE',
+                    role,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: home.geofenceEnabled
-                          ? AppColors.blue
-                          : AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      letterSpacing: 0.6,
+                      color: Colors.white.withValues(alpha: 0.82),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _HeaderChip(
+                      icon: HugeIcons.strokeRoundedLocation01,
+                      label: home.placeLabel,
+                    ),
+                    _HeaderChip(
+                      icon: HugeIcons.strokeRoundedCalendar03,
+                      label: dateLabel,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            children: [
+              _NotifyButton(count: home.unreadNotifications),
+              const SizedBox(height: 12),
+              PopupMenuButton<String>(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                onSelected: (value) {
+                  if (value == 'logout') {
+                    ref.read(authProvider.notifier).logout();
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'logout', child: Text('Sign out')),
+                ],
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.purpleSoft,
+                    backgroundImage: avatar != null
+                        ? CachedNetworkImageProvider(avatar)
+                        : null,
+                    child: avatar == null
+                        ? Text(
+                            home.firstName.isNotEmpty
+                                ? home.firstName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: AppColors.purple,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotifyButton extends ConsumerWidget {
+  const _NotifyButton({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final label = count > 9 ? '9+' : '$count';
+    return Material(
+      color: Colors.white.withValues(alpha: 0.2),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => ref.read(shellIndexProvider.notifier).state = 3,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const HugeIcon(
+                icon: HugeIcons.strokeRoundedNotification03,
+                color: Colors.white,
+                size: 21,
+              ),
+              if (count > 0)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.red,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderChip extends StatelessWidget {
+  const _HeaderChip({required this.icon, required this.label});
+
+  final List<List<dynamic>> icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 190),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          HugeIcon(icon: icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActions extends ConsumerWidget {
+  const _QuickActions({required this.home});
+
+  final MobileHome home;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    void go(int i) => ref.read(shellIndexProvider.notifier).state = i;
+    final unread = home.unreadNotifications;
+    return Row(
+      children: [
+        Expanded(
+          child: _QuickAction(
+            label: 'Attendance',
+            icon: HugeIcons.strokeRoundedCalendarCheckIn01,
+            color: const Color(0xFF8B5CF6),
+            onTap: () => go(1),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _QuickAction(
+            label: 'Requests',
+            icon: HugeIcons.strokeRoundedFileAdd,
+            color: const Color(0xFFF59E0B),
+            onTap: () => go(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _QuickAction(
+            label: 'Alerts',
+            icon: HugeIcons.strokeRoundedNotification03,
+            color: const Color(0xFFEC4899),
+            badge: unread > 0 ? (unread > 9 ? '9+' : '$unread') : null,
+            onTap: () => go(3),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _QuickAction(
+            label: 'Profile',
+            icon: HugeIcons.strokeRoundedUser,
+            color: const Color(0xFF22B8E8),
+            onTap: () => go(4),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.badge,
+  });
+
+  final String label;
+  final List<List<dynamic>> icon;
+  final Color color;
+  final VoidCallback onTap;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.14),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color.lerp(color, Colors.white, 0.28)!, color],
+                      ),
+                    ),
+                    child: Center(
+                      child: HugeIcon(
+                        icon: icon,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  if (badge != null)
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.red,
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          badge!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ],
           ),
         ),
-        PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'logout') {
-              ref.read(authProvider.notifier).logout();
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'logout', child: Text('Sign out')),
-          ],
-          child: CircleAvatar(
-            radius: 24,
-            backgroundColor: AppColors.purpleSoft,
-            backgroundImage: avatar != null ? CachedNetworkImageProvider(avatar) : null,
-            child: avatar == null
-                ? Text(
-                    home.firstName.isNotEmpty ? home.firstName[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: AppColors.purple,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  )
-                : null,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -198,7 +542,7 @@ class _AttendanceCardState extends ConsumerState<_AttendanceCard> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.home.isClockedIn != widget.home.isClockedIn ||
         oldWidget.home.worked != widget.home.worked ||
-        oldWidget.home.lastActivityAt != widget.home.lastActivityAt) {
+        oldWidget.home.fetchedAt != widget.home.fetchedAt) {
       _syncLive();
     }
   }
@@ -221,15 +565,9 @@ class _AttendanceCardState extends ConsumerState<_AttendanceCard> {
   void _syncLive() {
     final home = widget.home;
     var base = _parseHms(home.worked);
-    if (home.isClockedIn && home.lastActivityAt != null) {
-      final started = DateTime.tryParse(home.lastActivityAt!);
-      if (started != null) {
-        // Prefer server worked + elapsed since last open punch when available.
-        final open = DateTime.now().difference(started);
-        if (open.inSeconds > base.inSeconds) {
-          base = open;
-        }
-      }
+    if (home.isClockedIn) {
+      final extra = DateTime.now().difference(home.fetchedAt);
+      if (!extra.isNegative) base += extra;
     }
     if (!mounted) return;
     setState(() => _live = base);
@@ -240,6 +578,25 @@ class _AttendanceCardState extends ConsumerState<_AttendanceCard> {
     final m = (d.inMinutes % 60).toString().padLeft(2, '0');
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
     return '$h : $m : $s';
+  }
+
+  String _shiftLabel(MobileHome home) {
+    final days = home.workSchedule?.days ?? const <HomeScheduleDay>[];
+    for (final day in days) {
+      if (day.isToday && day.hasSchedule) {
+        final name = day.shiftName.trim();
+        return name.isEmpty ? day.timingLabel : '$name · ${day.timingLabel}';
+      }
+    }
+    final name = home.workSchedule?.shiftName.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return 'No shift today';
+  }
+
+  String _shortClock(String raw) {
+    final parts = raw.split(':');
+    if (parts.length < 2) return raw;
+    return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
   }
 
   Future<void> _onPunch() async {
@@ -257,82 +614,235 @@ class _AttendanceCardState extends ConsumerState<_AttendanceCard> {
   Widget build(BuildContext context) {
     final home = widget.home;
     final busy = ref.watch(punchBusyProvider);
-    final dateLabel = DateFormat('MMM d, yyyy - EEEE').format(DateTime.now());
-    final checkOutLabel = home.isClockedIn
-        ? '—'
-        : (home.clockOutTime ?? (home.clockInTime == null ? '--:--' : '—'));
+    final dateLabel = DateFormat('EEEE, MMM d').format(DateTime.now());
+    final checkOutLabel = home.clockOutTime ?? '—';
+    final onSite = home.isClockedIn;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
+    final tint = onSite ? const Color(0xFFE7F8EE) : const Color(0xFFEEF2FF);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFF3EEFF), Colors.white],
+          end: Alignment.center,
+          colors: [tint, Colors.white],
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: (onSite ? AppColors.green : AppColors.navBlue).withValues(
+              alpha: 0.10,
+            ),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
       child: Column(
         children: [
+          Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: (onSite ? AppColors.green : AppColors.navBlue)
+                      .withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: onSite ? AppColors.green : AppColors.navBlue,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      onSite ? 'Clocked in' : 'Clocked out',
+                      style: TextStyle(
+                        color: onSite ? AppColors.green : AppColors.navBlue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                dateLabel,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           Text(
-            '+ ${_fmt(_live)} hrs',
+            _fmt(_live),
             style: const TextStyle(
-              fontSize: 34,
+              fontSize: 36,
               fontWeight: FontWeight.w800,
-              color: AppColors.purple,
-              letterSpacing: 0.5,
+              color: AppColors.textPrimary,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'Worked today',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            '08 : 00 : 00 hrs',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+          Text(
+            _shiftLabel(home),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.navBlue,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            dateLabel,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
           _CheckButton(
             isClockedIn: home.isClockedIn,
             busy: busy,
             onPressed: busy ? null : _onPunch,
           ),
-          const SizedBox(height: 22),
+          if (home.geofenceEnabled) ...[
+            const SizedBox(height: 12),
+            const FenceStatusLine(),
+          ],
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                child: _TimeStat(
+                child: _StatTile(
+                  label: 'Check-in',
+                  value: home.clockInTime ?? '--:--',
+                  color: const Color(0xFF16A34A),
                   icon: HugeIcons.strokeRoundedLogin01,
-                  iconColor: AppColors.green,
-                  time: home.clockInTime ?? '--:--',
-                  label: 'Check-in time',
-                  labelColor: AppColors.green,
                 ),
               ),
-              Container(width: 1, height: 42, color: Colors.grey.shade300),
+              const SizedBox(width: 8),
               Expanded(
-                child: _TimeStat(
+                child: _StatTile(
+                  label: home.isClockedIn && home.clockOutTime != null
+                      ? 'Last out'
+                      : 'Check-out',
+                  value: checkOutLabel,
+                  color: const Color(0xFFE5484D),
                   icon: HugeIcons.strokeRoundedLogout01,
-                  iconColor: AppColors.red,
-                  time: checkOutLabel,
-                  label: 'Check-out time',
-                  labelColor: AppColors.red,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  label: 'Break',
+                  value: _shortClock(home.breakTime),
+                  color: const Color(0xFFF59E0B),
+                  icon: HugeIcons.strokeRoundedCoffee01,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StatTile(
+                  label: 'Overtime',
+                  value: _shortClock(home.overtime),
+                  color: const Color(0xFF8B5CF6),
+                  icon: HugeIcons.strokeRoundedAnalyticsUp,
+                ),
+              ),
+            ],
+          ),
+          if (home.punches.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F7FB),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Today's punches",
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  for (final punch in home.punches) _PunchLine(punch: punch),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PunchLine extends StatelessWidget {
+  const _PunchLine({required this.punch});
+
+  final HomePunch punch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: punch.open ? AppColors.green : AppColors.textSecondary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              punch.rangeLabel,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Text(
+            punch.open ? 'In' : 'Done',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: punch.open ? AppColors.green : AppColors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -388,9 +898,10 @@ class _CheckButtonState extends State<_CheckButton>
     _pulseOpacity = Tween<double>(begin: 0.55, end: 0.18).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    _pressScale = Tween<double>(begin: 1.0, end: 0.94).animate(
-      CurvedAnimation(parent: _pressController, curve: Curves.easeOut),
-    );
+    _pressScale = Tween<double>(
+      begin: 1.0,
+      end: 0.94,
+    ).animate(CurvedAnimation(parent: _pressController, curve: Curves.easeOut));
   }
 
   @override
@@ -592,50 +1103,71 @@ class _RingArcPainter extends CustomPainter {
   }
 }
 
-class _TimeStat extends StatelessWidget {
-  const _TimeStat({
-    required this.icon,
-    required this.iconColor,
-    required this.time,
+class _StatTile extends StatelessWidget {
+  const _StatTile({
     required this.label,
-    required this.labelColor,
+    required this.value,
+    required this.color,
+    required this.icon,
   });
 
-  final List<List<dynamic>> icon;
-  final Color iconColor;
-  final String time;
   final String label;
-  final Color labelColor;
+  final String value;
+  final Color color;
+  final List<List<dynamic>> icon;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            HugeIcon(icon: icon, size: 18, color: iconColor),
-            const SizedBox(width: 6),
-            Text(
-              time,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                color: AppColors.textPrimary,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(10),
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: labelColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+            child: Center(
+              child: HugeIcon(icon: icon, color: Colors.white, size: 16),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

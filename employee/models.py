@@ -979,6 +979,18 @@ class EmployeeWorkInformation(models.Model):
     location = models.CharField(
         max_length=254, null=True, blank=True, verbose_name=_("Work Location")
     )
+    work_site = models.ForeignKey(
+        "geofencing.WorkSite",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_employees",
+        verbose_name=_("Work Site"),
+        help_text=_(
+            "When this site has geofencing enabled, check-in and check-out "
+            "are allowed only inside that site."
+        ),
+    )
     company_id = models.ForeignKey(
         Company,
         on_delete=models.PROTECT,

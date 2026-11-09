@@ -46,8 +46,7 @@ String formatTotalWorked(Iterable<AttendanceDay> days) {
 
 AttendanceDay mapRecordToDay(AttendanceRecord record) {
   final date = _dateOnly(record.date);
-  final hasOt =
-      record.overtimeSeconds > 0 || !_isZeroDuration(record.overtime);
+  final hasOt = record.overtimeSeconds > 0 || !_isZeroDuration(record.overtime);
   final AttendanceStatus status;
   final String? detail;
   String? workedLabel = formatWorkedLabel(record.workedHour);
@@ -58,7 +57,6 @@ AttendanceDay mapRecordToDay(AttendanceRecord record) {
   } else if (hasOt) {
     status = AttendanceStatus.overtime;
     detail = 'Overtime';
-    workedLabel = formatWorkedLabel(record.overtime);
   } else if (record.clockIn != null) {
     status = AttendanceStatus.present;
     detail = 'Present';
@@ -83,6 +81,7 @@ AttendanceDay mapRecordToDay(AttendanceRecord record) {
     shiftStart: record.shiftStart,
     shiftEnd: record.shiftEnd,
     overtimeLabel: hasOt ? formatWorkedLabel(record.overtime) : null,
+    punches: record.punches,
   );
 }
 
@@ -95,9 +94,6 @@ AttendanceDay placeholderDay(DateTime date, {DateTime? today}) {
       date: d,
       status: AttendanceStatus.weekend,
       statusDetail: 'Weekend',
-      shiftName: 'General',
-      shiftStart: '09:00',
-      shiftEnd: '17:00',
     );
   }
 
@@ -105,9 +101,16 @@ AttendanceDay placeholderDay(DateTime date, {DateTime? today}) {
     return AttendanceDay(
       date: d,
       status: AttendanceStatus.none,
-      shiftName: 'General',
-      shiftStart: '09:00',
-      shiftEnd: '17:00',
+      statusDetail: 'Upcoming',
+    );
+  }
+
+  if (d == now) {
+    // Today with no punch yet is not an absence.
+    return AttendanceDay(
+      date: d,
+      status: AttendanceStatus.none,
+      statusDetail: 'Not clocked in',
     );
   }
 
@@ -115,9 +118,6 @@ AttendanceDay placeholderDay(DateTime date, {DateTime? today}) {
     date: d,
     status: AttendanceStatus.absent,
     statusDetail: 'Absent',
-    shiftName: 'General',
-    shiftStart: '09:00',
-    shiftEnd: '17:00',
   );
 }
 
@@ -128,8 +128,7 @@ List<AttendanceDay> buildDaysForRange({
 }) {
   final byDate = <String, AttendanceRecord>{};
   for (final record in records) {
-    final key =
-        '${record.date.year}-${record.date.month}-${record.date.day}';
+    final key = '${record.date.year}-${record.date.month}-${record.date.day}';
     byDate[key] = record;
   }
 
@@ -137,13 +136,17 @@ List<AttendanceDay> buildDaysForRange({
   final end = _dateOnly(to);
   final today = _dateOnly(DateTime.now());
   final days = <AttendanceDay>[];
-  for (var cursor = start;
-      !cursor.isAfter(end);
-      cursor = cursor.add(const Duration(days: 1))) {
+  for (
+    var cursor = start;
+    !cursor.isAfter(end);
+    cursor = cursor.add(const Duration(days: 1))
+  ) {
     final key = '${cursor.year}-${cursor.month}-${cursor.day}';
     final record = byDate[key];
     days.add(
-      record != null ? mapRecordToDay(record) : placeholderDay(cursor, today: today),
+      record != null
+          ? mapRecordToDay(record)
+          : placeholderDay(cursor, today: today),
     );
   }
   return days;
@@ -152,7 +155,7 @@ List<AttendanceDay> buildDaysForRange({
 AttendanceMonthStats buildMonthStats(List<AttendanceDay> days) {
   var present = 0;
   var absent = 0;
-  var lateMins = 0;
+  var lateDays = 0;
   var otMins = 0;
 
   for (final day in days) {
@@ -161,22 +164,23 @@ AttendanceMonthStats buildMonthStats(List<AttendanceDay> days) {
         present++;
       case AttendanceStatus.late:
         present++;
-        lateMins += parseHhMmToMinutes(day.workedLabel) ?? 0;
+        lateDays++;
       case AttendanceStatus.overtime:
         present++;
-        otMins += parseHhMmToMinutes(day.overtimeLabel ?? day.workedLabel) ?? 0;
       case AttendanceStatus.absent:
         absent++;
       case AttendanceStatus.weekend:
       case AttendanceStatus.none:
         break;
     }
+    // A late day can carry overtime too.
+    otMins += parseHhMmToMinutes(day.overtimeLabel) ?? 0;
   }
 
   return AttendanceMonthStats(
     presentDays: present,
     absentDays: absent,
-    lateMinutes: lateMins,
+    lateDays: lateDays,
     overtimeHours: (otMins / 60).ceil(),
   );
 }

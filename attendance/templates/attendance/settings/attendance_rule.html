@@ -352,6 +352,14 @@
             <div class="p-4">
                 <div hx-get="{% url 'geo-config' %}" hx-trigger="load" hx-target="#geo"></div>
                 <div id="geo"></div>
+                <div class="mt-4 border-t border-[#ebebeb] pt-4">
+                    <h6 class="text-sm font-semibold mb-2">{% trans "Work sites" %}</h6>
+                    <p class="text-xs text-gray-500 mb-2">
+                        {% trans "Add a site per branch. Assign employees to a site on their work information. When that site's geofence is enabled, check-in and check-out are allowed only inside it." %}
+                    </p>
+                    <div hx-get="{% url 'work-sites' %}" hx-trigger="load" hx-target="#work-sites"></div>
+                    <div id="work-sites"></div>
+                </div>
             </div>
         </div>
     {% endif %}

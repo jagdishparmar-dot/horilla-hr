@@ -1,0 +1,31 @@
+{% load i18n horillafilters %}
+<div class="emp-card-body">
+    <div class="emp-card-body__main">
+        {% if instance.get_avatar %}
+        <div class="emp-card-body__avatar-wrap">
+            <img
+                src="{{ instance.get_avatar }}"
+                data-src="{{ instance.get_avatar }}"
+                class="emp-card-body__avatar avatar-thumb object-cover"
+                alt="{% trans 'Employee' %}"
+            >
+            {% if request|is_check_in_enabled %}
+            <span
+                class="emp-card-body__status-dot"
+                style="background-color: {% if instance.check_online %}#22c55e{% else %}#ef4444{% endif %};"
+                title="{% if instance.check_online %}{% trans 'Online' %}{% else %}{% trans 'Offline' %}{% endif %}"
+            ></span>
+            {% endif %}
+        </div>
+        {% endif %}
+        <div class="emp-card-body__meta min-w-0">
+            <h5 class="emp-card-body__name">{{ instance.employee_name_with_badge_id }}</h5>
+            <div class="emp-card-body__details">
+                <span class="truncate">{{ instance.get_email }}</span>
+                {% if instance.employee_work_info.job_position_id %}
+                <span class="truncate">{{ instance.employee_work_info.job_position_id }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

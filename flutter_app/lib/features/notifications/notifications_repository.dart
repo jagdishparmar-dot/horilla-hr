@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/dio_client.dart';
 import 'models.dart';
 
-final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) {
+final notificationsRepositoryProvider = Provider<NotificationsRepository>((
+  ref,
+) {
   return NotificationsRepository(ref.watch(dioProvider));
 });
 
@@ -37,6 +39,22 @@ class NotificationsRepository {
   Future<void> markAllAsRead() async {
     try {
       await _dio.post('/notifications/notifications/bulk-read/');
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  Future<void> delete(int id) async {
+    try {
+      await _dio.delete('/notifications/notifications/$id/');
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  Future<void> deleteAll() async {
+    try {
+      await _dio.delete('/notifications/notifications/bulk-delete/');
     } on DioException catch (e) {
       throwApi(e);
     }

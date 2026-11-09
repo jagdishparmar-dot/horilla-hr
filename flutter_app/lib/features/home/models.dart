@@ -1,5 +1,5 @@
 class MobileHome {
-  const MobileHome({
+  MobileHome({
     required this.employeeId,
     required this.employeeName,
     required this.avatarUrl,
@@ -9,6 +9,10 @@ class MobileHome {
     required this.breakTime,
     required this.overtime,
     required this.geofenceEnabled,
+    this.geofenceName,
+    this.geofenceLatitude,
+    this.geofenceLongitude,
+    this.geofenceRadiusMeters,
     this.clockOutTime,
     this.lastActivityAt,
     this.unreadNotifications = 0,
@@ -24,7 +28,9 @@ class MobileHome {
     this.recentRequests = const [],
     this.birthdays = const [],
     this.newHires = const [],
-  });
+    this.punches = const [],
+    DateTime? fetchedAt,
+  }) : fetchedAt = fetchedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   final int? employeeId;
   final String employeeName;
@@ -44,12 +50,22 @@ class MobileHome {
   final String breakTime;
   final String overtime;
   final bool geofenceEnabled;
+  final String? geofenceName;
+  final double? geofenceLatitude;
+  final double? geofenceLongitude;
+  final int? geofenceRadiusMeters;
   final int unreadNotifications;
   final HomeWorkSchedule? workSchedule;
   final HomeAnnouncement? announcement;
   final List<HomeRecentRequest> recentRequests;
   final List<HomeColleague> birthdays;
   final List<HomeColleague> newHires;
+  final List<HomePunch> punches;
+
+  /// When this payload was parsed. While clocked in, the worked timer adds
+  /// time since this moment onto the server total, which already includes
+  /// every session today.
+  final DateTime fetchedAt;
 
   factory MobileHome.fromJson(Map<String, dynamic> json) {
     final employee = json['employee'] as Map<String, dynamic>? ?? {};
@@ -78,9 +94,14 @@ class MobileHome {
       breakTime: today['break'] as String? ?? '00:00:00',
       overtime: today['overtime'] as String? ?? '00:00:00',
       geofenceEnabled: geofence['enabled'] as bool? ?? false,
+      geofenceName: geofence['name'] as String?,
+      geofenceLatitude: _asDouble(geofence['latitude']),
+      geofenceLongitude: _asDouble(geofence['longitude']),
+      geofenceRadiusMeters: _asInt(geofence['radius_in_meters']),
       unreadNotifications: json['unread_notifications'] as int? ?? 0,
-      workSchedule:
-          schedule == null ? null : HomeWorkSchedule.fromJson(schedule),
+      workSchedule: schedule == null
+          ? null
+          : HomeWorkSchedule.fromJson(schedule),
       announcement: announcement == null
           ? null
           : HomeAnnouncement.fromJson(announcement),
@@ -96,7 +117,41 @@ class MobileHome {
           .whereType<Map>()
           .map((e) => HomeColleague.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
+      punches: (punch['activities'] as List<dynamic>? ?? [])
+          .whereType<Map>()
+          .map((e) => HomePunch.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      fetchedAt: DateTime.now(),
     );
+  }
+
+  static double? _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  String get placeLabel {
+    if (!geofenceEnabled) return 'REMOTE';
+    final name = geofenceName?.trim();
+    if (name == null || name.isEmpty) return 'OFFICE';
+    return name.toUpperCase();
+  }
+
+  String get roleLine {
+    final parts = <String>[];
+    final job = jobPosition?.trim();
+    final dept = department?.trim();
+    if (job != null && job.isNotEmpty) parts.add(job);
+    if (dept != null && dept.isNotEmpty) parts.add(dept);
+    return parts.join(' · ');
   }
 
   String get firstName {
@@ -108,6 +163,32 @@ class MobileHome {
     final id = badgeId?.trim();
     if (id == null || id.isEmpty) return '—';
     return id.startsWith('ID:') ? id : 'ID: $id';
+  }
+}
+
+class HomePunch {
+  const HomePunch({
+    required this.clockIn,
+    required this.clockOut,
+    required this.open,
+  });
+
+  final String? clockIn;
+  final String? clockOut;
+  final bool open;
+
+  factory HomePunch.fromJson(Map<String, dynamic> json) {
+    return HomePunch(
+      clockIn: json['clock_in'] as String?,
+      clockOut: json['clock_out'] as String?,
+      open: json['open'] as bool? ?? json['clock_out'] == null,
+    );
+  }
+
+  String get rangeLabel {
+    final start = clockIn ?? '--:--';
+    final end = open ? 'now' : (clockOut ?? '--:--');
+    return '$start – $end';
   }
 }
 
@@ -159,10 +240,12 @@ class HomeWorkSchedule {
   factory HomeWorkSchedule.fromJson(Map<String, dynamic> json) {
     return HomeWorkSchedule(
       shiftName: json['shift_name'] as String? ?? 'General',
-      weekStart: DateTime.tryParse(json['week_start'] as String? ?? '') ??
+      weekStart:
+          DateTime.tryParse(json['week_start'] as String? ?? '') ??
           DateTime.now(),
       weekEnd:
-          DateTime.tryParse(json['week_end'] as String? ?? '') ?? DateTime.now(),
+          DateTime.tryParse(json['week_end'] as String? ?? '') ??
+          DateTime.now(),
       days: (json['days'] as List<dynamic>? ?? [])
           .whereType<Map>()
           .map((e) => HomeScheduleDay.fromJson(Map<String, dynamic>.from(e)))
@@ -177,10 +260,7 @@ class HomeWorkSchedule {
     if (todayIndex < 0) return days.take(2).toList();
     final today = days[todayIndex];
     final next = todayIndex + 1 < days.length ? days[todayIndex + 1] : null;
-    return [
-      today,
-      ?next,
-    ];
+    return [today, ?next];
   }
 }
 
@@ -240,10 +320,10 @@ class HomeRecentRequest {
   final String? reason;
 
   factory HomeRecentRequest.fromJson(Map<String, dynamic> json) {
-    final start = DateTime.tryParse(json['start_date'] as String? ?? '') ??
+    final start =
+        DateTime.tryParse(json['start_date'] as String? ?? '') ??
         DateTime.now();
-    final end =
-        DateTime.tryParse(json['end_date'] as String? ?? '') ?? start;
+    final end = DateTime.tryParse(json['end_date'] as String? ?? '') ?? start;
     return HomeRecentRequest(
       id: json['id'] as int? ?? 0,
       title: json['title'] as String? ?? 'Request',

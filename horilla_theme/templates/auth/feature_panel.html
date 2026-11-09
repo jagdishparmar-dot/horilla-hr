@@ -1,0 +1,183 @@
+{% load i18n %}
+<aside class="auth-showcase" aria-label="{% trans 'Product highlights' %}">
+    <div>
+        <p class="auth-kicker">{% trans "Human resources" %}</p>
+        <h2 class="auth-showcase__title hr-display">
+            {% trans "One place for the people side of work." %}
+        </h2>
+        <p class="auth-showcase__lead">
+            {% trans "Attendance, leave, payroll, and employee records for every site in the company." %}
+        </p>
+    </div>
+    <ul class="auth-features">
+        <li>
+            <span class="auth-feature__mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>
+            </span>
+            <span>
+                <strong>{% trans "Attendance" %}</strong>
+                <p>{% trans "Check in and out on the web or mobile, with a work-site geofence when you need it." %}</p>
+            </span>
+        </li>
+        <li>
+            <span class="auth-feature__mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>
+            </span>
+            <span>
+                <strong>{% trans "Leave" %}</strong>
+                <p>{% trans "Request time off, see balances, and track approvals without a spreadsheet." %}</p>
+            </span>
+        </li>
+        <li>
+            <span class="auth-feature__mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M7 8h7a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg>
+            </span>
+            <span>
+                <strong>{% trans "Payroll" %}</strong>
+                <p>{% trans "Salary structures, payslips, and deductions kept with the employee record." %}</p>
+            </span>
+        </li>
+        <li>
+            <span class="auth-feature__mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3.5 19c.6-2.6 2.8-4 5.5-4s4.9 1.4 5.5 4M14 15.2c1.6-.3 3.2.3 4.2 1.8"/></svg>
+            </span>
+            <span>
+                <strong>{% trans "People" %}</strong>
+                <p>{% trans "Employees, departments, and work sites in one directory." %}</p>
+            </span>
+        </li>
+    </ul>
+</aside>
+<style>
+    .auth-shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(280px, 1.05fr) minmax(360px, 0.95fr);
+        background: #f4f5f7;
+    }
+    .auth-showcase {
+        background: #111827;
+        color: #f8fafc;
+        padding: 3rem 3.25rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 2.5rem;
+    }
+    .auth-kicker {
+        margin: 0 0 0.75rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: {{ theme_obj.primary_600|default:'#E54F38' }};
+    }
+    .auth-showcase__title {
+        margin: 0;
+        max-width: 16ch;
+        font-size: 2.15rem;
+        line-height: 1.15;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+    }
+    .auth-showcase__lead {
+        margin: 0.9rem 0 0;
+        max-width: 36ch;
+        color: #cbd5e1;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    .auth-features {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.85rem;
+    }
+    .auth-features li {
+        display: flex;
+        gap: 0.85rem;
+        align-items: flex-start;
+        padding: 0.85rem 0.9rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0.75rem;
+        background: rgba(255, 255, 255, 0.04);
+    }
+    .auth-features strong {
+        display: block;
+        font-size: 0.92rem;
+        font-weight: 650;
+    }
+    .auth-features p {
+        margin: 0.15rem 0 0;
+        color: #94a3b8;
+        font-size: 0.8rem;
+        line-height: 1.4;
+    }
+    .auth-feature__mark {
+        flex: 0 0 2rem;
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        border-radius: 0.45rem;
+        background: {{ theme_obj.primary_600|default:'#E54F38' }};
+        color: #fff;
+    }
+    .auth-feature__mark svg { width: 1.05rem; height: 1.05rem; }
+    .auth-main {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+    }
+    .auth-card {
+        width: 100%;
+        max-width: 420px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.9rem;
+        padding: 2rem 1.75rem 1.75rem;
+    }
+    .auth-card__logo { display: block; margin: 0 auto 1.1rem; }
+    .auth-card h1 {
+        margin: 0;
+        text-align: center;
+        font-size: 1.55rem;
+        line-height: 1.25;
+        letter-spacing: -0.03em;
+        color: #111827;
+    }
+    .auth-card__sub {
+        margin: 0.45rem 0 1.4rem;
+        text-align: center;
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+    .auth-note {
+        margin: 0.9rem 0 0;
+        text-align: center;
+        color: #6b7280;
+        font-size: 0.8rem;
+    }
+    .auth-back {
+        display: inline-block;
+        margin-top: 1rem;
+        width: 100%;
+        text-align: center;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #111827;
+        text-decoration: none;
+    }
+    .auth-back:hover { color: {{ theme_obj.primary_600|default:'#E54F38' }}; }
+    @media (max-width: 960px) {
+        .auth-shell { grid-template-columns: 1fr; }
+        .auth-showcase { padding: 1.35rem 1.25rem 0.4rem; gap: 1rem; }
+        .auth-showcase__title { font-size: 1.45rem; max-width: none; }
+        .auth-showcase__lead, .auth-features p { display: none; }
+        .auth-features { grid-template-columns: 1fr 1fr; }
+        .auth-features li { padding: 0.55rem 0.65rem; align-items: center; }
+        .auth-main { padding: 1rem 1rem 2rem; align-items: flex-start; }
+    }
+</style>
