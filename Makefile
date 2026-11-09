@@ -1,4 +1,4 @@
-.PHONY: help dev prod build stop logs logs-web shell clean db-shell status restart makemessages compilemessages test-smoke test-unit test-cov
+.PHONY: help dev prod coolify-check build stop logs logs-web shell clean db-shell status restart makemessages compilemessages test-smoke test-unit test-cov
 
 COMPOSE ?= docker compose
 COMPOSE_PROD ?= $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -14,6 +14,11 @@ dev: ## Start development stack (web + db + redis; bind-mount source)
 prod: ## Start production overlay (no source bind-mount; requires .env)
 	@test -f .env || (echo "Missing .env — copy .env.dist and set production secrets:" && echo "  cp .env.dist .env" && exit 1)
 	$(COMPOSE_PROD) up --build -d
+
+coolify-check: ## Validate docker-compose.coolify.yml with dummy Coolify variables
+	SERVICE_FQDN_WEB=hr.example.com SERVICE_PASSWORD_64_DJANGOKEY=x SERVICE_PASSWORD_64_DBINIT=x \
+	SERVICE_PASSWORD_POSTGRES=x SERVICE_PASSWORD_REDIS=x \
+	$(COMPOSE) --env-file /dev/null -f docker-compose.coolify.yml config --quiet && echo "docker-compose.coolify.yml OK"
 
 build: ## Build images
 	$(COMPOSE) build

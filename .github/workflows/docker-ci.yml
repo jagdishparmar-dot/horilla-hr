@@ -25,6 +25,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Validate Coolify compose file
+        run: |
+          set -e
+          # Coolify injects these at deploy time; dummy values prove the file
+          # parses, interpolates and has no unresolved required variables.
+          export SERVICE_FQDN_WEB=hr.example.com \
+                 SERVICE_PASSWORD_64_DJANGOKEY=ci-django-key \
+                 SERVICE_PASSWORD_64_DBINIT=ci-db-init \
+                 SERVICE_PASSWORD_POSTGRES=ci-postgres \
+                 SERVICE_PASSWORD_REDIS=ci-redis
+          docker compose -f docker-compose.coolify.yml config --quiet
+          # Nothing may be published on the host: Traefik is the only entry.
+          if docker compose -f docker-compose.coolify.yml config | grep -qE '^\s+published:'; then
+            echo "::error::docker-compose.coolify.yml must not publish host ports"
+            exit 1
+          fi
+
       - name: Build web image
         run: |
           set -e

@@ -17,7 +17,7 @@ workers = int(
     or max(2, min(multiprocessing.cpu_count() * 2 + 1, 8))
 )
 worker_class = "gthread"
-threads = 4
+threads = int(os.environ.get("GUNICORN_THREADS") or 4)
 worker_connections = 1000
 max_requests = 1000
 max_requests_jitter = 50
@@ -25,8 +25,16 @@ max_requests_jitter = 50
 preload_app = False
 
 # Timeout settings
-timeout = 120
-keepalive = 5
+timeout = int(os.environ.get("GUNICORN_TIMEOUT") or 120)
+graceful_timeout = int(os.environ.get("GUNICORN_GRACEFUL_TIMEOUT") or 30)
+# Keep-alive must outlive the reverse proxy's idle upstream timeout (Traefik:
+# 90s). If gunicorn closes first, the proxy reuses a dead connection and the
+# client gets an intermittent 502. nginx opens a fresh connection per request,
+# so the short default is fine there; the Coolify compose sets 95.
+keepalive = int(os.environ.get("GUNICORN_KEEPALIVE") or 5)
+# Heartbeat files on the container's overlay filesystem can stall workers
+# under I/O pressure and trigger spurious timeouts; /dev/shm is RAM-backed.
+worker_tmp_dir = "/dev/shm"
 
 # Logging
 accesslog = "-"

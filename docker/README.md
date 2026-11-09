@@ -366,6 +366,43 @@ docker compose logs --tail=50 web
 
 ---
 
+### Deploying on Coolify
+
+`docker-compose.coolify.yml` is a self-contained stack for [Coolify](https://coolify.io)
+(do not combine it with the other compose files). Traefik, which Coolify runs,
+handles TLS and routing, so there is no nginx, no host port binding and no `.env` file.
+
+1. **New Resource → Docker Compose**, point it at this repository and the `deployed` branch.
+2. Set **Docker Compose Location** to `/docker-compose.coolify.yml`.
+3. In **Domains**, give the `web` service your URL (e.g. `https://hr.example.com`).
+4. Deploy. The first boot runs migrations and `collectstatic` (about 5 minutes) before it turns healthy.
+5. Create the first admin through the Horilla initialize page.
+
+Coolify generates `SECRET_KEY`, `DB_INIT_PASSWORD` and the Postgres/Redis passwords
+(`SERVICE_PASSWORD_*`). Optional overrides are listed in `.env.coolify.example`.
+
+What the stack does for production:
+
+| Concern | Handling |
+| --- | --- |
+| TLS / hosts | Traefik terminates TLS. `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` come from the domain you set. |
+| Client IP | `HORILLA_TRUSTED_PROXIES` trusts the private Docker ranges, so lockouts see the real visitor. Add Cloudflare's ranges if you use it. |
+| Static / media | WhiteNoise serves `/static/`. `/media/` goes through Django so the authenticated `protected_media` check still applies. |
+| Startup order | `web` waits for healthy Postgres and Redis; `scheduler` waits for `web`, which owns the migrations. |
+| Backups | The `db-backup` sidecar writes daily gzip dumps (7 daily, 4 weekly, 6 monthly) to the `db_backups` volume. Copy that volume off the host. |
+| Hardening | Non-root user, `cap_drop: ALL`, `no-new-privileges`, memory limits, log rotation, `init: true`, 40s graceful stop. |
+| Keep-alive | Gunicorn keep-alive is 95s, above Traefik's 90s idle timeout, which avoids intermittent 502s. |
+
+Rules to keep:
+
+- Keep `scheduler` at exactly one replica.
+- Scale `web` only after moving media to S3 (`AWS_*` variables).
+- After HTTPS works, set `SECURE_SSL_REDIRECT=true` to add the redirect and HSTS.
+- To restore, run `gunzip -c <file>.sql.gz | psql -h db -U <user> <db>`.
+- Run `make coolify-check` to validate the file locally.
+
+Mobile clients need the public HTTPS API URL, for example `https://hr.example.com/api/v1`.
+
 ## 7. Database Management
 
 ### Running Migrations
