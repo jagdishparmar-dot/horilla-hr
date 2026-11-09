@@ -7,7 +7,14 @@
 
 services:
   web:
-    build: .
+    # Shared tag so web + scheduler build once and reuse the same image.
+    image: horilla-hr:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # If apt hangs on deb.debian.org, set APT_MIRROR=mirrors.aliyun.com
+        APT_MIRROR: ${APT_MIRROR:-}
     ports:
       - "8000:8000"
     volumes:
@@ -44,7 +51,12 @@ services:
   # replica: the jobs are not idempotent, so a second copy means a second
   # payslip run and a second backup. Scaling `web` is safe; scaling this is not.
   scheduler:
-    build: .
+    image: horilla-hr:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
     command: python manage.py run_scheduler
     volumes:
       - .:/app

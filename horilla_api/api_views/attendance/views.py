@@ -1179,12 +1179,31 @@ class UserAttendanceView(APIView):
     def get(self, request):
         employee_id = request.user.employee_get.id
 
-        attendance_queryset = Attendance.objects.filter(
-            employee_id=employee_id
-        ).order_by("-attendance_date")
+        attendance_queryset = (
+            Attendance.objects.filter(employee_id=employee_id)
+            .select_related("shift_id", "attendance_day")
+            .prefetch_related("late_come_early_out", "shift_id__employeeshiftschedule_set")
+            .order_by("-attendance_date")
+        )
+
+        # Optional range for mobile week/month views.
+        from_date = request.query_params.get("from_date") or request.query_params.get(
+            "attendance_date__gte"
+        )
+        to_date = request.query_params.get("to_date") or request.query_params.get(
+            "attendance_date__lte"
+        )
+        if from_date:
+            attendance_queryset = attendance_queryset.filter(
+                attendance_date__gte=from_date
+            )
+        if to_date:
+            attendance_queryset = attendance_queryset.filter(
+                attendance_date__lte=to_date
+            )
 
         paginator = HorillaPageNumberPagination()
-        paginator.page_size = 20
+        paginator.page_size = 31
         page = paginator.paginate_queryset(attendance_queryset, request)
 
         serializer = self.serializer_class(page, many=True)

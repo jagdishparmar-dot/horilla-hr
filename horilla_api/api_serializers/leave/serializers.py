@@ -106,6 +106,7 @@ class GetAvailableLeaveTypeSerializer(serializers.ModelSerializer):
     leave_type_id = serializers.SerializerMethodField()
     icon = serializers.SerializerMethodField()
     total_leave_days = serializers.SerializerMethodField()
+    leave_taken = serializers.SerializerMethodField()
 
     class Meta:
         model = AvailableLeave
@@ -116,6 +117,7 @@ class GetAvailableLeaveTypeSerializer(serializers.ModelSerializer):
             "available_days",
             "carryforward_days",
             "total_leave_days",
+            "leave_taken",
         ]
 
     def get_leave_type_id(self, obj):
@@ -126,11 +128,14 @@ class GetAvailableLeaveTypeSerializer(serializers.ModelSerializer):
     def get_icon(self, obj):
         try:
             return obj.leave_type_id.icon.url
-        except:
+        except Exception:
             return None
 
     def get_total_leave_days(self, obj):
         return obj.available_days + obj.carryforward_days
+
+    def get_leave_taken(self, obj):
+        return obj.leave_taken()
 
 
 class userLeaveRequestGetAllSerilaizer(serializers.ModelSerializer):
@@ -140,12 +145,10 @@ class userLeaveRequestGetAllSerilaizer(serializers.ModelSerializer):
         model = LeaveRequest
         exclude = [
             "requested_date",
-            "description",
             "attachment",
             "approved_available_days",
             "approved_carryforward_days",
             "created_at",
-            "reject_reason",
             "employee_id",
             "created_by",
         ]
@@ -166,7 +169,6 @@ class UserLeaveRequestGetSerilaizer(serializers.ModelSerializer):
             "approved_available_days",
             "approved_carryforward_days",
             "created_at",
-            "reject_reason",
             "employee_id",
             "created_by",
         ]
@@ -252,7 +254,7 @@ class LeaveTypeGetCreateSerilaizer(serializers.ModelSerializer):
 class LeaveTypeAllGetSerializer(serializers.ModelSerializer):
     class Meta:
         model = LeaveType
-        fields = ["id", "name", "icon"]
+        fields = ["id", "name", "icon", "period_in"]
 
 
 class LeaveAllocationRequestCreateSerializer(serializers.ModelSerializer):

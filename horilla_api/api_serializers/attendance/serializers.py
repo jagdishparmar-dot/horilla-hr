@@ -227,7 +227,30 @@ class UserAttendanceListSerializer(serializers.ModelSerializer):
 
 class UserAttendanceDetailedSerializer(serializers.ModelSerializer):
     shift_name = serializers.CharField(source="shift_id.employee_shift", read_only=True)
+    is_late = serializers.SerializerMethodField()
+    shift_start = serializers.SerializerMethodField()
+    shift_end = serializers.SerializerMethodField()
 
     class Meta:
         model = Attendance
         fields = "__all__"
+
+    def get_is_late(self, obj):
+        return obj.late_come_early_out.filter(type="late_come").exists()
+
+    def _schedule_for_day(self, obj):
+        shift = obj.shift_id
+        day = obj.attendance_day
+        if not shift or not day:
+            return None
+        return shift.employeeshiftschedule_set.filter(day=day).first()
+
+    def get_shift_start(self, obj):
+        schedule = self._schedule_for_day(obj)
+        value = getattr(schedule, "start_time", None)
+        return value.strftime("%H:%M") if value else None
+
+    def get_shift_end(self, obj):
+        schedule = self._schedule_for_day(obj)
+        value = getattr(schedule, "end_time", None)
+        return value.strftime("%H:%M") if value else None

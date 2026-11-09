@@ -6,4 +6,13 @@ from notifications.models import Notification
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        fields = ["id", "level", "unread", "verb", "timestamp", "deleted", "data"]
+        fields = [
+            "id",
+            "level",
+            "unread",
+            "verb",
+            "description",
+            "timestamp",
+            "deleted",
+            "data",
+        ]

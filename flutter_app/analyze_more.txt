@@ -1,0 +1,6 @@
+﻿Analyzing more, main_shell.dart, models.dart...
+
+   info - lib\features\more\contracts_screen.dart:184:57 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+   info - lib\features\more\contracts_screen.dart:186:9 - Invalid use of a private type in a public API. Try making the private type public, or making the API that uses the private type also be private. - library_private_types_in_public_api
+
+2 issues found.

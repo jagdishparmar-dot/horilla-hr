@@ -1,0 +1,29 @@
+name: horilla_employee
+description: Horilla HR employee mobile app — check-in / check-out.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  dio: ^5.8.0+1
+  flutter_secure_storage: ^9.2.4
+  geolocator: ^14.0.1
+  intl: ^0.20.2
+  cached_network_image: ^3.4.1
+  hugeicons: 4.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

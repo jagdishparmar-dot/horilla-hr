@@ -14,9 +14,10 @@ screen needs an aggregate, it gets its own, so each one stays readable and
 cheap.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from django.apps import apps
+from django.db.models import F
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,6 +25,16 @@ from rest_framework.views import APIView
 from attendance.models import Attendance, AttendanceActivity
 from horilla_api.api_methods.base.announcements import announcements_for
 from horilla_api.api_methods.base.capabilities import build_capabilities
+
+_WEEKDAY_KEYS = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
 
 
 def _format_seconds(seconds):
@@ -78,9 +89,15 @@ def _break_seconds(activities):
 def _punch_block(employee, activities):
     open_activity = next((a for a in activities if not a.clock_out), None)
     first = activities[0] if activities else None
+    last_out = next((a for a in reversed(activities) if a.clock_out), None)
     return {
         "is_clocked_in": open_activity is not None,
         "clock_in_time": first.clock_in.strftime("%H:%M") if first else None,
+        "clock_out_time": (
+            last_out.clock_out.strftime("%H:%M")
+            if last_out and open_activity is None
+            else None
+        ),
         "last_activity_at": (
             _moment(open_activity.clock_in_date, open_activity.clock_in).isoformat()
             if open_activity
@@ -88,6 +105,173 @@ def _punch_block(employee, activities):
             else None
         ),
     }
+
+
+def _format_hhmm(value):
+    if value is None:
+        return None
+    if hasattr(value, "strftime"):
+        return value.strftime("%H:%M")
+    return str(value)[:5]
+
+
+def _infer_request_kind(name):
+    text = (name or "").lower()
+    if "remote" in text:
+        return "remote"
+    if "permission" in text:
+        return "permission"
+    if "casual" in text:
+        return "casual"
+    if "annual" in text or "vacation" in text or "paid" in text:
+        return "annual"
+    if "early" in text:
+        return "early"
+    return "other"
+
+
+def _work_info_label(employee, attr, nested):
+    work = getattr(employee, "employee_work_info", None)
+    obj = getattr(work, attr, None) if work else None
+    return getattr(obj, nested, None) if obj else None
+
+
+def _colleague_card(employee):
+    return {
+        "id": employee.id,
+        "name": employee.get_full_name(),
+        "avatar": employee.get_avatar(),
+        "job_position": _work_info_label(
+            employee, "job_position_id", "job_position"
+        ),
+        "department": _work_info_label(employee, "department_id", "department"),
+    }
+
+
+def _company_employees(employee):
+    from employee.models import Employee
+
+    company = employee.get_company()
+    qs = Employee.objects.filter(is_active=True).select_related(
+        "employee_work_info__job_position_id",
+        "employee_work_info__department_id",
+        "employee_work_info__company_id",
+    )
+    if company is not None:
+        qs = qs.filter(employee_work_info__company_id=company)
+    return qs
+
+
+def _work_schedule(employee):
+    """
+    Current week (Sun–Sat) plus day rows from the employee's assigned shift.
+    """
+    today = date.today()
+    # Sunday-start week to match the home schedule card.
+    days_since_sunday = (today.weekday() + 1) % 7
+    week_start = today - timedelta(days=days_since_sunday)
+    week_end = week_start + timedelta(days=6)
+
+    shift = employee.get_shift()
+    shift_name = getattr(shift, "employee_shift", None) or "General"
+    schedule_by_day = {}
+    if shift is not None:
+        from base.models import EmployeeShiftSchedule
+
+        for row in EmployeeShiftSchedule.objects.filter(shift_id=shift).select_related(
+            "day"
+        ):
+            key = (row.day.day or "").lower()
+            schedule_by_day[key] = row
+
+    days = []
+    for offset in range(7):
+        day = week_start + timedelta(days=offset)
+        key = _WEEKDAY_KEYS[day.weekday()]
+        row = schedule_by_day.get(key)
+        days.append(
+            {
+                "date": day.isoformat(),
+                "day_key": key,
+                "shift_name": (
+                    getattr(getattr(row, "shift_id", None), "employee_shift", None)
+                    or shift_name
+                ),
+                "start_time": _format_hhmm(getattr(row, "start_time", None)) or "09:00",
+                "end_time": _format_hhmm(getattr(row, "end_time", None)) or "17:00",
+                "is_today": day == today,
+                "has_schedule": row is not None,
+            }
+        )
+
+    return {
+        "shift_name": shift_name,
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "days": days,
+    }
+
+
+def _recent_requests(employee, limit=5):
+    if not apps.is_installed("leave"):
+        return []
+    LeaveRequest = apps.get_model("leave", "LeaveRequest")
+    rows = (
+        LeaveRequest.objects.filter(employee_id=employee)
+        .select_related("leave_type_id")
+        .order_by("-id")[:limit]
+    )
+    payload = []
+    for leave in rows:
+        leave_name = getattr(leave.leave_type_id, "name", None) or "Leave"
+        payload.append(
+            {
+                "id": leave.id,
+                "title": leave_name,
+                "status": leave.status,
+                "requested_days": leave.requested_days,
+                "start_date": leave.start_date.isoformat() if leave.start_date else None,
+                "end_date": leave.end_date.isoformat() if leave.end_date else None,
+                "kind": _infer_request_kind(leave_name),
+                "reason": leave.description,
+            }
+        )
+    return payload
+
+
+def _upcoming_birthdays(employee, limit=5):
+    """Same-month upcoming birthdays in the caller's company (dashboard logic)."""
+    today = date.today()
+    import calendar
+
+    last_day = calendar.monthrange(today.year, today.month)[1]
+    rows = (
+        _company_employees(employee)
+        .filter(
+            dob__isnull=False,
+            dob__month=today.month,
+            dob__day__gte=today.day,
+            dob__day__lte=last_day,
+        )
+        .order_by(F("dob__day").asc(nulls_last=True))[:limit]
+    )
+    return [_colleague_card(row) for row in rows]
+
+
+def _new_hires(employee, limit=5, within_days=30):
+    today = date.today()
+    since = today - timedelta(days=within_days)
+    rows = (
+        _company_employees(employee)
+        .filter(
+            employee_work_info__date_joining__isnull=False,
+            employee_work_info__date_joining__gte=since,
+            employee_work_info__date_joining__lte=today,
+        )
+        .exclude(id=employee.id)
+        .order_by("-employee_work_info__date_joining")[:limit]
+    )
+    return [_colleague_card(row) for row in rows]
 
 
 def _geofence_block(employee):
@@ -150,7 +334,13 @@ def _latest_announcement(employee):
     return {
         "id": announcement.id,
         "title": announcement.title,
-        "created_at": announcement.created_at.isoformat(),
+        "description": announcement.description,
+        "created_at": (
+            announcement.created_at.isoformat() if announcement.created_at else None
+        ),
+        "expire_date": (
+            announcement.expire_date.isoformat() if announcement.expire_date else None
+        ),
     }
 
 
@@ -258,6 +448,37 @@ class MobileHomeAPIView(APIView):
                     "id": employee.id,
                     "name": employee.get_full_name(),
                     "avatar": employee.get_avatar(),
+                    "badge_id": employee.badge_id,
+                    "email": employee.email,
+                    "phone": employee.phone,
+                    "job_position": getattr(
+                        getattr(
+                            getattr(employee, "employee_work_info", None),
+                            "job_position_id",
+                            None,
+                        ),
+                        "job_position",
+                        None,
+                    ),
+                    "department": getattr(
+                        getattr(
+                            getattr(employee, "employee_work_info", None),
+                            "department_id",
+                            None,
+                        ),
+                        "department",
+                        None,
+                    ),
+                    "shift_id": getattr(employee.get_shift(), "id", None),
+                    "work_type_id": getattr(
+                        getattr(
+                            getattr(employee, "employee_work_info", None),
+                            "work_type_id",
+                            None,
+                        ),
+                        "id",
+                        None,
+                    ),
                 },
                 "capabilities": build_capabilities(request.user),
                 "punch": _punch_block(employee, activities),
@@ -273,6 +494,10 @@ class MobileHomeAPIView(APIView):
                 "announcement": _latest_announcement(employee),
                 "unread_notifications": _unread_notification_count(request.user),
                 "pending_approvals": _pending_approvals(request),
+                "work_schedule": _work_schedule(employee),
+                "recent_requests": _recent_requests(employee),
+                "birthdays": _upcoming_birthdays(employee),
+                "new_hires": _new_hires(employee),
             },
             status=200,
         )

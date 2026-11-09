@@ -7,6 +7,11 @@
     min-height: calc(100vh - 4rem);
     margin-top: 2rem;
     margin-bottom: 2rem;
+    padding: 1rem;
+    background:
+        radial-gradient(1200px 500px at 10% -10%, rgba(229, 79, 56, 0.12), transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, rgba(229, 79, 56, 0.08), transparent 50%),
+        #faf7f6;
     @media (max-width: 767.98px) {
         align-items: center;
         height: 100%;
@@ -17,10 +22,158 @@
     background-color: $white;
     width: 90%;
     max-width: 450px;
-    padding: 2.5rem;
-    box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.06) 0px 1px 2px 0px;
+    padding: 2.75rem 2.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(229, 79, 56, 0.08);
+    box-shadow:
+        0 1px 2px rgba(25, 9, 6, 0.04),
+        0 12px 32px rgba(229, 79, 56, 0.08);
+    animation: oh-auth-card-in 420ms ease-out;
 
     @media (max-width: 767.98px) {
-        padding: 1.5rem;
+        padding: 1.75rem 1.35rem;
+    }
+}
+
+.oh-auth-card__title {
+    letter-spacing: -0.02em;
+    margin-bottom: 0.35rem !important;
+}
+
+.oh-auth-card__subtitle {
+    color: #6b7280;
+    font-size: 0.95rem;
+    margin-bottom: 1.75rem;
+}
+
+.oh-auth-field {
+    margin-bottom: 1.15rem;
+}
+
+.oh-auth-field .oh-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.45rem;
+}
+
+.oh-auth-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.oh-auth-input-wrap__icon {
+    position: absolute;
+    left: 0.95rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.15rem;
+    color: #9ca3af;
+    pointer-events: none;
+    transition: color 200ms ease;
+    z-index: 1;
+}
+
+.oh-auth-input-wrap .oh-input,
+.oh-auth-input-wrap .oh-input--password {
+    width: 100%;
+    border-radius: 0.65rem;
+    border: 1px solid #e5e7eb;
+    padding: 0.85rem 1rem 0.85rem 2.75rem;
+    font-size: 0.95rem;
+    background: #fff;
+    transition:
+        border-color 200ms ease,
+        box-shadow 200ms ease,
+        background-color 200ms ease;
+
+    &::placeholder {
+        color: #9ca3af;
+        font-weight: 400;
+        opacity: 1;
+    }
+
+    &:hover {
+        border-color: #d1d5db;
+    }
+
+    &:focus,
+    &:focus-visible {
+        outline: none;
+        border-color: #E54F38 !important;
+        box-shadow: 0 0 0 3px rgba(229, 79, 56, 0.15);
+    }
+}
+
+.oh-auth-input-wrap:focus-within .oh-auth-input-wrap__icon {
+    color: #E54F38;
+}
+
+.oh-auth-input-wrap--password .oh-input--password {
+    padding-right: 2.85rem;
+}
+
+.oh-auth-input-wrap .oh-password-input--toggle {
+    position: absolute;
+    right: 0.35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    height: auto;
+    color: #9ca3af;
+    transition: color 200ms ease;
+
+    &:hover {
+        color: #E54F38;
+    }
+}
+
+.oh-auth-submit {
+    border-radius: 0.65rem !important;
+    transition:
+        transform 180ms ease,
+        box-shadow 180ms ease,
+        background-color 180ms ease !important;
+
+    &:hover {
+        transform: translateY(-1px);
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+}
+
+.oh-auth-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 0.5rem;
+    animation: oh-auth-card-in 520ms ease-out;
+}
+
+.oh-auth-brand img {
+    opacity: 0.92;
+    max-width: 200px;
+    height: 140px;
+    object-fit: contain;
+}
+
+.oh-auth-brand__name {
+    font-size: 1.05rem;
+    color: #6b7280;
+    text-align: center;
+    margin-top: 0.5rem;
+}
+
+@keyframes oh-auth-card-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

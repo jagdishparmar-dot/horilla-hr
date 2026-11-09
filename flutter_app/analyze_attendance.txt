@@ -1,0 +1,5 @@
+﻿Analyzing attendance, main_shell.dart, theme.dart...
+
+   info - lib\features\attendance\attendance_screen.dart:294:35 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+
+1 issue found.

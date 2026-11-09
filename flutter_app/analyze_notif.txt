@@ -1,0 +1,5 @@
+﻿Analyzing notifications, main_shell.dart...
+
+   info - lib\features\notifications\notifications_screen.dart:47:29 - Use the '??' operator rather than '?:' when testing for 'null'. Try rewriting the code to use '??'. - prefer_if_null_operators
+
+1 issue found.

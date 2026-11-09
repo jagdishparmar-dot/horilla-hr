@@ -64,8 +64,16 @@ class MobileHomeTests(TestCase):
             "on_leave_today",
             "announcement",
             "unread_notifications",
+            "work_schedule",
+            "recent_requests",
+            "birthdays",
+            "new_hires",
         ):
             self.assertIn(key, response.data)
+        self.assertIn("days", response.data["work_schedule"])
+        self.assertIsInstance(response.data["recent_requests"], list)
+        self.assertIsInstance(response.data["birthdays"], list)
+        self.assertIsInstance(response.data["new_hires"], list)
         # Embedded so the tab bar needs no extra call.
         self.assertIn("role", response.data["capabilities"])
         self.assertIn("features", response.data["capabilities"])

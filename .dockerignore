@@ -70,13 +70,20 @@ horillavenv/
 # Node
 node_modules/
 
-# Git
+# Git / CI (not needed in image)
 .git
 .gitignore
+.github/
+.gitattributes
 
 # Docker (avoid recursive copy)
 docker-compose.yml
+docker-compose.prod.yml
 docker-compose.override.yml
+Dockerfile
+.dockerignore
+Makefile
+*.log
 
 # Database files
 *.sqlite3
@@ -89,6 +96,19 @@ csv_tmp/
 # Documentation (not needed in image)
 ARCHITECTURE_DIAGRAM.md
 CODEBASE_INDEX.md
+*.md
+!docker/README.md
 
-# Claude/AI
+# SCSS sources — compiled CSS lives under static/build and static/css
+static/src/
+
+# Mobile / local-only (not needed in Django image)
+flutter_app/
+docs/
+pg_backup/
+
+# Claude/AI / local tooling
 .claude/
+.cursor/
+agent-transcripts/
+docker/test-apt.sh
