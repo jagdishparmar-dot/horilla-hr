@@ -9,7 +9,7 @@ class AppConfig {
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     // Physical device / LAN default. Emulator: --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
-    defaultValue: 'http://10.118.201.152:8000/api/v1',
+    defaultValue: 'https://hr-dev.intoship.cloud/api/v1',
   );
 
   /// Origin without `/api/v1` — used to resolve relative media URLs.

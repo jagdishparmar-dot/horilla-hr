@@ -23,7 +23,11 @@ Color _accentOf(AttendanceStatus status) => switch (status) {
   AttendanceStatus.present => const Color(0xFF16A34A),
   AttendanceStatus.late => const Color(0xFFF97316),
   AttendanceStatus.overtime => const Color(0xFF8B5CF6),
+  AttendanceStatus.shortHours => const Color(0xFFD97706),
+  AttendanceStatus.missingOut => const Color(0xFFEF4444),
   AttendanceStatus.absent => const Color(0xFFEF4444),
+  AttendanceStatus.leave => const Color(0xFF2563EB),
+  AttendanceStatus.holiday => const Color(0xFF0F766E),
   AttendanceStatus.weekend => const Color(0xFF94A3B8),
   AttendanceStatus.none => const Color(0xFF64748B),
 };
@@ -32,7 +36,11 @@ Color _tintOf(AttendanceStatus status) => switch (status) {
   AttendanceStatus.present => const Color(0xFFE7F8EE),
   AttendanceStatus.late => const Color(0xFFFFF0E4),
   AttendanceStatus.overtime => const Color(0xFFF3EEFF),
+  AttendanceStatus.shortHours => const Color(0xFFFFF7ED),
+  AttendanceStatus.missingOut => const Color(0xFFFDECEE),
   AttendanceStatus.absent => const Color(0xFFFDECEE),
+  AttendanceStatus.leave => const Color(0xFFEFF6FF),
+  AttendanceStatus.holiday => const Color(0xFFCCFBF1),
   AttendanceStatus.weekend => const Color(0xFFF3F4F6),
   AttendanceStatus.none => Colors.white,
 };
@@ -45,6 +53,39 @@ class AttendanceScreen extends ConsumerWidget {
     final homeAsync = ref.watch(mobileHomeProvider);
     final segment = ref.watch(attendanceSegmentProvider);
     final viewMode = ref.watch(attendanceViewModeProvider);
+
+    ref.listen(mobileHomeProvider, (prev, next) {
+      final today = next.asData?.value.workSchedule?.companyToday;
+      if (today == null) return;
+      final wantedWeek = weekStartOf(today);
+      final currentWeek = ref.read(attendanceWeekStartProvider);
+      final deviceWeek = weekStartOf(DateTime.now());
+      if (currentWeek == deviceWeek && wantedWeek != currentWeek) {
+        ref.read(attendanceWeekStartProvider.notifier).state = wantedWeek;
+      }
+      final wantedMonth = DateTime(today.year, today.month);
+      final currentMonth = ref.read(attendanceMonthProvider);
+      final now = DateTime.now();
+      if (currentMonth.year == now.year &&
+          currentMonth.month == now.month &&
+          (wantedMonth.year != currentMonth.year ||
+              wantedMonth.month != currentMonth.month)) {
+        ref.read(attendanceMonthProvider.notifier).state = wantedMonth;
+      }
+      final selected = ref.read(attendanceSelectedDayProvider);
+      if (selected.year == now.year &&
+          selected.month == now.month &&
+          selected.day == now.day &&
+          (today.year != selected.year ||
+              today.month != selected.month ||
+              today.day != selected.day)) {
+        ref.read(attendanceSelectedDayProvider.notifier).state = DateTime(
+          today.year,
+          today.month,
+          today.day,
+        );
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
@@ -399,7 +440,7 @@ class _SummaryHero extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _HeroStat(
-                  value: '${stats.overtimeHours}h',
+                  value: stats.overtimeLabel,
                   label: 'Overtime',
                   dot: const Color(0xFFD8B4FE),
                 ),
@@ -481,7 +522,7 @@ class _ShiftPane extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final weekStart = ref.watch(attendanceWeekStartProvider);
-    final daysAsync = ref.watch(attendanceWeekDaysProvider);
+    final daysAsync = ref.watch(attendanceShiftDaysProvider);
     final weekEnd = weekStart.add(const Duration(days: 6));
     final rangeLabel =
         '${DateFormat('dd MMM').format(weekStart)} – ${DateFormat('dd MMM yyyy').format(weekEnd)}';
@@ -611,7 +652,7 @@ class _ShiftDayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = _accentOf(day.status);
-    final off = day.status == AttendanceStatus.weekend;
+    final off = day.isDayOff;
     final worked = day.workedLabel;
 
     return Container(
@@ -980,6 +1021,10 @@ class _AttendanceDayCard extends StatelessWidget {
   String get _emptyLabel => switch (day.status) {
     AttendanceStatus.absent => 'No punches recorded',
     AttendanceStatus.weekend => 'Day off',
+    AttendanceStatus.holiday => 'Holiday',
+    AttendanceStatus.leave => day.leaveName ?? 'On leave',
+    AttendanceStatus.missingOut => 'Missing clock-out',
+    AttendanceStatus.shortHours => 'Short of minimum hours',
     _ => day.statusDetail ?? '',
   };
 
@@ -1032,15 +1077,20 @@ class _AttendanceDayCard extends StatelessWidget {
   }
 
   Widget _punchBody() {
-    final worked = day.workedLabel;
-    final overtime = day.overtimeLabel;
+    final inLabel = formatPunchClock(day.clockIn, day.clockInDate, day.date);
+    final outLabel = day.clockOut == null
+        ? '—'
+        : formatPunchClock(day.clockOut, day.clockOutDate, day.date);
+    final extraPunches = day.punches.length > 1
+        ? day.punches.skip(1).toList()
+        : const <HomePunch>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Text(
-              day.clockIn ?? '--:--',
+              inLabel,
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 14,
@@ -1051,7 +1101,7 @@ class _AttendanceDayCard extends StatelessWidget {
             Expanded(child: _TimelineDots(status: day.status)),
             const SizedBox(width: 8),
             Text(
-              day.clockOut ?? '—',
+              outLabel,
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 14,
@@ -1062,22 +1112,58 @@ class _AttendanceDayCard extends StatelessWidget {
             ),
           ],
         ),
+        if (extraPunches.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          for (final punch in extraPunches)
+            Text(
+              '${formatPunchClock(punch.clockIn, punch.clockInDate, day.date)} → ${punch.open ? 'now' : formatPunchClock(punch.clockOut, punch.clockOutDate, day.date)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+        ],
         const SizedBox(height: 8),
         Wrap(
           spacing: 6,
           runSpacing: 4,
           children: [
-            if (worked != null)
+            if (day.workedLabel != null)
               _MiniChip(
                 icon: HugeIcons.strokeRoundedClock01,
-                label: worked,
+                label: day.workedLabel!,
                 color: AppColors.navBlue,
               ),
-            if (overtime != null)
+            if (day.overtimeLabel != null)
               _MiniChip(
                 icon: HugeIcons.strokeRoundedAnalyticsUp,
-                label: '+$overtime',
+                label: '+${day.overtimeLabel}',
                 color: const Color(0xFF8B5CF6),
+              ),
+            if (day.overtimePending)
+              _MiniChip(
+                icon: HugeIcons.strokeRoundedAnalyticsUp,
+                label: 'OT pending',
+                color: const Color(0xFFD97706),
+              ),
+            if (day.hoursPending != null)
+              _MiniChip(
+                icon: HugeIcons.strokeRoundedClock01,
+                label: 'Short ${day.hoursPending}',
+                color: const Color(0xFFD97706),
+              ),
+            if (day.isEarlyOut)
+              _MiniChip(
+                icon: HugeIcons.strokeRoundedLogout01,
+                label: 'Early out',
+                color: const Color(0xFFF97316),
+              ),
+            if (day.isRequestPending)
+              _MiniChip(
+                icon: HugeIcons.strokeRoundedCalendar03,
+                label: 'Pending',
+                color: const Color(0xFFF97316),
               ),
           ],
         ),
@@ -1276,9 +1362,13 @@ class _MonthCalendarGrid extends StatelessWidget {
     final accent = _accentOf(day.status);
 
     final fg = isSelected ? Colors.white : AppColors.textPrimary;
-    final timeText =
-        day.clockIn ??
-        (day.status == AttendanceStatus.weekend ? 'off' : '--:--');
+    final timeText = switch (day.status) {
+      AttendanceStatus.weekend => 'off',
+      AttendanceStatus.holiday => 'hol',
+      AttendanceStatus.leave => 'leave',
+      AttendanceStatus.missingOut => day.clockIn ?? 'out',
+      _ => day.clockIn ?? '--:--',
+    };
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -1343,7 +1433,10 @@ class _CalendarLegend extends StatelessWidget {
         _LegendDot(color: Color(0xFF16A34A), label: 'Present'),
         _LegendDot(color: Color(0xFFF97316), label: 'Late'),
         _LegendDot(color: Color(0xFF8B5CF6), label: 'Overtime'),
+        _LegendDot(color: Color(0xFFD97706), label: 'Short'),
         _LegendDot(color: Color(0xFFEF4444), label: 'Absent'),
+        _LegendDot(color: Color(0xFF2563EB), label: 'Leave'),
+        _LegendDot(color: Color(0xFF0F766E), label: 'Holiday'),
         _LegendDot(color: Color(0xFF94A3B8), label: 'Off'),
       ],
     );
@@ -1390,7 +1483,7 @@ class _SelectedDayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = _accentOf(day.status);
     final title = DateFormat('EEEE, MMM d').format(day.date);
-    final off = day.status == AttendanceStatus.weekend;
+    final off = day.isDayOff;
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
@@ -1433,7 +1526,11 @@ class _SelectedDayCard extends StatelessWidget {
                   child: _FactTile(
                     icon: HugeIcons.strokeRoundedLogin01,
                     label: 'Check-in',
-                    value: day.clockIn ?? '--:--',
+                    value: formatPunchClock(
+                      day.clockIn,
+                      day.clockInDate,
+                      day.date,
+                    ),
                     color: const Color(0xFF16A34A),
                   ),
                 ),
@@ -1442,7 +1539,13 @@ class _SelectedDayCard extends StatelessWidget {
                   child: _FactTile(
                     icon: HugeIcons.strokeRoundedLogout01,
                     label: 'Check-out',
-                    value: day.clockOut ?? '--:--',
+                    value: day.clockOut == null
+                        ? '--:--'
+                        : formatPunchClock(
+                            day.clockOut,
+                            day.clockOutDate,
+                            day.date,
+                          ),
                     color: const Color(0xFFE5484D),
                   ),
                 ),
@@ -1464,12 +1567,41 @@ class _SelectedDayCard extends StatelessWidget {
                   child: _FactTile(
                     icon: HugeIcons.strokeRoundedAnalyticsUp,
                     label: 'Overtime',
-                    value: day.overtimeLabel ?? 'None',
-                    color: const Color(0xFF8B5CF6),
+                    value: day.overtimeLabel ??
+                        (day.overtimePending ? 'Pending' : 'None'),
+                    color: day.overtimePending
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF8B5CF6),
                   ),
                 ),
               ],
             ),
+            if (day.punches.length > 1) ...[
+              const SizedBox(height: 10),
+              for (final punch in day.punches)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '${formatPunchClock(punch.clockIn, punch.clockInDate, day.date)} → ${punch.open ? 'now' : formatPunchClock(punch.clockOut, punch.clockOutDate, day.date)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+            ],
+            if (day.leaveName != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                day.leaveName!,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  color: Color(0xFF2563EB),
+                ),
+              ),
+            ],
             if (!off) ...[
               const SizedBox(height: 12),
               Row(

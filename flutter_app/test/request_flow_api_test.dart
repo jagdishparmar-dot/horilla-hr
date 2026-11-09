@@ -148,12 +148,12 @@ void main() {
       from: now.subtract(const Duration(days: 40)),
       to: now.add(const Duration(days: 1)),
     );
-    expect(rows, isNotEmpty);
+    expect(rows.records, isNotEmpty);
 
-    final withShift = rows.where(
+    final withShift = rows.records.where(
       (r) => r.shiftId != null && r.workTypeId != null,
     );
-    final target = withShift.isNotEmpty ? withShift.first : rows.first;
+    final target = withShift.isNotEmpty ? withShift.first : rows.records.first;
     expect(target.shiftId, isNotNull);
 
     final createDate = DateTime(now.year, now.month, now.day)

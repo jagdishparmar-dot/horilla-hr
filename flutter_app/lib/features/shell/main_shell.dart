@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../attendance/attendance_provider.dart';
 import '../attendance/attendance_screen.dart';
 import '../home/home_provider.dart';
 import '../home/home_screen.dart';
@@ -36,7 +37,14 @@ class MainShell extends ConsumerWidget {
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: index,
         unreadNotifications: unread,
-        onTap: (i) => ref.read(shellIndexProvider.notifier).state = i,
+        onTap: (i) {
+          final previous = ref.read(shellIndexProvider);
+          ref.read(shellIndexProvider.notifier).state = i;
+          if (i == 1 && previous != 1) {
+            invalidateAttendance(ref);
+            ref.invalidate(mobileHomeProvider);
+          }
+        },
       ),
     );
   }

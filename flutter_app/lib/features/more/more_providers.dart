@@ -71,7 +71,7 @@ final activityFeedProvider = FutureProvider.autoDispose<List<ActivityEvent>>((
   final attendanceFuture = ref
       .read(attendanceRepositoryProvider)
       .fetchMyAttendance(from: from, to: to)
-      .then<List<ActivityEvent>>(_attendanceEvents)
+      .then<List<ActivityEvent>>((payload) => _attendanceEvents(payload.records))
       .catchError((Object e) {
         attendanceError = e;
         return <ActivityEvent>[];

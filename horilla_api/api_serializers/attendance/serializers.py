@@ -228,6 +228,8 @@ class UserAttendanceListSerializer(serializers.ModelSerializer):
 class UserAttendanceDetailedSerializer(serializers.ModelSerializer):
     shift_name = serializers.CharField(source="shift_id.employee_shift", read_only=True)
     is_late = serializers.SerializerMethodField()
+    is_early_out = serializers.SerializerMethodField()
+    hours_pending = serializers.SerializerMethodField()
     shift_start = serializers.SerializerMethodField()
     shift_end = serializers.SerializerMethodField()
 
@@ -237,6 +239,13 @@ class UserAttendanceDetailedSerializer(serializers.ModelSerializer):
 
     def get_is_late(self, obj):
         return obj.late_come_early_out.filter(type="late_come").exists()
+
+    def get_is_early_out(self, obj):
+        return obj.late_come_early_out.filter(type="early_out").exists()
+
+    def get_hours_pending(self, obj):
+        pending = obj.hours_pending()
+        return pending if pending and pending != "00:00" else None
 
     def _schedule_for_day(self, obj):
         shift = obj.shift_id
@@ -270,6 +279,12 @@ class UserAttendanceDetailedSerializer(serializers.ModelSerializer):
                 "id": row.id,
                 "clock_in": row.clock_in.strftime("%H:%M") if row.clock_in else None,
                 "clock_out": row.clock_out.strftime("%H:%M") if row.clock_out else None,
+                "clock_in_date": (
+                    row.clock_in_date.isoformat() if row.clock_in_date else None
+                ),
+                "clock_out_date": (
+                    row.clock_out_date.isoformat() if row.clock_out_date else None
+                ),
                 "open": row.clock_out is None,
             }
             for row in rows

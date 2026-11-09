@@ -171,16 +171,22 @@ class HomePunch {
     required this.clockIn,
     required this.clockOut,
     required this.open,
+    this.clockInDate,
+    this.clockOutDate,
   });
 
   final String? clockIn;
   final String? clockOut;
+  final String? clockInDate;
+  final String? clockOutDate;
   final bool open;
 
   factory HomePunch.fromJson(Map<String, dynamic> json) {
     return HomePunch(
       clockIn: json['clock_in'] as String?,
       clockOut: json['clock_out'] as String?,
+      clockInDate: json['clock_in_date'] as String?,
+      clockOutDate: json['clock_out_date'] as String?,
       open: json['open'] as bool? ?? json['clock_out'] == null,
     );
   }
@@ -230,12 +236,18 @@ class HomeWorkSchedule {
     required this.weekStart,
     required this.weekEnd,
     required this.days,
+    this.companyToday,
+    this.timezone,
   });
 
   final String shiftName;
   final DateTime weekStart;
   final DateTime weekEnd;
   final List<HomeScheduleDay> days;
+
+  /// Company calendar date (Django TIME_ZONE), not the phone's local date.
+  final DateTime? companyToday;
+  final String? timezone;
 
   factory HomeWorkSchedule.fromJson(Map<String, dynamic> json) {
     return HomeWorkSchedule(
@@ -246,6 +258,8 @@ class HomeWorkSchedule {
       weekEnd:
           DateTime.tryParse(json['week_end'] as String? ?? '') ??
           DateTime.now(),
+      companyToday: _asDate(json['today'] as String?),
+      timezone: json['timezone'] as String?,
       days: (json['days'] as List<dynamic>? ?? [])
           .whereType<Map>()
           .map((e) => HomeScheduleDay.fromJson(Map<String, dynamic>.from(e)))
@@ -253,13 +267,91 @@ class HomeWorkSchedule {
     );
   }
 
-  /// Today + next scheduled day (or tomorrow) for the home card preview.
+  static DateTime? _asDate(String? raw) {
+    final parsed = DateTime.tryParse(raw ?? '');
+    if (parsed == null) return null;
+    return DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
+  static const weekdayKeys = [
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ];
+
+  static String weekdayKey(DateTime date) => weekdayKeys[date.weekday - 1];
+
+  /// Stamp this week's weekday pattern onto [from]–[to].
+  ///
+  /// Used when `/mobile/work-schedule/` is not deployed yet: home already
+  /// returns the current week's roster, and the same Mon–Fri (etc.) pattern
+  /// applies to other weeks for the assigned shift.
+  HomeWorkSchedule projectOntoRange({
+    required DateTime from,
+    required DateTime to,
+    DateTime? today,
+  }) {
+    final now = today ?? DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    final byKey = <String, HomeScheduleDay>{
+      for (final day in days) day.dayKey.toLowerCase(): day,
+    };
+    final start = DateTime(from.year, from.month, from.day);
+    final end = DateTime(to.year, to.month, to.day);
+    final projected = <HomeScheduleDay>[];
+    for (
+      var cursor = start;
+      !cursor.isAfter(end);
+      cursor = cursor.add(const Duration(days: 1))
+    ) {
+      final key = weekdayKey(cursor);
+      final src = byKey[key];
+      final hasSchedule = src?.hasSchedule ?? false;
+      projected.add(
+        HomeScheduleDay(
+          date: cursor,
+          dayKey: key,
+          shiftName: (src?.shiftName.trim().isNotEmpty ?? false)
+              ? src!.shiftName
+              : shiftName,
+          startTime: hasSchedule ? src?.startTime : null,
+          endTime: hasSchedule ? src?.endTime : null,
+          isToday:
+              cursor.year == todayDate.year &&
+              cursor.month == todayDate.month &&
+              cursor.day == todayDate.day,
+          hasSchedule: hasSchedule,
+        ),
+      );
+    }
+    return HomeWorkSchedule(
+      shiftName: shiftName,
+      weekStart: start,
+      weekEnd: end,
+      companyToday: companyToday ?? DateTime(now.year, now.month, now.day),
+      timezone: timezone,
+      days: projected,
+    );
+  }
+
+  /// Today + the next day that actually has roster hours (else tomorrow).
   List<HomeScheduleDay> get previewDays {
     if (days.isEmpty) return const [];
     final todayIndex = days.indexWhere((d) => d.isToday);
     if (todayIndex < 0) return days.take(2).toList();
     final today = days[todayIndex];
-    final next = todayIndex + 1 < days.length ? days[todayIndex + 1] : null;
+    HomeScheduleDay? next;
+    for (var i = todayIndex + 1; i < days.length; i++) {
+      if (days[i].hasSchedule) {
+        next = days[i];
+        break;
+      }
+    }
+    next ??= todayIndex + 1 < days.length ? days[todayIndex + 1] : null;
     return [today, ?next];
   }
 }
@@ -269,17 +361,17 @@ class HomeScheduleDay {
     required this.date,
     required this.dayKey,
     required this.shiftName,
-    required this.startTime,
-    required this.endTime,
     required this.isToday,
     required this.hasSchedule,
+    this.startTime,
+    this.endTime,
   });
 
   final DateTime date;
   final String dayKey;
   final String shiftName;
-  final String startTime;
-  final String endTime;
+  final String? startTime;
+  final String? endTime;
   final bool isToday;
   final bool hasSchedule;
 
@@ -288,14 +380,24 @@ class HomeScheduleDay {
       date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
       dayKey: json['day_key'] as String? ?? '',
       shiftName: json['shift_name'] as String? ?? 'General',
-      startTime: json['start_time'] as String? ?? '09:00',
-      endTime: json['end_time'] as String? ?? '17:00',
+      startTime: _hhmm(json['start_time']),
+      endTime: _hhmm(json['end_time']),
       isToday: json['is_today'] as bool? ?? false,
       hasSchedule: json['has_schedule'] as bool? ?? false,
     );
   }
 
-  String get timingLabel => '$startTime - $endTime';
+  static String? _hhmm(dynamic raw) {
+    if (raw == null) return null;
+    final text = raw.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  String get timingLabel {
+    if (!hasSchedule) return 'Day off';
+    if (startTime != null && endTime != null) return '$startTime - $endTime';
+    return 'Timing not set';
+  }
 }
 
 class HomeRecentRequest {

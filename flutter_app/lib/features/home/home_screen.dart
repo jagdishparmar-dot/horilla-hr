@@ -583,7 +583,8 @@ class _AttendanceCardState extends ConsumerState<_AttendanceCard> {
   String _shiftLabel(MobileHome home) {
     final days = home.workSchedule?.days ?? const <HomeScheduleDay>[];
     for (final day in days) {
-      if (day.isToday && day.hasSchedule) {
+      if (day.isToday) {
+        if (!day.hasSchedule) return 'Day off';
         final name = day.shiftName.trim();
         return name.isEmpty ? day.timingLabel : '$name · ${day.timingLabel}';
       }

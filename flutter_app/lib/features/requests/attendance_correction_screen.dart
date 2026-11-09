@@ -118,7 +118,7 @@ class _AttendanceCorrectionScreenState
             to: date,
           );
       AttendanceRecord? match;
-      for (final row in rows) {
+      for (final row in rows.records) {
         if (row.date.year == date.year &&
             row.date.month == date.month &&
             row.date.day == date.day) {

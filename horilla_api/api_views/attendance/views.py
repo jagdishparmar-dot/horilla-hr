@@ -35,6 +35,7 @@ from base.methods import generate_pdf, sanitize_mail_template_body
 from base.models import HorillaMailTemplate
 from base.views import is_reportingmanger
 from employee.filters import EmployeeFilter
+from horilla_api.api_methods.attendance_day_context import build_day_context
 from horilla_api.api_methods.base.pagination import HorillaPageNumberPagination
 
 from ...api_decorators.base.decorators import (
@@ -1230,7 +1231,12 @@ class UserAttendanceView(APIView):
             many=True,
             context={"activities_by_date": activities_by_date},
         )
-        return paginator.get_paginated_response(serializer.data)
+        response = paginator.get_paginated_response(serializer.data)
+        if from_date and to_date:
+            response.data["day_context"] = build_day_context(
+                request.user.employee_get, from_date, to_date
+            )
+        return response
 
 
 class AttendanceTypeAccessCheck(APIView):

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../home/models.dart';
 import 'attendance_mapper.dart';
 import 'attendance_repository.dart';
 import 'models.dart';
@@ -49,12 +50,23 @@ final attendanceSelectedDayProvider = StateProvider<DateTime>((ref) {
   return DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
 });
 
-final attendanceRecordsProvider =
-    FutureProvider.autoDispose.family<List<AttendanceRecord>, _DateRange>((
+final attendanceRangeProvider =
+    FutureProvider.autoDispose.family<AttendanceRangePayload, _DateRange>((
   ref,
   range,
 ) async {
   return ref.watch(attendanceRepositoryProvider).fetchMyAttendance(
+        from: range.from,
+        to: range.to,
+      );
+});
+
+final workScheduleProvider =
+    FutureProvider.autoDispose.family<HomeWorkSchedule, _DateRange>((
+  ref,
+  range,
+) async {
+  return ref.watch(attendanceRepositoryProvider).fetchWorkSchedule(
         from: range.from,
         to: range.to,
       );
@@ -75,26 +87,79 @@ final attendanceWeekDaysProvider =
     Provider.autoDispose<AsyncValue<List<AttendanceDay>>>((ref) {
   final start = ref.watch(attendanceWeekStartProvider);
   final range = _weekRange(start);
-  return ref.watch(attendanceRecordsProvider(range)).whenData(
-        (records) => buildDaysForRange(
-          from: range.from,
-          to: range.to,
-          records: records,
-        ),
-      );
+  final payload = ref.watch(attendanceRangeProvider(range));
+  final schedule = ref.watch(workScheduleProvider(range));
+  return _combineAsync(payload, schedule, (bundle, roster) {
+    return buildDaysForRange(
+      from: range.from,
+      to: range.to,
+      records: bundle.records,
+      context: bundle.context,
+      schedule: roster,
+      today: _companyToday(roster),
+    );
+  });
 });
+
+/// Roster week with punches overlaid — the Shift tab, not Summary.
+final attendanceShiftDaysProvider =
+    Provider.autoDispose<AsyncValue<List<AttendanceDay>>>((ref) {
+  final start = ref.watch(attendanceWeekStartProvider);
+  final range = _weekRange(start);
+  final payload = ref.watch(attendanceRangeProvider(range));
+  final schedule = ref.watch(workScheduleProvider(range));
+  return _combineAsync(payload, schedule, (bundle, roster) {
+    return buildShiftDaysForRange(
+      from: range.from,
+      to: range.to,
+      records: bundle.records,
+      schedule: roster,
+      context: bundle.context,
+      today: _companyToday(roster),
+    );
+  });
+});
+
+DateTime _companyToday(HomeWorkSchedule roster) {
+  final t = roster.companyToday;
+  if (t != null) return DateTime(t.year, t.month, t.day);
+  final n = DateTime.now();
+  return DateTime(n.year, n.month, n.day);
+}
+
+AsyncValue<R> _combineAsync<A, B, R>(
+  AsyncValue<A> a,
+  AsyncValue<B> b,
+  R Function(A a, B b) merge,
+) {
+  if (a.hasError) {
+    return AsyncValue.error(a.error!, a.stackTrace ?? StackTrace.empty);
+  }
+  if (b.hasError) {
+    return AsyncValue.error(b.error!, b.stackTrace ?? StackTrace.empty);
+  }
+  if (!a.hasValue || !b.hasValue) {
+    return const AsyncValue.loading();
+  }
+  return AsyncValue.data(merge(a.requireValue, b.requireValue));
+}
 
 final attendanceMonthDaysProvider =
     Provider.autoDispose<AsyncValue<List<AttendanceDay>>>((ref) {
   final month = ref.watch(attendanceMonthProvider);
   final range = _monthRange(month);
-  return ref.watch(attendanceRecordsProvider(range)).whenData(
-        (records) => buildDaysForRange(
-          from: range.from,
-          to: range.to,
-          records: records,
-        ),
-      );
+  final payload = ref.watch(attendanceRangeProvider(range));
+  final schedule = ref.watch(workScheduleProvider(range));
+  return _combineAsync(payload, schedule, (bundle, roster) {
+    return buildDaysForRange(
+      from: range.from,
+      to: range.to,
+      records: bundle.records,
+      context: bundle.context,
+      schedule: roster,
+      today: _companyToday(roster),
+    );
+  });
 });
 
 final attendanceMonthStatsProvider =
@@ -115,5 +180,11 @@ final attendanceTotalWorkedProvider =
 void invalidateAttendance(dynamic ref) {
   // Accepts both `Ref` (providers) and `WidgetRef` (widgets).
   // ignore: avoid_dynamic_calls
-  ref.invalidate(attendanceRecordsProvider);
+  ref.invalidate(attendanceRangeProvider);
+  // ignore: avoid_dynamic_calls
+  ref.invalidate(workScheduleProvider);
+  try {
+    // ignore: avoid_dynamic_calls
+    ref.read(attendanceRepositoryProvider).clearScheduleCache();
+  } catch (_) {}
 }

@@ -113,8 +113,8 @@ Future<void> main() async {
     from: now.subtract(const Duration(days: 40)),
     to: now.add(const Duration(days: 1)),
   );
-  final withShift = rows.where((r) => r.shiftId != null && r.workTypeId != null);
-  final target = withShift.isNotEmpty ? withShift.first : rows.first;
+  final withShift = rows.records.where((r) => r.shiftId != null && r.workTypeId != null);
+  final target = withShift.isNotEmpty ? withShift.first : rows.records.first;
   if (target.shiftId == null) {
     stderr.writeln('FAIL no shift_id on attendance rows');
     exitCode = 1;

@@ -20,16 +20,10 @@ from horilla.testkit import make_company, make_employee, make_user
 
 HOME_URL = "/api/v1/mobile/home/"
 
-# A fixed "today". The view reads date.today() and the fixtures build rows for
-# the same day, so a run that straddled midnight would look for the rows on the
-# wrong date. Pinning it makes the day a constant, not a race.
+# A fixed "today". The view reads company_today() (Django TIME_ZONE) and the
+# fixtures build rows for the same day, so a run that straddled midnight would
+# look for the rows on the wrong date. Pinning it makes the day a constant.
 FIXED_TODAY = date(2026, 3, 10)
-
-
-class _FrozenDate(date):
-    @classmethod
-    def today(cls):
-        return FIXED_TODAY
 
 
 class MobileHomeTests(TestCase):
@@ -45,7 +39,10 @@ class MobileHomeTests(TestCase):
             user=self.user,
         )
         self.client.force_authenticate(user=self.user)
-        clock = patch("horilla_api.api_views.mobile.views.date", _FrozenDate)
+        clock = patch(
+            "horilla_api.api_views.mobile.views._company_today",
+            return_value=FIXED_TODAY,
+        )
         clock.start()
         self.addCleanup(clock.stop)
 

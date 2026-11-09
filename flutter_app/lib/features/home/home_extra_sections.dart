@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../../core/config.dart';
 import '../../core/theme.dart';
+import '../attendance/attendance_provider.dart';
+import '../attendance/models.dart';
 import '../requests/models.dart';
 import '../requests/request_details_sheet.dart';
 import '../shell/main_shell.dart';
@@ -382,33 +384,7 @@ class HomeWorkScheduleSection extends ConsumerWidget {
     final range =
         '${DateFormat('dd-MMM-yyyy').format(weekStart)} / ${DateFormat('dd-MMM-yyyy').format(weekEnd)}';
 
-    final preview = schedule?.previewDays;
-    final days = (preview != null && preview.isNotEmpty)
-        ? preview
-        : [
-            HomeScheduleDay(
-              date: DateTime(now.year, now.month, now.day),
-              dayKey: '',
-              shiftName: schedule?.shiftName ?? 'General',
-              startTime: '09:00',
-              endTime: '17:00',
-              isToday: true,
-              hasSchedule: false,
-            ),
-            HomeScheduleDay(
-              date: DateTime(
-                now.year,
-                now.month,
-                now.day,
-              ).add(const Duration(days: 1)),
-              dayKey: '',
-              shiftName: schedule?.shiftName ?? 'General',
-              startTime: '09:00',
-              endTime: '17:00',
-              isToday: false,
-              hasSchedule: false,
-            ),
-          ];
+    final days = schedule?.previewDays ?? const <HomeScheduleDay>[];
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -472,15 +448,43 @@ class HomeWorkScheduleSection extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 14),
-          for (var i = 0; i < days.length; i++) ...[
-            if (i > 0) const SizedBox(height: 10),
-            _ScheduleDayRow(day: days[i]),
-          ],
+          if (days.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'No schedule assigned',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            )
+          else
+            for (var i = 0; i < days.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _ScheduleDayRow(day: days[i]),
+            ],
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
               onPressed: () {
+                ref.read(attendanceSegmentProvider.notifier).state =
+                    AttendanceSegment.shift;
+                final companyStart = schedule?.weekStart;
+                ref.read(attendanceWeekStartProvider.notifier).state =
+                    companyStart != null
+                    ? DateTime(
+                        companyStart.year,
+                        companyStart.month,
+                        companyStart.day,
+                      )
+                    : weekStartOf(
+                        schedule?.companyToday ?? DateTime.now(),
+                      );
                 ref.read(shellIndexProvider.notifier).state = 1;
               },
               style: OutlinedButton.styleFrom(
@@ -561,14 +565,18 @@ class _ScheduleDayRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  day.shiftName,
+                  day.hasSchedule
+                      ? (day.shiftName.trim().isEmpty
+                            ? 'Shift'
+                            : day.shiftName)
+                      : 'Day off',
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
                   ),
                 ),
                 Text(
-                  day.timingLabel,
+                  day.hasSchedule ? day.timingLabel : 'No hours scheduled',
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 12,

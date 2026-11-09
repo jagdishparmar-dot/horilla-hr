@@ -25,6 +25,13 @@ from rest_framework.views import APIView
 from attendance.models import Attendance, AttendanceActivity
 from horilla_api.api_methods.base.announcements import announcements_for
 from horilla_api.api_methods.base.capabilities import build_capabilities
+from horilla_api.api_methods.shift_on_date import (
+    company_today as _company_today,
+    company_timezone_name as _company_timezone_name,
+    load_rotating_assigns,
+    shift_on_date,
+    work_info_shift,
+)
 
 _WEEKDAY_KEYS = (
     "monday",
@@ -35,6 +42,7 @@ _WEEKDAY_KEYS = (
     "saturday",
     "sunday",
 )
+_MAX_SCHEDULE_DAYS = 31
 
 
 def _format_seconds(seconds):
@@ -51,7 +59,7 @@ def _working_activities(employee):
     the button would offer Check-in while the punch API still says they are in.
     A finished yesterday is not shown once today has started.
     """
-    today = date.today()
+    today = _company_today()
     yesterday = today - timedelta(days=1)
     rows = list(
         AttendanceActivity.objects.filter(
@@ -186,54 +194,104 @@ def _company_employees(employee):
     return qs
 
 
-def _work_schedule(employee):
-    """
-    Current week (Sun–Sat) plus day rows from the employee's assigned shift.
-    """
-    today = date.today()
-    # Sunday-start week to match the home schedule card.
-    days_since_sunday = (today.weekday() + 1) % 7
-    week_start = today - timedelta(days=days_since_sunday)
-    week_end = week_start + timedelta(days=6)
+def _parse_iso_date(raw):
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(str(raw).strip())
+    except ValueError:
+        return None
 
-    shift = employee.get_shift()
-    shift_name = getattr(shift, "employee_shift", None) or "General"
-    schedule_by_day = {}
-    if shift is not None:
-        from base.models import EmployeeShiftSchedule
 
-        for row in EmployeeShiftSchedule.objects.filter(shift_id=shift).select_related(
-            "day"
-        ):
-            key = (row.day.day or "").lower()
-            schedule_by_day[key] = row
+def _sunday_of(day):
+    return day - timedelta(days=(day.weekday() + 1) % 7)
+
+
+def _work_schedule(employee, start=None, end=None):
+    """
+    Assigned shift plus one row per date in [start, end].
+
+    A missing EmployeeShiftSchedule row is a day off -- start_time / end_time
+    stay null. Callers used to invent 09:00–17:00, which made week-offs look
+    like office hours on the mobile Shift tab.
+
+    Default range is the current Sunday–Saturday week so home and the Shift
+    tab agree when no dates are passed.
+    """
+    today = _company_today()
+    if start is None:
+        start = _sunday_of(today)
+    if end is None:
+        end = start + timedelta(days=6)
+    if end < start:
+        start, end = end, start
+    if (end - start).days > _MAX_SCHEDULE_DAYS:
+        end = start + timedelta(days=_MAX_SCHEDULE_DAYS)
+
+    static = work_info_shift(employee)
+    assigns = load_rotating_assigns(employee)
+    today_shift = shift_on_date(
+        employee, today, assigns=assigns, static_shift=static
+    )
+    shift_name = getattr(today_shift, "employee_shift", None) or "General"
+    schedule_cache = {}
 
     days = []
-    for offset in range(7):
-        day = week_start + timedelta(days=offset)
-        key = _WEEKDAY_KEYS[day.weekday()]
-        row = schedule_by_day.get(key)
+    cursor = start
+    while cursor <= end:
+        key = _WEEKDAY_KEYS[cursor.weekday()]
+        day_shift = shift_on_date(
+            employee, cursor, assigns=assigns, static_shift=static
+        )
+        row = _schedule_row(day_shift, key, schedule_cache)
+        day_shift_name = (
+            getattr(day_shift, "employee_shift", None) or shift_name
+        )
         days.append(
             {
-                "date": day.isoformat(),
+                "date": cursor.isoformat(),
                 "day_key": key,
                 "shift_name": (
                     getattr(getattr(row, "shift_id", None), "employee_shift", None)
-                    or shift_name
+                    or day_shift_name
                 ),
-                "start_time": _format_hhmm(getattr(row, "start_time", None)) or "09:00",
-                "end_time": _format_hhmm(getattr(row, "end_time", None)) or "17:00",
-                "is_today": day == today,
+                "start_time": (
+                    _format_hhmm(getattr(row, "start_time", None)) if row else None
+                ),
+                "end_time": (
+                    _format_hhmm(getattr(row, "end_time", None)) if row else None
+                ),
+                "is_today": cursor == today,
                 "has_schedule": row is not None,
             }
         )
+        cursor += timedelta(days=1)
 
     return {
         "shift_name": shift_name,
-        "week_start": week_start.isoformat(),
-        "week_end": week_end.isoformat(),
+        "week_start": start.isoformat(),
+        "week_end": end.isoformat(),
+        "today": today.isoformat(),
+        "timezone": _company_timezone_name(),
         "days": days,
     }
+
+
+def _schedule_row(shift, day_key, cache):
+    if shift is None:
+        return None
+    sid = shift.id
+    by_day = cache.get(sid)
+    if by_day is None:
+        from base.models import EmployeeShiftSchedule
+
+        by_day = {}
+        for row in EmployeeShiftSchedule.objects.filter(shift_id=shift).select_related(
+            "day"
+        ):
+            by_day[(row.day.day or "").lower()] = row
+        cache[sid] = by_day
+    return by_day.get(day_key)
 
 
 def _recent_requests(employee, limit=5):
@@ -265,7 +323,7 @@ def _recent_requests(employee, limit=5):
 
 def _upcoming_birthdays(employee, limit=5):
     """Same-month upcoming birthdays in the caller's company (dashboard logic)."""
-    today = date.today()
+    today = _company_today()
     import calendar
 
     last_day = calendar.monthrange(today.year, today.month)[1]
@@ -283,7 +341,7 @@ def _upcoming_birthdays(employee, limit=5):
 
 
 def _new_hires(employee, limit=5, within_days=30):
-    today = date.today()
+    today = _company_today()
     since = today - timedelta(days=within_days)
     rows = (
         _company_employees(employee)
@@ -319,7 +377,7 @@ def _on_leave_today(employee):
     if not apps.is_installed("leave"):
         return []
     LeaveRequest = apps.get_model("leave", "LeaveRequest")
-    today = date.today()
+    today = _company_today()
     requests = (
         LeaveRequest.objects.filter(
             status__in=["approved", "cancel_requested"],
@@ -459,7 +517,7 @@ class MobileHomeAPIView(APIView):
         employee = request.user.employee_get
         activities = _working_activities(employee)
         working_day = (
-            activities[0].attendance_date if activities else date.today()
+            activities[0].attendance_date if activities else _company_today()
         )
         attendance_today = Attendance.objects.filter(
             employee_id=employee, attendance_date=working_day
@@ -529,6 +587,30 @@ class MobileHomeAPIView(APIView):
             },
             status=200,
         )
+
+
+class MobileWorkScheduleAPIView(APIView):
+    """
+    The signed-in employee's assigned shift for a date range.
+
+    Home embeds the current week via ``work_schedule``. The Attendance Shift
+    tab needs other weeks without pulling the rest of home, so this is the
+    same payload with ``from_date`` / ``to_date``.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        employee = request.user.employee_get
+        from_raw = request.query_params.get("from_date")
+        to_raw = request.query_params.get("to_date")
+        start = _parse_iso_date(from_raw)
+        end = _parse_iso_date(to_raw)
+        if from_raw and start is None:
+            return Response({"error": "from_date must be YYYY-MM-DD"}, status=400)
+        if to_raw and end is None:
+            return Response({"error": "to_date must be YYYY-MM-DD"}, status=400)
+        return Response(_work_schedule(employee, start=start, end=end))
 
 
 class MobileWorkSiteAPIView(APIView):
