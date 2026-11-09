@@ -99,8 +99,11 @@ CODEBASE_INDEX.md
 *.md
 !docker/README.md
 
-# SCSS sources — compiled CSS lives under static/build and static/css
-static/src/
+# SCSS sources — compiled CSS lives under static/build and static/css.
+# Only the SCSS is excluded: static/src/js (componentForm.js, custom*Scripts.js,
+# ...) and static/src/css are served at runtime, and excluding the whole of
+# static/src/ made those files 404 in the image.
+static/src/scss/
 
 # Mobile / local-only (not needed in Django image)
 flutter_app/
