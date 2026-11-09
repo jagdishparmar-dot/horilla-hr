@@ -4,6 +4,8 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from geopy.geocoders import Nominatim
 
+from base.horilla_company_manager import HorillaCompanyManager
+
 
 class GeoFencing(models.Model):
     latitude = models.FloatField()
@@ -97,6 +99,10 @@ class WorkSite(models.Model):
         ),
     )
     is_active = models.BooleanField(default=True, verbose_name=_("Active"))
+
+    # Company-scoped like the other tenant models, so site pickers and filters
+    # (employee form, employee filter) only offer the selected company's sites.
+    objects = HorillaCompanyManager()
 
     class Meta:
         verbose_name = _("Work Site")
