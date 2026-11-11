@@ -112,7 +112,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 FROM debian-base AS production
 
 ENV PATH="/opt/venv/bin:$PATH" \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # pdfkit / payslip PDFs (see pdfkit_configuration in base.methods).
+    WKHTMLTOPDF_PATH=/usr/local/bin/wkhtmltopdf
+
+# Last upstream wkhtmltopdf build that targets OpenSSL 3 (bookworm). Newer
+# Debian bases still run this .deb; without it pdfkit fails with
+# 'No wkhtmltopdf executable found: b""' on every payslip/document PDF.
+ARG WKHTMLTOPDF_VERSION=0.12.6.1-3
 
 RUN apt-get install -y --no-install-recommends \
         libpq5 \
@@ -125,8 +132,20 @@ RUN apt-get install -y --no-install-recommends \
         libxslt1.1 \
         libffi8 \
         curl \
+        ca-certificates \
         netcat-openbsd \
         gettext \
+        fontconfig \
+        fonts-dejavu-core \
+        fonts-liberation \
+    && arch="$(dpkg --print-architecture)" \
+    && curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 20 \
+        -o /tmp/wkhtmltox.deb \
+        "https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTMLTOPDF_VERSION}/wkhtmltox_${WKHTMLTOPDF_VERSION}.bookworm_${arch}.deb" \
+    && apt-get install -y --no-install-recommends /tmp/wkhtmltox.deb \
+    && rm -f /tmp/wkhtmltox.deb \
+    && test -x /usr/local/bin/wkhtmltopdf \
+    && wkhtmltopdf --version \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
