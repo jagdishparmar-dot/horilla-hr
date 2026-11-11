@@ -165,3 +165,7 @@ CLAUDE.md
 .mcp.safe.json
 .claudeignore
 .specify/
+
+# Local scratch (ad-hoc UI screenshots / test scripts)
+/tmp/
+/_tmp_*

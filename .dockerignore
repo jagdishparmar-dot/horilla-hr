@@ -111,6 +111,7 @@ docs/
 pg_backup/
 
 # Scratch files from local debugging
+tmp/
 _tmp_*
 *.err
 *.pyc
