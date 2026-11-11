@@ -83,9 +83,9 @@ services:
       - HORILLA_SCHEDULER_HISTORY_DAYS=${HORILLA_SCHEDULER_HISTORY_DAYS:-7}
       - HORILLA_ALLOW_PYTHON_TAX_FORMULAS=${HORILLA_ALLOW_PYTHON_TAX_FORMULAS:-false}
       - SENTRY_DSN=${SENTRY_DSN:-}
-      # One worker keeps idle RSS low (~300-400 MB). Raise workers when
-      # concurrent load grows; threads cover overlapping I/O-bound requests.
-      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-1}
+      # Two workers (~300-400 MB each) for overlapping requests; threads cover
+      # I/O wait. Drop to 1 only on very small hosts.
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
       - GUNICORN_THREADS=${GUNICORN_THREADS:-8}
       - GUNICORN_LOG_LEVEL=${GUNICORN_LOG_LEVEL:-info}
       # Must stay above Traefik's 90s idle upstream timeout, otherwise Traefik
@@ -109,7 +109,7 @@ services:
       retries: 3
       # migrate + collectstatic run before gunicorn binds.
       start_period: 10m
-    mem_limit: ${WEB_MEM_LIMIT:-1g}
+    mem_limit: ${WEB_MEM_LIMIT:-1.5g}
     security_opt:
       - no-new-privileges:true
     cap_drop:
