@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/dio_client.dart';
+import '../../core/auth/session_revocation.dart';
 import 'auth_repository.dart';
 import 'models.dart';
 
@@ -39,22 +41,42 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _repo;
 
   Future<void> _bootstrap() async {
-    final has = await _repo.hasSession();
-    state = AuthState(
-      status: has ? AuthStatus.authenticated : AuthStatus.unauthenticated,
-    );
+    try {
+      final has = await _repo.hasSession();
+      if (!mounted || state.status != AuthStatus.unknown) return;
+      state = AuthState(
+        status: has ? AuthStatus.authenticated : AuthStatus.unauthenticated,
+      );
+    } catch (_) {
+      if (!mounted || state.status != AuthStatus.unknown) return;
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
   }
 
-  Future<bool> login(String username, String password) async {
+  /// Storage was cleared because the server rejected refresh.
+  void onSessionRevoked() {
+    if (!mounted) return;
+    state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  Future<bool> login(
+    String username,
+    String password, {
+    void Function()? onAttemptFinished,
+  }) async {
     state = state.copyWith(clearError: true);
     try {
       final session = await _repo.login(username: username, password: password);
+      onAttemptFinished?.call();
+      if (!mounted) return true;
       state = AuthState(status: AuthStatus.authenticated, session: session);
       return true;
     } catch (e) {
+      onAttemptFinished?.call();
+      if (!mounted) return false;
       state = AuthState(
         status: AuthStatus.unauthenticated,
-        error: e.toString(),
+        error: userFacingError(e),
       );
       return false;
     }
@@ -62,10 +84,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repo.logout();
+    if (!mounted) return;
+    state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  /// Drops stored tokens without calling logout. Password change already
+  /// revokes the refresh token on the server.
+  Future<void> signOutLocal() async {
+    await _repo.clearLocalSession();
+    if (!mounted) return;
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.watch(authRepositoryProvider));
+  final notifier = AuthNotifier(ref.watch(authRepositoryProvider));
+  final sub = ref.watch(sessionRevocationProvider).stream.listen((_) {
+    notifier.onSessionRevoked();
+  });
+  ref.onDispose(sub.cancel);
+  return notifier;
 });

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../core/api/dio_client.dart';
 import '../attendance/attendance_provider.dart';
 import 'home_repository.dart';
 import 'models.dart';
@@ -100,8 +101,7 @@ class PunchActions {
       invalidateAttendance(_ref);
       return null;
     } catch (e) {
-      final text = e.toString();
-      return text.startsWith('Exception: ') ? text.substring(11) : text;
+      return userFacingError(e);
     } finally {
       busy.state = false;
     }

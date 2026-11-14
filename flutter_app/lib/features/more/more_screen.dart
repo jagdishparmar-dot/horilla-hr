@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 
 import '../../core/theme.dart';
+import '../auth/app_lock.dart';
 import '../auth/auth_provider.dart';
 import '../home/home_provider.dart';
 import '../home/models.dart';
@@ -66,6 +67,39 @@ class MoreScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _setAppLock(
+    BuildContext context,
+    WidgetRef ref,
+    bool enabled,
+  ) async {
+    final ok = await promptAppLock(
+      reason: enabled
+          ? 'Confirm to turn on app lock'
+          : 'Confirm to turn off app lock',
+    );
+    if (!ok) {
+      if (context.mounted) {
+        showSnack(
+          context,
+          enabled
+              ? 'App lock needs a device PIN or biometric.'
+              : 'App lock stays on.',
+        );
+      }
+      return;
+    }
+    final saved = await ref.read(appLockEnabledProvider.notifier).setEnabled(
+      enabled,
+    );
+    if (!saved) {
+      if (context.mounted) showSnack(context, 'Could not update app lock.');
+      return;
+    }
+    if (enabled) {
+      ref.read(appLockSessionProvider.notifier).state = true;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final homeAsync = ref.watch(mobileHomeProvider);
@@ -80,6 +114,7 @@ class MoreScreen extends ConsumerWidget {
     final docsWaiting =
         documents?.where((d) => d.document.canUpload).length ?? 0;
     final openTickets = tickets?.where((t) => t.status.isOpen).length ?? 0;
+    final appLock = ref.watch(appLockEnabledProvider);
     return Scaffold(
       backgroundColor: AppColors.scaffold,
       body: SafeArea(
@@ -200,6 +235,11 @@ class MoreScreen extends ConsumerWidget {
                   const _SectionTitle('Account'),
                   _MenuGroup(
                     children: [
+                      _AppLockTile(
+                        enabled: appLock.enabled,
+                        loaded: appLock.loaded,
+                        onChanged: (value) => _setAppLock(context, ref, value),
+                      ),
                       _MenuTile(
                         icon: HugeIcons.strokeRoundedSquareLockPassword,
                         color: AppColors.orange,
@@ -381,6 +421,57 @@ class _MenuGroup extends StatelessWidget {
         color: Colors.transparent,
         child: Column(children: children),
       ),
+    );
+  }
+}
+
+class _AppLockTile extends StatelessWidget {
+  const _AppLockTile({
+    required this.enabled,
+    required this.loaded,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final bool loaded;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SwitchListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+          secondary: const GradientIconTile(
+            icon: HugeIcons.strokeRoundedFingerPrint,
+            color: AppColors.navBlue,
+            size: 42,
+          ),
+          title: const Text(
+            'App lock',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 14.5,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          subtitle: const Text(
+            'Ask for fingerprint, face, or PIN',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+            ),
+          ),
+          value: enabled,
+          onChanged: loaded ? onChanged : null,
+          activeThumbColor: Colors.white,
+          activeTrackColor: AppColors.navBlue,
+        ),
+        const Divider(height: 1, indent: 70, color: Color(0xFFF1F5F9)),
+      ],
     );
   }
 }

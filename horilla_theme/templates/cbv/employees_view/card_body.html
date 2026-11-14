@@ -8,6 +8,10 @@
                 data-src="{{ instance.get_avatar }}"
                 class="emp-card-body__avatar avatar-thumb object-cover"
                 alt="{% trans 'Employee' %}"
+                width="34"
+                height="34"
+                decoding="async"
+                loading="lazy"
             >
             {% if request|is_check_in_enabled %}
             <span

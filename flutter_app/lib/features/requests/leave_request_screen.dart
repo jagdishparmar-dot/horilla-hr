@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
 import '../home/home_provider.dart';
 import 'models.dart';
@@ -110,7 +111,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(userFacingError(e))),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -148,7 +149,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(e.toString(), textAlign: TextAlign.center),
+                Text(userFacingError(e), textAlign: TextAlign.center),
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: () => ref.invalidate(leaveBalancesProvider),

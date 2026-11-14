@@ -68,6 +68,8 @@
 		</array>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>Location is used for office geofenced check-in and check-out.</string>
+		<key>NSFaceIDUsageDescription</key>
+		<string>ClockMe uses Face ID to unlock the app when app lock is turned on.</string>
 		<key>NSAppTransportSecurity</key>
 		<dict>
 			<key>NSAllowsLocalNetworking</key>

@@ -2,12 +2,10 @@
 ///
 /// ```
 /// cd flutter_app
-/// dart run tool/test_request_flow.dart
-/// # or override host / credentials:
 /// dart run tool/test_request_flow.dart ^
 ///   --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1 ^
-///   --dart-define=TEST_USERNAME=jagdish.parmar@shreemaruti.com ^
-///   --dart-define=TEST_PASSWORD=Demo@12345
+///   --dart-define=TEST_USERNAME=... ^
+///   --dart-define=TEST_PASSWORD=...
 /// ```
 library;
 
@@ -17,19 +15,21 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:horilla_employee/core/config.dart';
 import 'package:horilla_employee/features/attendance/attendance_repository.dart';
+import 'package:horilla_employee/features/requests/models.dart';
 import 'package:horilla_employee/features/requests/requests_repository.dart';
 import 'package:intl/intl.dart';
 
-const _username = String.fromEnvironment(
-  'TEST_USERNAME',
-  defaultValue: 'jagdish.parmar@shreemaruti.com',
-);
-const _password = String.fromEnvironment(
-  'TEST_PASSWORD',
-  defaultValue: 'Demo@12345',
-);
+const _username = String.fromEnvironment('TEST_USERNAME');
+const _password = String.fromEnvironment('TEST_PASSWORD');
 
 Future<void> main() async {
+  if (_username.isEmpty || _password.isEmpty) {
+    stderr.writeln(
+      'Set TEST_USERNAME and TEST_PASSWORD with --dart-define.',
+    );
+    exitCode = 64;
+    return;
+  }
   final dio = Dio(
     BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,

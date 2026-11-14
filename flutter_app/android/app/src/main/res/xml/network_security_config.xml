@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Allow cleartext HTTP to local Horilla during development. -->
+<!-- Release and profile do not permit cleartext. Debug overrides this file. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

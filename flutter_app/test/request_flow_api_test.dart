@@ -3,7 +3,7 @@
 /// Uses the same repositories as the Flutter app against a running Horilla API.
 ///
 /// ```
-/// flutter test test/request_flow_api_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
+/// flutter test test/request_flow_api_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1 --dart-define=TEST_USERNAME=... --dart-define=TEST_PASSWORD=...
 /// ```
 library;
 
@@ -18,14 +18,8 @@ import 'package:horilla_employee/features/requests/requests_repository.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:intl/intl.dart';
 
-const _username = String.fromEnvironment(
-  'TEST_USERNAME',
-  defaultValue: 'jagdish.parmar@shreemaruti.com',
-);
-const _password = String.fromEnvironment(
-  'TEST_PASSWORD',
-  defaultValue: 'Demo@12345',
-);
+const _username = String.fromEnvironment('TEST_USERNAME');
+const _password = String.fromEnvironment('TEST_PASSWORD');
 
 Dio _buildDio() {
   return Dio(
@@ -62,6 +56,11 @@ void main() {
   late AttendanceRepository attendance;
 
   setUpAll(() async {
+    if (_username.isEmpty || _password.isEmpty) {
+      fail(
+        'Pass --dart-define=TEST_USERNAME and --dart-define=TEST_PASSWORD.',
+      );
+    }
     // ignore: avoid_print
     print('API_BASE_URL=${AppConfig.apiBaseUrl}');
     dio = _buildDio();

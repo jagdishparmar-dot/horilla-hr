@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
+import '../auth/auth_provider.dart';
 
 class ChangePasswordScreen extends ConsumerStatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -47,10 +48,11 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   Future<void> _submit() async {
     if (!_canSave) return;
+    final auth = ref.read(authProvider.notifier);
     setState(() => _busy = true);
     try {
       final dio = ref.read(dioProvider);
-      final response = await dio.post(
+      await dio.post(
         '/auth/reset-password/',
         data: {
           'old_password': _oldController.text,
@@ -58,13 +60,12 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
           'confirm_password': _confirmController.text,
         },
       );
-      final message = (response.data is Map &&
-              (response.data as Map)['message'] is String)
-          ? (response.data as Map)['message'] as String
-          : 'Password updated successfully.';
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-      Navigator.of(context).pop(true);
+      if (mounted) {
+        _oldController.clear();
+        _newController.clear();
+        _confirmController.clear();
+      }
+      await auth.signOutLocal();
     } on DioException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

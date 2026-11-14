@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
 import '../attendance/attendance_provider.dart';
 import '../attendance/attendance_repository.dart';
@@ -209,7 +210,7 @@ class _AttendanceCorrectionScreenState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(userFacingError(e))),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

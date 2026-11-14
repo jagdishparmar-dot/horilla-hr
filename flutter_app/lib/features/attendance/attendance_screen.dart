@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../home/fence_status_line.dart';
@@ -103,7 +104,7 @@ class AttendanceScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(e.toString(), textAlign: TextAlign.center),
+                        Text(userFacingError(e), textAlign: TextAlign.center),
                         const SizedBox(height: 12),
                         FilledButton(
                           onPressed: () => ref.invalidate(mobileHomeProvider),
@@ -550,7 +551,7 @@ class _ShiftPane extends ConsumerWidget {
             skipLoadingOnReload: true,
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => _AttendanceError(
-              message: e.toString(),
+              message: userFacingError(e),
               onRetry: () => invalidateAttendance(ref),
             ),
             data: (days) => ListView.separated(
@@ -786,7 +787,7 @@ class _ListPane extends ConsumerWidget {
             skipLoadingOnReload: true,
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => _AttendanceError(
-              message: e.toString(),
+              message: userFacingError(e),
               onRetry: () => invalidateAttendance(ref),
             ),
             data: (days) => ListView.separated(
@@ -829,7 +830,7 @@ class _CalendarPane extends ConsumerWidget {
       skipLoadingOnReload: true,
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _AttendanceError(
-        message: e.toString(),
+        message: userFacingError(e),
         onRetry: () => invalidateAttendance(ref),
       ),
       data: (days) {

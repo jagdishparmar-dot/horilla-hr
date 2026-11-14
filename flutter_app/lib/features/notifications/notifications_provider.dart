@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/dio_client.dart';
 import '../home/home_provider.dart';
 import 'models.dart';
 import 'notifications_repository.dart';
@@ -83,7 +84,7 @@ class NotificationsActions {
       return null;
     } catch (e) {
       reads.state = {...reads.state}..remove(id);
-      return e.toString();
+      return userFacingError(e);
     }
   }
 
@@ -98,7 +99,7 @@ class NotificationsActions {
       return null;
     } catch (e) {
       reads.state = before;
-      return e.toString();
+      return userFacingError(e);
     }
   }
 
@@ -111,7 +112,7 @@ class NotificationsActions {
       return null;
     } catch (e) {
       hidden.state = {...hidden.state}..remove(id);
-      return e.toString();
+      return userFacingError(e);
     }
   }
 
@@ -126,7 +127,7 @@ class NotificationsActions {
       return null;
     } catch (e) {
       hidden.state = before;
-      return e.toString();
+      return userFacingError(e);
     }
   }
 }

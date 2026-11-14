@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../home/home_provider.dart';
@@ -95,7 +96,7 @@ class RequestsScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(e.toString(), textAlign: TextAlign.center),
+                  Text(userFacingError(e), textAlign: TextAlign.center),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: () => ref.invalidate(mobileHomeProvider),
@@ -225,7 +226,7 @@ class RequestsScreen extends ConsumerWidget {
                         padding: const EdgeInsets.all(24),
                         child: Column(
                           children: [
-                            Text(e.toString(), textAlign: TextAlign.center),
+                            Text(userFacingError(e), textAlign: TextAlign.center),
                             const SizedBox(height: 12),
                             FilledButton(
                               onPressed: () =>

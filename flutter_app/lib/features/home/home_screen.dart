@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../auth/auth_provider.dart';
@@ -30,7 +31,7 @@ class HomeScreen extends ConsumerWidget {
           skipLoadingOnReload: true,
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => _ErrorPane(
-            message: e.toString(),
+            message: userFacingError(e),
             onRetry: () => ref.invalidate(mobileHomeProvider),
             onLogout: () => ref.read(authProvider.notifier).logout(),
           ),

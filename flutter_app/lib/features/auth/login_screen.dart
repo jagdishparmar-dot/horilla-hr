@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/branding.dart';
 import '../../core/theme.dart';
 import 'auth_provider.dart';
@@ -31,9 +32,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
-    final ok = await ref
-        .read(authProvider.notifier)
-        .login(_username.text.trim(), _password.text);
+    final ok = await ref.read(authProvider.notifier).login(
+      _username.text.trim(),
+      _password.text,
+      onAttemptFinished: () {
+        if (mounted) _password.clear();
+      },
+    );
     if (!mounted) return;
     setState(() => _submitting = false);
     if (ok) return;
@@ -355,12 +360,4 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-String _friendlyError(String raw) {
-  var text = raw.trim();
-  const prefix = 'Exception: ';
-  if (text.startsWith(prefix)) text = text.substring(prefix.length);
-  if (text.startsWith('DioException')) {
-    return 'Cannot reach the ClockMe server. Check your connection and try again.';
-  }
-  return text;
-}
+String _friendlyError(String raw) => userFacingError(raw);

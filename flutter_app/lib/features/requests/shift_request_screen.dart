@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
 import '../home/home_provider.dart';
 import 'models.dart';
@@ -66,7 +67,7 @@ class _ShiftRequestScreenState extends ConsumerState<ShiftRequestScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _loadError = e.toString();
+        _loadError = userFacingError(e);
       });
     }
   }
@@ -112,7 +113,7 @@ class _ShiftRequestScreenState extends ConsumerState<ShiftRequestScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+          .showSnackBar(SnackBar(content: Text(userFacingError(e))));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

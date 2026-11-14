@@ -1,0 +1,355 @@
+/* Employee directory (/employee/employee-view/).
+   Loaded with type.css. #employeeViewPage.hr-type sets both type tokens
+   to Geist so this page does not fall back to IBM Plex Sans. */
+
+#employeeViewPage.hr-type {
+    --hr-font-display: "Geist", "IBM Plex Sans", sans-serif;
+    --hr-font-sans: "Geist", "IBM Plex Sans", sans-serif;
+    --emp-surface: #ffffff;
+    --emp-ink: #0f172a;
+    --emp-muted: #64748b;
+    --emp-border: rgba(15, 23, 42, 0.08);
+    --emp-accent: #e54f38;
+    --emp-accent-soft: #fef6f5;
+    margin-top: -0.5rem;
+    font-family: var(--hr-font-sans);
+    color: var(--emp-ink);
+}
+
+#employeeViewPage.hr-type :is(h1, h2, h3, h4, h5, h6, button, input, textarea, select, a, td, th) {
+    font-family: var(--hr-font-sans);
+}
+
+#employeeViewPage #employeeListNavBar {
+    margin-bottom: 0.5rem;
+}
+
+#employeeViewPage #employeeListNavBar > div > .flex.flex-wrap.justify-between {
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--emp-border);
+    background: var(--emp-surface);
+}
+
+#employeeViewPage #employeeListNavBar h3.text-lg {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 650;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    color: var(--emp-ink);
+}
+
+#employeeViewPage #employeeListNavBar .flex.flex-wrap.gap-1 {
+    gap: 0.3rem !important;
+}
+
+#employeeViewPage #employeeListNavBar .tab-btn,
+#employeeViewPage #employeeListNavBar #modernFilterTrigger {
+    padding: 0.35rem 0.6rem !important;
+    font-size: 0.75rem !important;
+    border-radius: 0.65rem !important;
+}
+
+#employeeViewPage #employeeListNavBar .oh-btn,
+#employeeViewPage #employeeListNavBar button.bg-white {
+    border-radius: 0.65rem !important;
+}
+
+#employeeViewPage #employeeListNavBar .navFilterForm input[name="search"] {
+    min-width: 12rem;
+    height: 2rem;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 0.8125rem !important;
+    border-radius: 0.55rem !important;
+    border-color: var(--emp-border) !important;
+    background: #fff;
+}
+
+#employeeViewPage #employeeListNavBar .navFilterForm input[name="search"]:focus {
+    border-color: var(--emp-accent) !important;
+    outline: 2px solid color-mix(in srgb, var(--emp-accent) 22%, transparent);
+    outline-offset: 1px;
+}
+
+#employeeViewPage #employeeListNavBar .tab-btn.oh-view-btn--active {
+    background: color-mix(in srgb, var(--emp-accent) 12%, #fff) !important;
+    border-color: color-mix(in srgb, var(--emp-accent) 35%, transparent) !important;
+    color: var(--emp-accent) !important;
+}
+
+#employeeViewPage #listContainer.oh-wrapper {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+#employeeViewPage #view-container .bg-white.p-2.rounded-md,
+#employeeViewPage #listContainer .hlv-container > .bg-white,
+#employeeViewPage #listContainer .bg-white.rounded-md.shadow-card:has(#gridView) {
+    border-radius: 0.75rem !important;
+    border: 1px solid var(--emp-border);
+    background: var(--emp-surface) !important;
+    box-shadow: none;
+    padding: 0.15rem !important;
+}
+
+#employeeViewPage #view-container .heightContainer,
+#employeeViewPage #listContainer .heightContainer {
+    max-height: calc(100vh - 188px) !important;
+}
+
+#employeeViewPage #listContainer .h-\[calc\(100vh_-_210px\)\] {
+    height: calc(100vh - 188px) !important;
+    max-height: calc(100vh - 188px) !important;
+}
+
+#employeeViewPage #view-container table.fixed-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--emp-muted);
+    border-bottom: 1px solid var(--emp-border);
+    padding: 0.45rem 0.5rem !important;
+}
+
+#employeeViewPage #view-container table.fixed-table tbody tr {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 2.5rem;
+    background: transparent;
+}
+
+#employeeViewPage #view-container table.fixed-table tbody tr:hover {
+    background: var(--emp-accent-soft);
+}
+
+#employeeViewPage #view-container table.fixed-table tbody td {
+    font-size: 0.8125rem;
+    color: #334155;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+    padding: 0.4rem 0.5rem !important;
+    vertical-align: middle;
+    line-height: 1.3;
+}
+
+#employeeViewPage #view-container .oh-profile__avatar {
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+    margin-right: 0.35rem !important;
+}
+
+#employeeViewPage #view-container .avatar-thumb,
+#employeeViewPage .emp-card-body__avatar {
+    box-shadow: none;
+    outline: 1px solid var(--emp-border);
+}
+
+#employeeViewPage #view-container .hlv-quick-actions,
+#employeeViewPage #listContainer .hlv-quick-actions {
+    margin-bottom: 0.35rem !important;
+    gap: 0.35rem;
+}
+
+#employeeViewPage #filterTagContainerSection,
+#employeeViewPage #filterTagContainerSectionNav {
+    margin-bottom: 0.35rem !important;
+}
+
+#employeeViewPage #listContainer .grid.grid-cols-4,
+#employeeViewPage #gridView .grid.grid-cols-4 {
+    gap: 0.5rem !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+#employeeViewPage #gridView {
+    padding: 0.55rem !important;
+}
+
+#employeeViewPage #listContainer .grid.grid-cols-4 > div,
+#employeeViewPage #gridView .grid.grid-cols-4 > div {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 4.75rem;
+    border-radius: 0.7rem !important;
+    border: 1px solid var(--emp-border) !important;
+    background: #fff;
+    padding: 0.55rem 0.65rem !important;
+    box-shadow: none;
+}
+
+#employeeViewPage #listContainer .grid.grid-cols-4 > div:hover,
+#employeeViewPage #gridView .grid.grid-cols-4 > div:hover {
+    transform: none;
+    border-color: color-mix(in srgb, var(--emp-accent) 28%, var(--emp-border)) !important;
+    background: var(--emp-accent-soft);
+}
+
+#employeeViewPage #view-container .oh-btn--light-bkg,
+#employeeViewPage #view-container .oh-btn--sq-sm {
+    border-radius: 0.55rem;
+}
+
+#employeeViewPage .emp-row-actions {
+    padding: 0.05rem;
+    gap: 0.15rem !important;
+    border-radius: 0.5rem;
+    background: #f8fafc;
+}
+
+#employeeViewPage .emp-row-actions .oh-btn--sq-sm {
+    width: 1.55rem;
+    height: 1.55rem;
+    font-size: 0.7rem;
+}
+
+#employeeViewPage #view-container table.fixed-table th:last-child,
+#employeeViewPage #view-container table.fixed-table td:last-child {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+}
+
+#employeeViewPage .emp-card-body__main {
+    display: flex;
+    gap: 0.55rem;
+    align-items: center;
+    padding-top: 0;
+    padding-right: 0.85rem;
+}
+
+#employeeViewPage .emp-card-body__avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 2.125rem;
+    height: 2.125rem;
+}
+
+#employeeViewPage .emp-card-body__avatar {
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: 0.55rem;
+    object-fit: cover;
+}
+
+#employeeViewPage .emp-card-body__status-dot {
+    position: absolute;
+    right: -0.1rem;
+    bottom: -0.1rem;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+    border: 1.5px solid #fff;
+}
+
+#employeeViewPage .emp-card-body__name {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--emp-ink);
+    line-height: 1.2;
+}
+
+#employeeViewPage .emp-card-body__details {
+    display: grid;
+    gap: 0;
+    font-size: 0.72rem;
+    color: var(--emp-muted);
+    line-height: 1.25;
+}
+
+#employeeViewPage .online--dot {
+    background-color: #22c55e;
+}
+
+#employeeViewPage .offline--dot {
+    background-color: #94a3b8;
+}
+
+#employeeViewPage .hired-True {
+    border-left: 3px solid #22c55e !important;
+    border-radius: 0.7rem 0 0 0.7rem;
+}
+
+#employeeViewPage .custom-swal-container .swal2-styled {
+    display: block;
+    width: 70%;
+}
+
+@media (max-width: 1536px) {
+    #employeeViewPage #listContainer .grid.grid-cols-4,
+    #employeeViewPage #gridView .grid.grid-cols-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1280px) {
+    #employeeViewPage #listContainer .grid.grid-cols-4,
+    #employeeViewPage #gridView .grid.grid-cols-4 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    #employeeViewPage #listContainer .grid.grid-cols-4,
+    #employeeViewPage #gridView .grid.grid-cols-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+body.dark #employeeViewPage.hr-type {
+    --emp-surface: #111827;
+    --emp-ink: #f8fafc;
+    --emp-muted: #94a3b8;
+    --emp-border: rgba(255, 255, 255, 0.08);
+    --emp-accent-soft: rgba(255, 255, 255, 0.04);
+}
+
+body.dark #employeeViewPage #employeeListNavBar > div > .flex.flex-wrap.justify-between,
+body.dark #employeeViewPage #view-container .bg-white,
+body.dark #employeeViewPage #listContainer .hlv-container > .bg-white,
+body.dark #employeeViewPage #listContainer .grid.grid-cols-4 > div,
+body.dark #employeeViewPage #gridView .grid.grid-cols-4 > div {
+    background: #111827 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark #employeeViewPage #employeeListNavBar h3.text-lg,
+body.dark #employeeViewPage .emp-card-body__name {
+    color: #f8fafc;
+}
+
+body.dark #employeeViewPage #view-container table.fixed-table thead th {
+    background: #0f172a;
+    color: #94a3b8;
+}
+
+body.dark #employeeViewPage #view-container table.fixed-table tbody td {
+    color: #e2e8f0;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+body.dark #employeeViewPage #view-container table.fixed-table tbody tr:hover,
+body.dark #employeeViewPage #listContainer .grid.grid-cols-4 > div:hover,
+body.dark #employeeViewPage #gridView .grid.grid-cols-4 > div:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+body.dark #employeeViewPage .emp-card-body__details {
+    color: #94a3b8;
+}
+
+body.dark #employeeViewPage .emp-row-actions {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+body.dark #employeeViewPage #employeeListNavBar .navFilterForm input[name="search"] {
+    background: #0f172a;
+    color: #f8fafc;
+}

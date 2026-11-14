@@ -106,10 +106,7 @@ class AsyncView<T> extends StatelessWidget {
   }
 }
 
-String cleanError(Object e) {
-  final text = e.toString();
-  return text.startsWith('Exception: ') ? text.substring(11) : text;
-}
+String cleanError(Object e) => userFacingError(e);
 
 /// Centers a short panel while keeping pull-to-refresh working.
 class CenteredScroll extends StatelessWidget {
@@ -459,6 +456,7 @@ class GradientIconTile extends StatelessWidget {
 final mediaHeadersProvider = FutureProvider.autoDispose<Map<String, String>>((
   ref,
 ) async {
+  ref.watch(accessGenerationProvider);
   final token = await ref.watch(tokenStorageProvider).readAccess();
   if (token == null || token.isEmpty) return const {};
   return {'Authorization': 'Bearer $token'};

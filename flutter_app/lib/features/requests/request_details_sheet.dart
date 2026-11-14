@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
 import '../home/home_provider.dart';
 import 'models.dart';
@@ -127,7 +128,7 @@ class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _cancelling = false);
-      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+      messenger.showSnackBar(SnackBar(content: Text(userFacingError(e))));
     }
   }
 

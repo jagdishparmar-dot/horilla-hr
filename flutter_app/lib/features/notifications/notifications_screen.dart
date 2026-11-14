@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
 import 'models.dart';
 import 'notifications_provider.dart';
@@ -187,7 +188,7 @@ class NotificationsScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(e.toString(), textAlign: TextAlign.center),
+                        Text(userFacingError(e), textAlign: TextAlign.center),
                         const SizedBox(height: 12),
                         FilledButton(
                           onPressed: () =>
