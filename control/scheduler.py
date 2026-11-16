@@ -10,4 +10,9 @@ def provision_queued_tenants():
     process_available_jobs()
 
 
-register_job(provision_queued_tenants, "interval", minutes=1)
+register_job(
+    provision_queued_tenants,
+    "interval",
+    minutes=1,
+    per_tenant=False,
+)

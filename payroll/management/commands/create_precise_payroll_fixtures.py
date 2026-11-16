@@ -46,6 +46,8 @@ import datetime
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
+from horilla.tenant_command import TenantSlugMixin
+
 EMPLOYEES = 10
 WAGE = 30000.0
 # Per-employee count of leave days each month, alternating paid/unpaid --
@@ -107,7 +109,7 @@ def _weekdays(start, end):
         day += datetime.timedelta(days=1)
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = (
         "Replace all data with 10 employees and two months of minute-accurate payroll."
     )

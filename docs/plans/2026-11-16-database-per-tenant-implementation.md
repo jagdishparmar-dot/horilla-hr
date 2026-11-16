@@ -26,11 +26,11 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 2. Request routing | 7 | 7 |
 | 3. Provisioning engine | 8 | 8 |
 | 4. Operator dashboard | 8 | 7 |
-| 5. Runtime isolation | 7 | 0 |
+| 5. Runtime isolation | 7 | 7 |
 | 6. Deploy and hosts | 6 | 0 |
 | 7. Isolation tests | 6 | 0 |
 | 8. Cutover | 5 | 0 |
-| **Total** | **57** | **32** |
+| **Total** | **57** | **39** |
 
 ### Progress log
 
@@ -42,6 +42,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 2026-11-16 | P2 | Host routing is in place and stays off until `HORILLA_MULTITENANT` is enabled. Dashboard and tenant URL confs are separate. |
 | 2026-11-16 | P3 | Provisioning jobs run in the single scheduler replica. Create, suspend, resume, retry, and delete are queued. Delete keeps the tenant row as `deleted` and refuses to drop a database until P5 supplies `pg_dump`. 11 phase-3 tests passed. |
 | 2026-11-16 | P4 | Operator dashboard is on the management host with cookie `control_sessionid`. Create, suspend, resume, backup, migrate, restore, and delete only enqueue jobs. Backup, migrate, and restore stay queued until phase 5. P4-07 stays open until custom-domain nginx exists. 7 phase-4 tests passed. |
+| 2026-11-16 | P5 | Cache, uploads, media downloads, scheduler, backups, restore, and JWT are tenant-scoped. Scheduler policy is log and continue. HR management commands require `--slug` when the flag is on. `pg_dump` is in the image only after the next rebuild; tests mock the binary. P4-07 stays open. |
 
 ## Locked decisions
 
@@ -435,7 +436,7 @@ Sequence, each step recorded on `ProvisionJob.step`:
 
 ### [x] P3-07 Delete
 
-- **Status:** Done (2026-11-16). The dump file itself is still P5-05. Until that lands, `dump_tenant` raises and a real delete cannot drop the database.
+- **Status:** Done (2026-11-16). P5-05 replaced the stub with `pg_dump`. A failed dump still refuses to drop the database.
 - **Depends on:** P3-05, P5-05
 - **Files:** `control/provisioning.py`
 - **Done when:**
@@ -527,34 +528,32 @@ The dashboard is server-rendered Django, on the management host only, using `con
 
 ## Phase 5 — Runtime isolation
 
-### [ ] P5-01 Cache keys include the tenant slug
+### [x] P5-01 Cache keys include the tenant slug
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). `horilla.cache.tenant_cache_key`. Flag off keeps `horilla:<version>:<key>`.
 - **Depends on:** P2-01
-- **Files:** `horilla/settings/base.py`, a thin helper if call sites use raw keys
+- **Files:** `horilla/settings/base.py`, `horilla/cache.py`, `horilla/isolation.py`, `control/middleware.py`
 - **Done when:**
   - The Redis prefix is `horilla:<slug>:` for tenant requests.
   - A cache read or write with no tenant alias raises.
-  - The same logical key in two tenants returns two values (Phase 7).
+  - The same logical key in two tenants returns two values (Phase 7 can prove Redis; the key function is covered here).
   - Control-plane pages either skip the shared cache or use the prefix `horilla:control:`.
 
-Today the prefix is the literal `horilla` in `CACHES` inside `horilla/settings/base.py`.
+### [x] P5-02 Media paths include the tenant slug
 
-### [ ] P5-02 Media paths include the tenant slug
-
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Existing files are still copied at P8-03.
 - **Depends on:** P2-01
-- **Files:** upload path helper used by `horilla/models.py` `upload_path`, download views that use `FileResponse`
+- **Files:** `horilla/models.py` `upload_path`, `base/views.py` `protected_media`
 - **Done when:**
   - New files land in `media/<slug>/...`.
   - A download checks that the relative path starts with the active slug before sending the file.
   - Existing single-tenant files are copied during cutover (P8-03).
 
-### [ ] P5-03 Scheduler loops active tenants
+### [x] P5-03 Scheduler loops active tenants
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Policy: log the exception with the slug and continue to the next tenant.
 - **Depends on:** P2-02, P1-02
-- **Files:** `base/management/commands/run_scheduler.py`, `horilla/scheduling.py`, each job module registered there
+- **Files:** `base/management/commands/run_scheduler.py`, `horilla/scheduling.py`, `control/scheduler.py`, `pg_backup/scheduler.py`
 - **Done when:**
   - `DjangoJobStore` uses the control database.
   - Every job that touches HR tables iterates `Tenant.objects.filter(status="active")`, activates that alias, runs, and clears the alias in `finally`.
@@ -562,27 +561,33 @@ Today the prefix is the literal `horilla` in `CACHES` inside `horilla/settings/b
   - One tenant’s exception is logged with the slug and does not skip the remaining tenants more than once for that tick. Record the actual policy in the progress log when implementing (proposed: log and continue).
   - Scheduler replica count stays 1.
 
-### [ ] P5-04 Management commands that assume one database
+### [x] P5-04 Management commands that assume one database
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). `--slug` is required only while `HORILLA_MULTITENANT` is on.
 - **Depends on:** P5-03
-- **Files:** commands under `*/management/commands/` that read employees, payroll, backups, or mail
+- **Files:** `horilla/tenant_command.py`, HR commands under `*/management/commands/`
 - **Done when:** a short inventory is appended to this task listing each command as `control-only`, `per-tenant`, or `unsafe`. Unsafe commands gain a required `--slug` and refuse to run without it.
 
-### [ ] P5-05 Per-tenant backup
+Inventory:
 
-- **Status:** Not started
+- **control-only** (no `--slug`): `control.provision_tenant`, `control.migrate_tenants`, `control.run_provisioner`, `base.run_scheduler`. `migrate_tenants` and the provisioner already choose the database themselves.
+- **per-tenant loop** (not a command): `horilla.scheduling.run_registered_job` for jobs with `per_tenant=True`. The provisioner and the nightly backup cron are `per_tenant=False`; the cron enqueues one backup job per active tenant and the provisioner runs `pg_dump`.
+- **unsafe** (now `TenantSlugMixin`): `attendance.create_summary_fixtures`, `base.audit_perms`, `base.createhorillauser`, `base.create_branch_demo_fixtures`, `base.demo_data_inventory`, `base.horilladumpdata`, `base.load_demo_data`, `base.seed_dashboard_demo_data`, `base.trigger_save`, `dynamic_fields.add_field`, `dynamic_fields.delete_field`, `employee.import_ldap_users`, `helpdesk.create_faqs`, `horilla_auth.migrateusers`, `horilla_ldap.import_ldap_users`, `horilla_ldap.import_users_to_ldap`, `horilla_theme.create_default_themes`, `payroll.backfill_component_sequence`, `payroll.check_structure_invariants`, `payroll.create_payroll_fixtures`, `payroll.create_precise_payroll_fixtures`, `payroll.normalise_component_basis`, `payroll.payroll_snapshot`, `payroll.report_lop_deduction_mode`, `payroll.seed_tax_packs`, `payroll.sync_system_components`, `report.run_report_subscriptions`, `report.seed_standard_report_templates`.
+
+### [x] P5-05 Per-tenant backup
+
+- **Status:** Done (2026-11-16). The worker now claims backup, migrate, and restore jobs. `postgresql-client` is in the Dockerfile and is available after the next image build.
 - **Depends on:** P3-02
-- **Files:** `horilla_backup/`, `pg_backup/scheduler.py`
+- **Files:** `control/backup.py`, `control/provisioning.py`, `pg_backup/scheduler.py`, `horilla_backup/scheduler.py`, `Dockerfile`
 - **Done when:**
   - Backup runs `pg_dump` against `tenant_<slug>` using that tenant’s database name, not `settings.DATABASES["default"]`.
   - Output path is `backups/<slug>/<timestamp>.dump`.
   - The dashboard “backup now” action enqueues this and the nightly scheduler runs it for every active tenant.
   - Dump files are not world-readable in the container.
 
-### [ ] P5-06 Per-tenant restore
+### [x] P5-06 Per-tenant restore
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). A failed `pg_restore` leaves the tenant suspended.
 - **Depends on:** P5-05, P3-06
 - **Done when:**
   - Restore suspends the tenant first.
@@ -590,11 +595,11 @@ Today the prefix is the literal `horilla` in `CACHES` inside `horilla/settings/b
   - It sets the tenant `active` only after `pg_restore` exits 0.
   - It cannot be pointed at a different slug than the dump’s folder.
 
-### [ ] P5-07 JWT and API stay inside the tenant database
+### [x] P5-07 JWT and API stay inside the tenant database
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). The `tenant_slug` claim is checked before the user lookup. Flag off does not require the claim.
 - **Depends on:** P2-03
-- **Files:** `horilla_api/authentication.py` (`TenantScopedJWTAuthentication`)
+- **Files:** `horilla_api/authentication.py`, `horilla_api/api_views/auth/views.py`
 - **Done when:**
   - Token lookup uses the database selected from `Host` before the token is trusted.
   - A token minted on tenant A is rejected on tenant B’s host.

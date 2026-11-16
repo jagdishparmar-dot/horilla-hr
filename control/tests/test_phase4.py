@@ -222,15 +222,18 @@ class DashboardTests(TestCase):
         queued.refresh_from_db()
         self.assertEqual(queued.status, ProvisionJob.Status.QUEUED)
 
-    def test_backup_stays_queued_while_another_job_runs(self):
+    def test_backup_runs_with_the_other_queued_job(self):
         tenant = Tenant.objects.create(name="Acme", slug="acme", status=Tenant.Status.ACTIVE)
         from control.provisioning import enqueue_suspend
 
         enqueue_suspend(tenant)
         backup = enqueue_backup(tenant)
-        self.assertEqual(process_available_jobs(), 1)
+        with mock.patch(
+            "control.provisioning.dump_tenant", return_value="backups/acme/x.dump"
+        ):
+            self.assertEqual(process_available_jobs(), 2)
         backup.refresh_from_db()
-        self.assertEqual(backup.status, ProvisionJob.Status.QUEUED)
+        self.assertEqual(backup.status, ProvisionJob.Status.SUCCEEDED)
         self.assertEqual(
             tenant.jobs.get(kind=ProvisionJob.Kind.SUSPEND).status,
             ProvisionJob.Status.SUCCEEDED,

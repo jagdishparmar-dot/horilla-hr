@@ -77,12 +77,17 @@ class Command(BaseCommand):
         # attendance's cron jobs fire at a wall-clock time (00:30), so the
         # scheduler must use the project timezone rather than the container's.
         scheduler = BlockingScheduler(timezone=pytz.timezone(settings.TIME_ZONE))
+        # DjangoJobStore persists through the ORM. The control router sends
+        # django_apscheduler to the default (control) database.
         scheduler.add_jobstore(DjangoJobStore(), "default")
+
+        from horilla.scheduling import run_registered_job
 
         for job in jobs:
             scheduler.add_job(
-                job.func,
+                run_registered_job,
                 job.trigger,
+                args=[job.job_id],
                 id=job.job_id,
                 # A job whose previous run is still going must not stack a
                 # second copy; coalesce collapses a backlog after downtime into

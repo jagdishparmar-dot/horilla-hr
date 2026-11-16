@@ -2,10 +2,12 @@
 
 from django.core.management.base import BaseCommand, CommandError
 
+from horilla.tenant_command import TenantSlugMixin
+
 from base.demo_data.inventory import count_sidebar_models, zero_row_models
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = (
         "List SIDEBAR (plus Base request/holiday/mail/tag) models and their "
         "row counts after demo seed. Use --fail-on-empty as the gap register."

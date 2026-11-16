@@ -40,6 +40,8 @@ import datetime
 import random
 
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db import transaction
 
 SECTIONS = (
@@ -121,7 +123,7 @@ def _weekdays_between(start, end):
     return max(count, 1)
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Add demo data for the dashboard charts (additive and re-runnable)."
 
     def add_arguments(self, parser):

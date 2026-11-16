@@ -1,9 +1,11 @@
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from report.delivery import run_due_subscriptions
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = (
         "Process due standard-report email subscriptions "
         "(or force one with --force-id)."

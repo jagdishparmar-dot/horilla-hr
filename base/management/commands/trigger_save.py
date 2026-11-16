@@ -1,8 +1,10 @@
 from django.apps import apps
 from django.core.management.base import BaseCommand, CommandError
 
+from horilla.tenant_command import TenantSlugMixin
 
-class Command(BaseCommand):
+
+class Command(TenantSlugMixin, BaseCommand):
     help = "Save all instances of the specified model"
 
     def add_arguments(self, parser):

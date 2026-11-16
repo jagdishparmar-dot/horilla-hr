@@ -88,6 +88,16 @@ scheduler = BackgroundScheduler()
 
 
 def google_drive_backup():
+    from django.conf import settings as django_settings
+
+    if getattr(django_settings, "HORILLA_MULTITENANT", False):
+        from control.models import Tenant
+        from control.provisioning import enqueue_backup
+
+        if GoogleDriveBackup.objects.exists():
+            for tenant in Tenant.objects.filter(status=Tenant.Status.ACTIVE):
+                enqueue_backup(tenant)
+        return
     if GoogleDriveBackup.objects.exists():
         google_drive = GoogleDriveBackup.objects.first()
         service_account_file = google_drive.service_account_file.path

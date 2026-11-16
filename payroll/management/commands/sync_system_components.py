@@ -22,12 +22,14 @@ report rather than to write.
 
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from payroll.methods.deductions import LOAN_REPAYMENT_KEYS
 from payroll.methods.system_sync import align
 from payroll.system_components import editable_fields
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Align generated pay rows with their standard component."
 
     def add_arguments(self, parser):

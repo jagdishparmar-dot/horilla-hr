@@ -5,8 +5,10 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
 
-class Command(BaseCommand):
+
+class Command(TenantSlugMixin, BaseCommand):
     help = "Dump all relevant data to JSON files."
 
     def handle(self, *args, **options):

@@ -1,5 +1,7 @@
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from report.models import ReportTemplate
 
 # Default pivot layouts for deep-linking from standard reports into Explorer.
@@ -243,7 +245,7 @@ def seed_standard_report_templates(dry_run: bool = False) -> tuple[int, int]:
     return created, updated
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Seed system ReportTemplate layouts for standard enterprise reports."
 
     def add_arguments(self, parser):

@@ -1,9 +1,11 @@
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from horilla_theme.models import THEMES_DATA, HorillaColorTheme
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Create default color themes for the CRM"
 
     def handle(self, *args, **options):

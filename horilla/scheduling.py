@@ -42,12 +42,20 @@ class ScheduledJob:
     trigger: str
     job_id: str
     kwargs: dict[str, Any] = field(default_factory=dict)
+    per_tenant: bool = True
 
 
 _REGISTRY: dict[str, ScheduledJob] = {}
 
 
-def register_job(func: Callable, trigger: str = "interval", *, job_id=None, **kwargs):
+def register_job(
+    func: Callable,
+    trigger: str = "interval",
+    *,
+    job_id=None,
+    per_tenant=True,
+    **kwargs,
+):
     """
     Register ``func`` to run on ``trigger``.
 
@@ -67,7 +75,11 @@ def register_job(func: Callable, trigger: str = "interval", *, job_id=None, **kw
         )
 
     _REGISTRY[resolved_id] = ScheduledJob(
-        func=func, trigger=trigger, job_id=resolved_id, kwargs=kwargs
+        func=func,
+        trigger=trigger,
+        job_id=resolved_id,
+        kwargs=kwargs,
+        per_tenant=per_tenant,
     )
     logger.debug("Registered scheduled job %s (%s, %s)", resolved_id, trigger, kwargs)
     return func
@@ -81,3 +93,43 @@ def get_registered_jobs() -> list[ScheduledJob]:
 def clear_registry() -> None:
     """Drop all registrations. For tests only."""
     _REGISTRY.clear()
+
+
+def run_registered_job(job_id: str):
+    """Entry point stored in DjangoJobStore. It stays importable so the job pickles.
+
+    HR jobs run once per active tenant. One tenant's exception is logged and
+    the remaining tenants still run. Control-plane jobs set per_tenant=False.
+    """
+    from django.conf import settings
+
+    job = _REGISTRY[job_id]
+    if not job.per_tenant or not getattr(settings, "HORILLA_MULTITENANT", False):
+        job.func()
+        return
+
+    from django.db import connections
+
+    from control.context import activate_tenant_alias, clear_tenant_alias, get_tenant_alias
+    from control.db import ensure_tenant_connection
+    from control.models import Tenant
+    from control.router import TenantRoutingError
+
+    tenants = list(Tenant.objects.filter(status=Tenant.Status.ACTIVE).order_by("pk"))
+    for tenant in tenants:
+        alias = ensure_tenant_connection(tenant)
+        token = activate_tenant_alias(alias)
+        try:
+            if not get_tenant_alias():
+                raise TenantRoutingError(
+                    f"Scheduled job {job_id} has no tenant database."
+                )
+            job.func()
+        except Exception:
+            logger.exception(
+                "Scheduled job %s failed for tenant %s", job_id, tenant.slug
+            )
+        finally:
+            clear_tenant_alias(token)
+            if alias in connections:
+                connections[alias].close()

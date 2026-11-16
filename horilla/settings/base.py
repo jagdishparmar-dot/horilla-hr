@@ -292,6 +292,7 @@ if REDIS_URL:
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
             },
             "KEY_PREFIX": "horilla",
+            "KEY_FUNCTION": "horilla.cache.tenant_cache_key",
         }
     }
 

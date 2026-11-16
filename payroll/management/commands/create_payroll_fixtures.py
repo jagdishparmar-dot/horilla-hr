@@ -37,6 +37,8 @@ import random
 from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db import transaction
 
 SEED = 20260823  # Fixed, so two runs of this command produce the same demo.
@@ -64,7 +66,7 @@ DEDUCTIONS = [
 ]
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Clear payroll and rebuild it as a coherent demo dataset."
 
     def add_arguments(self, parser):

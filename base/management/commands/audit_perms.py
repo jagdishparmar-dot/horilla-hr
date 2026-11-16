@@ -16,6 +16,8 @@ import json
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from base.models import Company
 from horilla.horilla_middlewares import set_selected_company
 
@@ -29,7 +31,7 @@ def _perms_for(user):
     return sorted(user.get_all_permissions())
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = (
         "Dump effective permission codenames per user (optionally per company) as JSON."
     )

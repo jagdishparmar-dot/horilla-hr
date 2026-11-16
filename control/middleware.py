@@ -12,6 +12,7 @@ from control.context import activate_tenant_alias, clear_tenant_alias
 from control.db import ensure_tenant_connection
 from control.hosts import request_hostname
 from control.models import Domain, Tenant
+from horilla.isolation import activate_cache_scope, clear_cache_scope
 
 
 class TenantMiddleware:
@@ -24,12 +25,18 @@ class TenantMiddleware:
 
         token = None
         alias = None
+        scope_token = None
         try:
             early, token, alias = self._bind(request)
+            if request.control_plane:
+                scope_token = activate_cache_scope("control")
+            elif getattr(request, "tenant", None) is not None:
+                scope_token = activate_cache_scope(request.tenant.slug)
             if early is not None:
                 return early
             return self.get_response(request)
         finally:
+            clear_cache_scope(scope_token)
             clear_tenant_alias(token)
             if alias:
                 _close_alias(alias)

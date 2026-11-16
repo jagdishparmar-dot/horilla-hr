@@ -7,6 +7,8 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from base.demo_data import run_enterprise_demo_seeder
 from base.demo_data.fixtures import demo_fixture_files
 from base.demo_data.media import copy_demo_media
@@ -18,7 +20,7 @@ from base.views import (
 )
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = (
         "Load demo fixture data with dates shifted relative to today, then apply "
         "the enterprise demo seeder. Use --flush to wipe the database first."

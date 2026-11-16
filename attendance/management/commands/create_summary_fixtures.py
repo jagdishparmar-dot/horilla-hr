@@ -29,6 +29,8 @@ Run:
 import datetime
 
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db import transaction
 
 FIXTURE_EMAIL_DOMAIN = "fixture.summary.test"
@@ -214,7 +216,7 @@ def _time(hhmm):
     return datetime.time(int(h), int(m))
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Create fixture attendance data for the Monthly Summary feature."
 
     def add_arguments(self, parser):

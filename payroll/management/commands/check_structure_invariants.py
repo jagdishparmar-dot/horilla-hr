@@ -15,11 +15,13 @@ of one-off sweep, as with normalise_component_basis.
 
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from payroll.methods.structure_rules import structure_problems
 from payroll.models.models import SalaryStructure
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "List salary structures whose components disagree with their mode."
 
     def add_arguments(self, parser):

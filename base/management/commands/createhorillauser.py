@@ -6,11 +6,13 @@ import uuid
 
 from django.core.management.base import BaseCommand, CommandError
 
+from horilla.tenant_command import TenantSlugMixin
+
 from employee.models import Employee
 from horilla_auth.models import HorillaUser
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     """
     Horilla management command to create a new user and associated employee.
     """

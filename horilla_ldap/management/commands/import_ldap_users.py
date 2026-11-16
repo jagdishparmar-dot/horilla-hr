@@ -3,6 +3,8 @@ import re
 import sys
 
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db.models import Q
 
 from employee.models import Employee
@@ -15,7 +17,7 @@ else:
     from ldap3 import ALL, Connection, Server  # Use ldap3 for Windows
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Imports employees from LDAP into the Django database using LDAP settings from the database"
 
     def handle(self, *args, **kwargs):

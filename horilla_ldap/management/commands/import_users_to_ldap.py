@@ -2,13 +2,15 @@ import base64
 import hashlib
 
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from ldap3 import ALL, ALL_ATTRIBUTES, Connection, Server
 
 from employee.models import Employee
 from horilla_ldap.models import LDAPSettings
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Import users from Django to LDAP using LDAP settings from the database"
 
     def handle(self, *args, **kwargs):

@@ -22,6 +22,8 @@ carrying the old default, so an admin's later choice is never undone.
 """
 
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db import transaction
 
 from payroll.methods.proration import FULL_PERIOD
@@ -30,7 +32,7 @@ from payroll.models.models import Allowance, Deduction
 OLD_DEFAULT = "month_working_days"
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Put components that never really prorated onto a flat basis."
 
     def add_arguments(self, parser):

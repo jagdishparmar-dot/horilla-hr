@@ -18,10 +18,12 @@ clicking through the UI.
 
 from django.core.management.base import BaseCommand, CommandError
 
+from horilla.tenant_command import TenantSlugMixin
+
 from payroll.tax_packs import TAX_PACKS, load_tax_packs
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Load ready-made income-tax configurations for common jurisdictions"
 
     def add_arguments(self, parser):

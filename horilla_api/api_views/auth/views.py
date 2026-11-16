@@ -16,6 +16,7 @@ from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
 from base.backends import ConfiguredEmailBackend
 from base.forms import PassWordResetForm, find_reset_user
+from horilla_api.authentication import stamp_tenant_claim
 from horilla_api.docs import document_api
 
 from ...api_methods.base.capabilities import build_capabilities
@@ -98,7 +99,7 @@ class LoginAPIView(APIView):
             # and axes raises rather than silently allowing it.
             user = authenticate(request, username=username, password=password)
             if user:
-                refresh = RefreshToken.for_user(user)
+                refresh = stamp_tenant_claim(RefreshToken.for_user(user))
                 employee = user.employee_get
                 face_detection = False
                 face_detection_image = None
@@ -321,8 +322,16 @@ class RevocationAwareTokenRefreshSerializer(TokenRefreshSerializer):
     """
 
     def validate(self, attrs):
+        refresh = self.token_class(attrs["refresh"])
+        if getattr(settings, "HORILLA_MULTITENANT", False):
+            request = self.context.get("request")
+            tenant = getattr(request, "tenant", None)
+            if tenant is None or refresh.payload.get("tenant_slug") != tenant.slug:
+                raise AuthenticationFailed(
+                    _("Token is not valid for this workspace."),
+                    code="wrong_tenant",
+                )
         if jwt_settings.CHECK_REVOKE_TOKEN:
-            refresh = self.token_class(attrs["refresh"])
             user_id = refresh.payload.get(jwt_settings.USER_ID_CLAIM)
             user = (
                 get_user_model()

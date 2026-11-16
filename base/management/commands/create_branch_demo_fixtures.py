@@ -42,6 +42,8 @@ from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
+from horilla.tenant_command import TenantSlugMixin
+
 EMPLOYEES_PER_COMPANY = 30
 NORTHWIND = "Northwind Technologies Inc."
 MERIDIAN = "Meridian Industries GmbH"
@@ -2434,7 +2436,7 @@ class ExtrasMixin:
         )
 
 
-class Command(ExtrasMixin, BaseCommand):
+class Command(TenantSlugMixin, ExtrasMixin, BaseCommand):
     help = (
         "Replace all data with a two-company, 60-employee demo dataset: "
         "attendance to date, leave into the future, payroll for last month."

@@ -16,10 +16,12 @@ are left, and pass --normalise to bring them in line with the rest.
 
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from payroll.models.models import Contract
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Report contracts that deduct loss of pay separately from basic pay."
 
     def add_arguments(self, parser):

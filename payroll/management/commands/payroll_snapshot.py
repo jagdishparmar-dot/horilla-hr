@@ -27,6 +27,8 @@ from datetime import datetime
 
 from django.core.management.base import BaseCommand, CommandError
 
+from horilla.tenant_command import TenantSlugMixin
+
 from payroll.methods.payroll_run import payroll_calculation
 from payroll.models.models import Contract, Payslip
 
@@ -38,7 +40,7 @@ def _parse_date(text, label):
         raise CommandError(f"--{label} must be YYYY-MM-DD, got {text!r}") from exc
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Snapshot payroll_calculation() output for every active contract (creates nothing)"
 
     def add_arguments(self, parser):

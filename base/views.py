@@ -8846,6 +8846,22 @@ class EnableIntegrationsView(View):
         return HttpResponse("<script>window.location.reload()</script>")
 
 
+def _jwt_user(request):
+    """Resolve a bearer token on this host. A token for another tenant is ignored."""
+    from rest_framework.exceptions import APIException
+    from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+
+    from horilla_api.authentication import TenantScopedJWTAuthentication
+
+    try:
+        result = TenantScopedJWTAuthentication().authenticate(request)
+    except (APIException, InvalidToken, TokenError):
+        return None
+    if not result:
+        return None
+    return result[0]
+
+
 def is_jwt_token_valid(auth_header):
     if not auth_header or not auth_header.startswith("Bearer "):
         return None  # No token
@@ -8871,6 +8887,13 @@ def protected_media(request, path):
         "recruitment/candidate/profile/",
     )
 
+    # A tenant download may only read files stored under its own slug.
+    if getattr(settings, "HORILLA_MULTITENANT", False):
+        tenant = getattr(request, "tenant", None)
+        slug = getattr(tenant, "slug", None)
+        if not slug or not (path == slug or path.startswith(f"{slug}/")):
+            raise Http404("File not found")
+
     # Prevent path traversal
     try:
         media_path = safe_join(settings.MEDIA_ROOT, path)
@@ -8888,10 +8911,15 @@ def protected_media(request, path):
     if any(part.startswith(".") for part in path.split("/")):
         raise Http404("File not found")
 
-    is_public_asset = any(path.startswith(prefix) for prefix in public_media_prefixes)
+    relative = path
+    if getattr(settings, "HORILLA_MULTITENANT", False) and path.startswith(
+        f"{getattr(getattr(request, 'tenant', None), 'slug', '')}/"
+    ):
+        relative = path.split("/", 1)[1]
+    is_public_asset = any(relative.startswith(prefix) for prefix in public_media_prefixes)
 
     if not is_public_asset:
-        jwt_user = is_jwt_token_valid(request.META.get("HTTP_AUTHORIZATION", ""))
+        jwt_user = _jwt_user(request)
         if not request.user.is_authenticated and not jwt_user:
             messages.error(
                 request,

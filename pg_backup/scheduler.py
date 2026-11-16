@@ -46,7 +46,6 @@ import subprocess
 from pathlib import Path
 
 import environ
-from apscheduler.schedulers.background import BackgroundScheduler
 from django.conf import settings
 
 # === Logging Configuration ===
@@ -88,80 +87,84 @@ DATE_FORMAT = "%Y-%m-%d_%H-%M-%S"
 db = settings.DATABASES["default"]
 DB_ENGINE = db["ENGINE"]
 
-if "postgresql" not in DB_ENGINE:
-    logger.warning(
-        "Skipping backup scheduler: not a PostgreSQL database (engine: %s)", DB_ENGINE
-    )
-else:
-    DB_NAME = db["NAME"]
-    DB_USER = db["USER"]
-    DB_PASSWORD = db["PASSWORD"]
-    DB_HOST = db.get("HOST", "localhost")
-    DB_PORT = str(db.get("PORT", 5432))
+DB_NAME = db["NAME"]
+DB_USER = db["USER"]
+DB_PASSWORD = db["PASSWORD"]
+DB_HOST = db.get("HOST", "localhost")
+DB_PORT = str(db.get("PORT", 5432))
 
-    def backup_postgres():
-        """
-        Method that dump pg data
-        """
-        timestamp = datetime.datetime.now().strftime(DATE_FORMAT)
-        backup_file = BACKUP_DIR / f"{DB_NAME}_backup_{timestamp}.sql"
 
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-        os.environ["PGPASSWORD"] = DB_PASSWORD
+def backup_default_database():
+    """Dump the single database. Multi-tenant mode does not use this path."""
+    timestamp = datetime.datetime.now().strftime(DATE_FORMAT)
+    backup_file = BACKUP_DIR / f"{DB_NAME}_backup_{timestamp}.sql"
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    env = os.environ.copy()
+    env["PGPASSWORD"] = DB_PASSWORD
+    command = [
+        shutil.which("pg_dump") or "pg_dump",
+        "-h",
+        DB_HOST,
+        "-p",
+        DB_PORT,
+        "-U",
+        DB_USER,
+        "-F",
+        "c",
+        "-b",
+        "-f",
+        str(backup_file),
+        DB_NAME,
+    ]
+    try:
+        logger.info("Starting backup: %s", backup_file)
+        subprocess.run(command, check=True, env=env)
+        logger.info("Backup successful: %s", backup_file)
+    except subprocess.CalledProcessError as e:
+        logger.error("Backup failed: %s", e)
+        raise
+    finally:
+        env.pop("PGPASSWORD", None)
 
-        command = [
-            shutil.which("pg_dump"),
-            "-h",
-            DB_HOST,
-            "-p",
-            DB_PORT,
-            "-U",
-            DB_USER,
-            "-F",
-            "c",
-            "-b",
-            "-v",
-            "-f",
-            str(backup_file),
-            DB_NAME,
-        ]
 
+def backup_postgres():
+    """Nightly entry point. One job per active tenant, or the single database."""
+    from django.conf import settings as django_settings
+
+    if getattr(django_settings, "HORILLA_MULTITENANT", False):
+        from control.models import Tenant
+        from control.provisioning import enqueue_backup
+
+        for tenant in Tenant.objects.filter(status=Tenant.Status.ACTIVE).order_by("pk"):
+            enqueue_backup(tenant)
+        return
+    if "postgresql" not in DB_ENGINE:
+        logger.warning("Skipping backup: not a PostgreSQL database.")
+        return
+    backup_default_database()
+
+
+def _register_backup_times():
+    from horilla.scheduling import register_job
+
+    if not BACKUP_CRON_TIMES:
+        logger.warning("BACKUP_CRON_TIMES not set. Scheduler is disabled.")
+        return
+    for time_str in [t.strip() for t in BACKUP_CRON_TIMES.split(",") if t.strip()]:
         try:
-            logger.info("Starting backup: %s", backup_file)
-            subprocess.run(command, check=True)
-            logger.info("Backup successful: %s", backup_file)
-        except subprocess.CalledProcessError as e:
-            logger.error("Backup failed: %s", e)
-        finally:
-            os.environ.pop("PGPASSWORD", None)
+            hour, minute = map(int, time_str.split(":"))
+        except ValueError:
+            logger.error("Invalid time format in BACKUP_CRON_TIMES: '%s'", time_str)
+            continue
+        register_job(
+            backup_postgres,
+            "cron",
+            job_id=f"pg_backup.backup_postgres.{hour:02d}{minute:02d}",
+            hour=hour,
+            minute=minute,
+            per_tenant=False,
+        )
+        logger.info("Backup scheduled at %02d:%02d", hour, minute)
 
-    def start():
-        """
-        Start the scheduler
-        """
-        if not BACKUP_CRON_TIMES:
-            logger.warning("BACKUP_CRON_TIMES not set. Scheduler is disabled.")
-            return
 
-        scheduler = BackgroundScheduler()
-        times = [t.strip() for t in BACKUP_CRON_TIMES.split(",")]
-
-        for time_str in times:
-            try:
-                hour, minute = map(int, time_str.split(":"))
-                scheduler.add_job(
-                    backup_postgres,
-                    "cron",
-                    hour=hour,
-                    minute=minute,
-                    id=f"backup_{hour}_{minute}",
-                    replace_existing=True,
-                )
-                logger.info("Backup scheduled at %02d:%02d", hour, minute)
-            except ValueError:
-                logger.error("Invalid time format in BACKUP_CRON_TIMES: '%s'", time_str)
-
-        scheduler.start()
-
-    # Start the scheduler
-    start()
+_register_backup_times()

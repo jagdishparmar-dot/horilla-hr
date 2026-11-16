@@ -1,5 +1,7 @@
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db import connection, transaction
 from django.utils import timezone
 
@@ -11,7 +13,7 @@ from horilla_auth.models import (
 )
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Migrate users from LegacyUser (auth_user) to HorillaUser, including groups and permissions."
 
     def handle(self, *args, **options):

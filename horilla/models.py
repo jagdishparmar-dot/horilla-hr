@@ -100,8 +100,19 @@ def upload_path(instance, filename):
     model_name = instance._meta.model_name
 
     if field_name:
-        return f"{app_label}/{model_name}/{field_name}/{unique_name}"
-    return f"{app_label}/{model_name}/{unique_name}"
+        relative = f"{app_label}/{model_name}/{field_name}/{unique_name}"
+    else:
+        relative = f"{app_label}/{model_name}/{unique_name}"
+    from django.conf import settings
+
+    if not getattr(settings, "HORILLA_MULTITENANT", False):
+        return relative
+    from horilla.isolation import active_tenant_slug
+
+    slug = active_tenant_slug()
+    if not slug:
+        raise ValueError("Refusing to store a file without a tenant.")
+    return f"{slug}/{relative}"
 
 
 class HorillaModel(models.Model, metaclass=HorillaModelBase):

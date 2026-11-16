@@ -23,12 +23,14 @@ is_pretax / is_tax, so sequence plus pk reproduces the existing per-phase order.
 """
 
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db import transaction
 
 from payroll.models.models import Allowance, Deduction, derive_component_code
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Set evaluation sequence on existing allowances/deductions to preserve today's order"
 
     def add_arguments(self, parser):

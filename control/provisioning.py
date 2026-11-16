@@ -121,15 +121,6 @@ def enqueue_restore(tenant, dump_name):
     )
 
 
-# Phase 5 claims these. Until then they stay queued so the worker does not
-# mark them failed or touch a tenant database.
-DEFERRED_JOB_KINDS = (
-    ProvisionJob.Kind.BACKUP,
-    ProvisionJob.Kind.MIGRATE,
-    ProvisionJob.Kind.RESTORE,
-)
-
-
 def enqueue_delete(tenant, confirm_slug):
     if confirm_slug != tenant.slug:
         raise ProvisionError("Slug confirmation does not match.")
@@ -227,8 +218,24 @@ def resume_tenant(tenant):
 
 
 def dump_tenant(tenant) -> str:
-    """P5 replaces this with pg_dump. Delete will not drop anything until a dump exists."""
-    raise ProvisionError("Tenant dump is not available yet.")
+    """Dump the tenant database before a delete. The path is backups/<slug>/."""
+    from control.backup import dump_tenant_database
+
+    return dump_tenant_database(tenant)
+
+
+def _run_restore(job):
+    """Suspend, load the dump from this tenant's folder, then mark active."""
+    from control.backup import restore_tenant_database
+
+    tenant = job.tenant
+    tenant.status = Tenant.Status.SUSPENDED
+    tenant.save(update_fields=["status"])
+    job.step = "restore"
+    job.save(update_fields=["step"])
+    restore_tenant_database(tenant, (job.payload or {}).get("dump_name") or "")
+    tenant.status = Tenant.Status.ACTIVE
+    tenant.save(update_fields=["status"])
 
 
 def delete_tenant(job, dump=None):
@@ -298,7 +305,6 @@ def _claim_next_job():
         job = (
             ProvisionJob.objects.select_for_update(skip_locked=True)
             .filter(status=ProvisionJob.Status.QUEUED)
-            .exclude(kind__in=DEFERRED_JOB_KINDS)
             .order_by("pk")
             .first()
         )
@@ -324,6 +330,22 @@ def _run_claimed(job):
             _succeed(job)
         elif job.kind == ProvisionJob.Kind.DELETE:
             delete_tenant(job)
+            _succeed(job)
+        elif job.kind == ProvisionJob.Kind.BACKUP:
+            job.step = "dump"
+            job.save(update_fields=["step"])
+            path = dump_tenant(job.tenant)
+            payload = dict(job.payload or {})
+            payload["dump_path"] = path
+            job.payload = payload
+            job.save(update_fields=["payload"])
+            _succeed(job)
+        elif job.kind == ProvisionJob.Kind.MIGRATE:
+            job.step = "migrate"
+            migrate_tenant(job.tenant)
+            _succeed(job)
+        elif job.kind == ProvisionJob.Kind.RESTORE:
+            _run_restore(job)
             _succeed(job)
         else:
             raise ProvisionError("Unsupported provisioning job.")

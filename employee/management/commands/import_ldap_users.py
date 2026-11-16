@@ -1,13 +1,15 @@
 import ldap
 from django.conf import settings
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db.models import Q
 
 from employee.models import Employee
 from horilla_auth.models import HorillaUser
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Imports employees from LDAP into the Django database"
 
     def handle(self, *args, **kwargs):

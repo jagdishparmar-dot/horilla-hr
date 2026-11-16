@@ -2,6 +2,8 @@ import logging
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
+
+from horilla.tenant_command import TenantSlugMixin
 from django.db import connection
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from simple_history.models import HistoricalRecords
@@ -12,7 +14,7 @@ from dynamic_fields.models import DynamicField
 logger = logging.getLogger(__name__)
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     """
     Command
     """

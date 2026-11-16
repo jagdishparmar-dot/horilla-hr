@@ -131,6 +131,7 @@ RUN apt-get install -y --no-install-recommends \
         libxml2 \
         libxslt1.1 \
         libffi8 \
+        postgresql-client \
         curl \
         ca-certificates \
         netcat-openbsd \

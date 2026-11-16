@@ -2,10 +2,12 @@ import json
 
 from django.core.management.base import BaseCommand
 
+from horilla.tenant_command import TenantSlugMixin
+
 from helpdesk.models import FAQ, FAQCategory
 
 
-class Command(BaseCommand):
+class Command(TenantSlugMixin, BaseCommand):
     help = "Create FAQ categories and FAQs from a JSON file"
 
     def add_arguments(self, parser):

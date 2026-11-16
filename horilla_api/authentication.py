@@ -35,10 +35,13 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import AuthenticationFailed
 
+from control.context import get_tenant_alias
 from horilla.horilla_middlewares import set_selected_company
 
 logger = logging.getLogger(__name__)
@@ -83,6 +86,17 @@ def resolve_company_id(user):
         return None
 
 
+def stamp_tenant_claim(token):
+    """Bind a new token to the tenant selected from the request host."""
+    if not getattr(settings, "HORILLA_MULTITENANT", False):
+        return token
+    alias = get_tenant_alias()
+    if not alias or not str(alias).startswith("tenant_"):
+        raise AuthenticationFailed(_("No workspace is selected for this token."))
+    token["tenant_slug"] = str(alias)[len("tenant_") :]
+    return token
+
+
 class TenantScopedJWTAuthentication(JWTAuthentication):
     """JWTAuthentication that also establishes tenant scope.
 
@@ -97,13 +111,24 @@ class TenantScopedJWTAuthentication(JWTAuthentication):
     """
 
     def authenticate(self, request):
-        result = super().authenticate(request)
-        if result is None:
-            # No credentials offered; leave scope unset. DRF's IsAuthenticated
-            # rejects the request before any queryset is built.
+        header = self.get_header(request)
+        if header is None:
             return None
-
-        user, validated_token = result
+        raw_token = self.get_raw_token(header)
+        if raw_token is None:
+            return None
+        validated_token = self.get_validated_token(raw_token)
+        # The host already selected the database. Reject another tenant's
+        # token before that user id is looked up.
+        if getattr(settings, "HORILLA_MULTITENANT", False):
+            tenant = getattr(request, "tenant", None)
+            claimed = validated_token.get("tenant_slug")
+            if tenant is None or claimed != tenant.slug:
+                raise AuthenticationFailed(
+                    _("Token is not valid for this workspace."),
+                    code="wrong_tenant",
+                )
+        user = self.get_user(validated_token)
         company_id = resolve_company_id(user)
         if company_id is not None:
             set_selected_company(company_id)
