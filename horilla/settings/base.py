@@ -101,6 +101,9 @@ INSTALLED_APPS = [
     "horilla_dbtemplate",
     "horilla_tour",
     "master_import",
+    # Control plane. Models arrive in a later phase; P0 only registers the
+    # slug gate and the tenant-password key check.
+    "control.apps.ControlConfig",
 ]
 
 # ========================================
@@ -694,6 +697,35 @@ if IS_PRODUCTION:
 # inactivity window instead, which is what access-control audits ask for.
 SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=12 * 60 * 60)
 SESSION_SAVE_EVERY_REQUEST = True
+# Host-only cookies. A session or CSRF cookie for one tenant host must not
+# be sent to another host on the same parent domain.
+SESSION_COOKIE_DOMAIN = None
+CSRF_COOKIE_DOMAIN = None
+
+# ========================================
+# TENANT HOSTS AND CONNECTION BUDGET
+# ========================================
+# Local tenants use <slug>.localhost (resolves to loopback). Production sets
+# HORILLA_PLATFORM_DOMAIN to the real parent domain. The dashboard is a
+# separate host and never a tenant subdomain of convenience.
+HORILLA_PLATFORM_DOMAIN = (
+    env("HORILLA_PLATFORM_DOMAIN", default="localhost").strip().lower().rstrip(".")
+)
+_dashboard_host = env("HORILLA_DASHBOARD_HOST", default="").strip().lower().rstrip(".")
+HORILLA_DASHBOARD_HOST = _dashboard_host or f"manage.{HORILLA_PLATFORM_DOMAIN}"
+# Off until the control database and tenant routing exist. When this is on,
+# TENANT_DB_FERNET_KEY must be set. The key is not stored in Django settings.
+HORILLA_MULTITENANT = env.bool("HORILLA_MULTITENANT", default=False)
+# Tenant aliases must use this. A persistent connection per customer per
+# worker exhausts Postgres max_connections. PgBouncer is not part of the
+# first cutover. Leave Postgres max_connections at the image default until
+# more than about 30 active tenants are expected. The scheduler stays at
+# one replica; web may scale.
+TENANT_CONN_MAX_AGE = 0
+
+from control.secrets import tenant_db_fernet_key  # noqa: E402
+
+tenant_db_fernet_key()
 
 # Rate limiting is production protection, not behaviour the rest of the suite
 # should have to work around. Throttle counters live in the cache keyed by

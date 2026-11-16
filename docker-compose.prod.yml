@@ -59,6 +59,9 @@ services:
     deploy:
       replicas: 1
 
+  # Same connection budget as docker-compose.yml: CONN_MAX_AGE=0 for tenant
+  # databases, image-default max_connections until about 30 tenants, no
+  # PgBouncer in the first cutover. Scheduler replicas stay at 1.
   db:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-horilla_db}

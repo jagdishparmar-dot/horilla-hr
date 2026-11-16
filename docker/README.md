@@ -178,6 +178,10 @@ make logs
 | `DATABASE_URL` | `postgres://...@db:5432/...` | PostgreSQL connection string. `db` is the Docker service name |
 | `DB_INIT_PASSWORD` | `dev-init-password...` | Initial database setup password — **change for production** |
 | `REDIS_URL` | `redis://:...@redis:6379/0` | Redis connection string (includes password) |
+| `HORILLA_PLATFORM_DOMAIN` | `localhost` | Parent domain for tenant hosts `<slug>.<domain>`. Local tenants use `<slug>.localhost` |
+| `HORILLA_DASHBOARD_HOST` | `manage.<platform-domain>` | Operator dashboard host. Not a customer tenant |
+| `HORILLA_MULTITENANT` | `false` | When `true`, startup requires `TENANT_DB_FERNET_KEY` |
+| `TENANT_DB_FERNET_KEY` | unset | Fernet key for tenant database passwords. Required only when multitenant is on. Do not commit a real value |
 
 #### PostgreSQL Settings
 

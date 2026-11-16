@@ -88,6 +88,11 @@ services:
       disable: true
     restart: unless-stopped
 
+  # Connection budget (database-per-tenant): tenant connections use
+  # CONN_MAX_AGE=0 so a worker does not keep one connection per customer.
+  # Leave Postgres max_connections at the image default until about 30
+  # active tenants. PgBouncer is a later addition, not part of the first
+  # cutover. Web may scale; scheduler stays at one replica (see above).
   db:
     image: postgres:16-alpine
     environment:
