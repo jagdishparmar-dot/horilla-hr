@@ -1,0 +1,64 @@
+{% extends "control/base.html" %}
+{% block title %}{{ tenant.name }}{% endblock %}
+{% block content %}
+  <h1>{{ tenant.name }}</h1>
+  <p>{{ tenant.slug }} · {{ tenant.status }}{% if tenant.plan %} · {{ tenant.plan }}{% endif %}</p>
+
+  <h2>Domains</h2>
+  <ul>
+    {% for domain in domains %}
+      <li>
+        {{ domain.host }}
+        {% if domain.is_primary %}primary{% endif %}
+        {% if domain.verified %}verified{% else %}unverified{% endif %}
+      </li>
+    {% empty %}
+      <li>No domain yet.</li>
+    {% endfor %}
+  </ul>
+
+  <div class="actions">
+    <form method="post" action="{% url 'control-tenant-suspend' tenant.slug %}">{% csrf_token %}<button class="quiet" type="submit">Suspend</button></form>
+    <form method="post" action="{% url 'control-tenant-resume' tenant.slug %}">{% csrf_token %}<button class="quiet" type="submit">Resume</button></form>
+    <form method="post" action="{% url 'control-tenant-backup' tenant.slug %}">{% csrf_token %}<button class="quiet" type="submit">Backup now</button></form>
+    <form method="post" action="{% url 'control-tenant-migrate' tenant.slug %}">{% csrf_token %}<button class="quiet" type="submit">Migrate</button></form>
+  </div>
+  <p class="note">Backup, migrate, and restore stay queued until the backup worker is in place. None of these buttons open the tenant database.</p>
+
+  <h2>Restore</h2>
+  {% if restore_error %}<p class="error">{{ restore_error }}</p>{% endif %}
+  <form method="post" action="{% url 'control-tenant-restore' tenant.slug %}">
+    {% csrf_token %}
+    {{ restore_form.as_p }}
+    <button class="quiet" type="submit">Queue restore</button>
+  </form>
+
+  <h2>Delete</h2>
+  {% if delete_error %}<p class="error">{{ delete_error }}</p>{% endif %}
+  <form method="post" action="{% url 'control-tenant-delete' tenant.slug %}">
+    {% csrf_token %}
+    {{ delete_form.as_p }}
+    <button class="danger" type="submit">Queue delete</button>
+  </form>
+
+  <h2>Jobs</h2>
+  <table>
+    <thead>
+      <tr><th>Kind</th><th>Status</th><th>Step</th><th>Error</th><th>Started</th><th>Finished</th></tr>
+    </thead>
+    <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td>{{ job.kind }}</td>
+          <td>{{ job.status }}</td>
+          <td>{{ job.step }}</td>
+          <td>{{ job.error }}</td>
+          <td>{{ job.started_at|default:"" }}</td>
+          <td>{{ job.finished_at|default:"" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No jobs.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

@@ -144,3 +144,38 @@ class ProvisionJob(models.Model):
 
     def __str__(self) -> str:
         return f"{self.kind} {self.status} ({self.tenant.slug})"
+
+
+class OperatorAudit(models.Model):
+    """Who changed a tenant or an operator. Never store a password here."""
+
+    class Action(models.TextChoices):
+        CREATE = "create", "Create"
+        SUSPEND = "suspend", "Suspend"
+        RESUME = "resume", "Resume"
+        BACKUP = "backup", "Backup"
+        RESTORE = "restore", "Restore"
+        MIGRATE = "migrate", "Migrate"
+        DELETE = "delete", "Delete"
+        OPERATOR_CREATE = "operator_create", "Operator create"
+        OPERATOR_DEACTIVATE = "operator_deactivate", "Operator deactivate"
+
+    operator = models.ForeignKey(
+        Operator,
+        on_delete=models.PROTECT,
+        related_name="audits",
+    )
+    action = models.CharField(max_length=32, choices=Action.choices)
+    slug = models.CharField(max_length=31, blank=True)
+    detail = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "operator audit"
+
+    def save(self, *args, **kwargs):
+        self.detail = redact_job_error(self.detail or "")
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.action} {self.slug}".strip()

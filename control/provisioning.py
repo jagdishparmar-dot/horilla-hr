@@ -91,6 +91,45 @@ def enqueue_resume(tenant):
     )
 
 
+def enqueue_backup(tenant):
+    """Queue a backup. Phase 5 runs pg_dump; this does not open the database."""
+    return ProvisionJob.objects.create(
+        tenant=tenant,
+        kind=ProvisionJob.Kind.BACKUP,
+        status=ProvisionJob.Status.QUEUED,
+    )
+
+
+def enqueue_migrate(tenant):
+    """Queue a migrate. The worker does not run it until tenant migrate jobs are enabled."""
+    return ProvisionJob.objects.create(
+        tenant=tenant,
+        kind=ProvisionJob.Kind.MIGRATE,
+        status=ProvisionJob.Status.QUEUED,
+    )
+
+
+def enqueue_restore(tenant, dump_name):
+    """Queue a restore. The dump name is a file name, not a path or a password."""
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,200}", dump_name or ""):
+        raise ProvisionError("Dump name is not valid.")
+    return ProvisionJob.objects.create(
+        tenant=tenant,
+        kind=ProvisionJob.Kind.RESTORE,
+        status=ProvisionJob.Status.QUEUED,
+        payload={"dump_name": dump_name},
+    )
+
+
+# Phase 5 claims these. Until then they stay queued so the worker does not
+# mark them failed or touch a tenant database.
+DEFERRED_JOB_KINDS = (
+    ProvisionJob.Kind.BACKUP,
+    ProvisionJob.Kind.MIGRATE,
+    ProvisionJob.Kind.RESTORE,
+)
+
+
 def enqueue_delete(tenant, confirm_slug):
     if confirm_slug != tenant.slug:
         raise ProvisionError("Slug confirmation does not match.")
@@ -259,6 +298,7 @@ def _claim_next_job():
         job = (
             ProvisionJob.objects.select_for_update(skip_locked=True)
             .filter(status=ProvisionJob.Status.QUEUED)
+            .exclude(kind__in=DEFERRED_JOB_KINDS)
             .order_by("pk")
             .first()
         )

@@ -205,7 +205,9 @@ MIDDLEWARE = [
     "control.middleware.TenantMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.gzip.GZipMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    # Same session store. The dashboard host uses control_sessionid so it
+    # cannot be read as a Horilla employee session. Other hosts keep sessionid.
+    "control.sessions.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "simple_history.middleware.HistoryRequestMiddleware",
@@ -369,6 +371,20 @@ TEMPLATES = [
                 "horilla_crumbs.context_processors.breadcrumbs",
             ],
             "loaders": [("django.template.loaders.cached.Loader", _TEMPLATE_LOADERS)],
+        },
+    },
+    # Operator pages only. No database template loader and no Horilla context
+    # processors, both of which query customer tables.
+    {
+        "NAME": "control",
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "control" / "templates"],
+        "APP_DIRS": False,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.template.context_processors.csrf",
+            ],
         },
     },
 ]

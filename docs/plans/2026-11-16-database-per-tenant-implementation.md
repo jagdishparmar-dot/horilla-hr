@@ -25,12 +25,12 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 1. Control plane | 6 | 6 |
 | 2. Request routing | 7 | 7 |
 | 3. Provisioning engine | 8 | 8 |
-| 4. Operator dashboard | 8 | 0 |
+| 4. Operator dashboard | 8 | 7 |
 | 5. Runtime isolation | 7 | 0 |
 | 6. Deploy and hosts | 6 | 0 |
 | 7. Isolation tests | 6 | 0 |
 | 8. Cutover | 5 | 0 |
-| **Total** | **57** | **25** |
+| **Total** | **57** | **32** |
 
 ### Progress log
 
@@ -41,6 +41,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 2026-11-16 | P1 | Control models, Fernet password storage, router, and `migrate_tenants` are in place. Strict routing stays off until `HORILLA_MULTITENANT` is enabled. 23 control tests passed. |
 | 2026-11-16 | P2 | Host routing is in place and stays off until `HORILLA_MULTITENANT` is enabled. Dashboard and tenant URL confs are separate. |
 | 2026-11-16 | P3 | Provisioning jobs run in the single scheduler replica. Create, suspend, resume, retry, and delete are queued. Delete keeps the tenant row as `deleted` and refuses to drop a database until P5 supplies `pg_dump`. 11 phase-3 tests passed. |
+| 2026-11-16 | P4 | Operator dashboard is on the management host with cookie `control_sessionid`. Create, suspend, resume, backup, migrate, restore, and delete only enqueue jobs. Backup, migrate, and restore stay queued until phase 5. P4-07 stays open until custom-domain nginx exists. 7 phase-4 tests passed. |
 
 ## Locked decisions
 
@@ -456,9 +457,9 @@ Sequence, each step recorded on `ProvisionJob.step`:
 
 The dashboard is server-rendered Django, on the management host only, using `control.Operator` sessions. It does not reuse Horilla employee templates for authorization.
 
-### [ ] P4-01 Operator login and logout
+### [x] P4-01 Operator login and logout
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Session cookie name is `control_sessionid`.
 - **Depends on:** P2-04, P1-02
 - **Files:** `control/auth.py`, `control/views.py`, `control/templates/control/login.html`
 - **Done when:**
@@ -467,16 +468,16 @@ The dashboard is server-rendered Django, on the management host only, using `con
   - The session cookie name is distinct from the Horilla session cookie (proposed: `control_sessionid`) so a tenant session and an operator session cannot be confused.
   - Logout clears that cookie.
 
-### [ ] P4-02 Tenant list
+### [x] P4-02 Tenant list
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P4-01
 - **Files:** `control/views.py`, `control/templates/control/tenant_list.html`
 - **Done when:** the page lists name, slug, primary host, status, last job result, last backup time. It does not query tenant databases for employee counts on first load (that can be a later column fed by a job).
 
-### [ ] P4-03 Create-tenant form
+### [x] P4-03 Create-tenant form
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P4-02, P3-05
 - **Files:** `control/forms.py`, `control/templates/control/tenant_form.html`
 - **Fields:** company name, slug, admin name, admin email, temporary password, plan.
@@ -485,29 +486,29 @@ The dashboard is server-rendered Django, on the management host only, using `con
   - The request returns before `CREATE DATABASE` finishes.
   - Duplicate slug shows a form error.
 
-### [ ] P4-04 Tenant detail and job log
+### [x] P4-04 Tenant detail and job log
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Backup, migrate, and restore jobs stay queued until phase 5 claims them.
 - **Depends on:** P4-03
 - **Files:** `control/templates/control/tenant_detail.html`
 - **Done when:** the page shows domains, status, and every `ProvisionJob` step and error. Actions: suspend, resume, backup now, migrate, delete. Each action inserts a job; it does not perform the SQL inline.
 
-### [ ] P4-05 Delete confirmation
+### [x] P4-05 Delete confirmation
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P4-04, P3-07
 - **Done when:** the operator must type the slug. A mismatched slug does not enqueue `delete`.
 
-### [ ] P4-06 Operator management
+### [x] P4-06 Operator management
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P4-01
 - **Files:** `control/views.py`, `control/templates/control/operators.html`
 - **Done when:** a staff operator can create and deactivate another operator. The last active staff operator cannot deactivate themselves.
 
 ### [ ] P4-07 Custom-domain screen (milestone 2)
 
-- **Status:** Not started
+- **Status:** Not started. Left open: nginx for a custom domain is P6-04, which is not done. Subdomains from P4-04 are enough until then.
 - **Depends on:** P4-04, P6-04
 - **Done when:**
   - The form adds an unverified `Domain`.
@@ -515,9 +516,9 @@ The dashboard is server-rendered Django, on the management host only, using `con
   - The host is attached in nginx and `verified=True` only after the check succeeds.
   - This task can stay open for the first production cutover. Subdomains are enough for milestone 1.
 
-### [ ] P4-08 Audit the dashboard itself
+### [x] P4-08 Audit the dashboard itself
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Rows live in `OperatorAudit`. The detail text is redacted and the page does not render job payloads.
 - **Depends on:** P4-04
 - **Files:** `control/models.py` (small `OperatorAudit` model or structured logs)
 - **Done when:** create, suspend, resume, backup, restore, delete, and operator changes write who did it, when, and which slug. Passwords are not in the audit row.
