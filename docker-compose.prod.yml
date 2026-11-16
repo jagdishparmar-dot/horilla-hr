@@ -62,6 +62,10 @@ services:
   # Same connection budget as docker-compose.yml: CONN_MAX_AGE=0 for tenant
   # databases, image-default max_connections until about 30 tenants, no
   # PgBouncer in the first cutover. Scheduler replicas stay at 1.
+  # Control login on a new volume comes from docker/postgres/init-control.sql
+  # (mounted in docker-compose.yml). It can create tenant databases. Tenant
+  # sessions do not use that login. Existing volumes keep the current
+  # superuser, which already has CREATEDB and CREATEROLE.
   db:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-horilla_db}

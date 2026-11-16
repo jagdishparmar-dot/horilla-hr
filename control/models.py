@@ -40,6 +40,7 @@ class Tenant(models.Model):
         SUSPENDED = "suspended", "Suspended"
         FAILED = "failed", "Failed"
         DELETING = "deleting", "Deleting"
+        DELETED = "deleted", "Deleted"
 
     name = models.CharField(max_length=200)
     slug = models.CharField(max_length=31, unique=True)
@@ -56,6 +57,7 @@ class Tenant(models.Model):
     plan = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     activated_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "tenant"
@@ -108,6 +110,7 @@ class ProvisionJob(models.Model):
         BACKUP = "backup", "Backup"
         RESTORE = "restore", "Restore"
         SUSPEND = "suspend", "Suspend"
+        RESUME = "resume", "Resume"
         DELETE = "delete", "Delete"
 
     class Status(models.TextChoices):
@@ -129,6 +132,7 @@ class ProvisionJob(models.Model):
         default=Status.QUEUED,
     )
     error = models.TextField(blank=True)
+    payload = models.JSONField(default=dict, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
 

@@ -169,3 +169,6 @@ CLAUDE.md
 # Local scratch (ad-hoc UI screenshots / test scripts)
 /tmp/
 /_tmp_*
+
+# Per-tenant database dumps. Never commit these.
+/backups/

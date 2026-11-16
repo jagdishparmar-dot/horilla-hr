@@ -53,6 +53,8 @@ services:
   # migrate and migrate_tenants run only from the web entrypoint. A second
   # container that also runs those release tasks will deadlock on DDL.
   # Extra web replicas must set HORILLA_SKIP_RELEASE_TASKS=1.
+  # Tenant provisioning (run_provisioner / control.scheduler) also lives only
+  # in this one replica. A second provisioner could create the same database twice.
   scheduler:
     image: horilla-hr:local
     build:
@@ -104,6 +106,10 @@ services:
       POSTGRES_PASSWORD: horilla_pass
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Applied only when the data volume is first created. The control login
+      # (POSTGRES_USER) may CREATE DATABASE and CREATE ROLE. Tenant queries
+      # connect as tenant_<slug>, never as this login.
+      - ./docker/postgres/init-control.sql:/docker-entrypoint-initdb.d/10-control.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U horilla_user -d horilla_db"]
       interval: 5s

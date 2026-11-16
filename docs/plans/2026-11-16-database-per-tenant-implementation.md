@@ -24,13 +24,13 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 0. Guardrails | 4 | 4 |
 | 1. Control plane | 6 | 6 |
 | 2. Request routing | 7 | 7 |
-| 3. Provisioning engine | 8 | 0 |
+| 3. Provisioning engine | 8 | 8 |
 | 4. Operator dashboard | 8 | 0 |
 | 5. Runtime isolation | 7 | 0 |
 | 6. Deploy and hosts | 6 | 0 |
 | 7. Isolation tests | 6 | 0 |
 | 8. Cutover | 5 | 0 |
-| **Total** | **57** | **17** |
+| **Total** | **57** | **25** |
 
 ### Progress log
 
@@ -40,6 +40,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 2026-11-16 | P0 | Guardrails committed on `feature/database-per-tenant`. Local hosts are `<slug>.localhost` and `manage.localhost`. Production domain stays in `HORILLA_PLATFORM_DOMAIN`. |
 | 2026-11-16 | P1 | Control models, Fernet password storage, router, and `migrate_tenants` are in place. Strict routing stays off until `HORILLA_MULTITENANT` is enabled. 23 control tests passed. |
 | 2026-11-16 | P2 | Host routing is in place and stays off until `HORILLA_MULTITENANT` is enabled. Dashboard and tenant URL confs are separate. |
+| 2026-11-16 | P3 | Provisioning jobs run in the single scheduler replica. Create, suspend, resume, retry, and delete are queued. Delete keeps the tenant row as `deleted` and refuses to drop a database until P5 supplies `pg_dump`. 11 phase-3 tests passed. |
 
 ## Locked decisions
 
@@ -362,9 +363,9 @@ Behavior:
 
 Provisioning runs in the scheduler process (or a dedicated `python manage.py run_provisioner` in that same single replica). The dashboard request only inserts a `ProvisionJob`. It does not call `CREATE DATABASE`.
 
-### [ ] P3-01 Control role can create databases
+### [x] P3-01 Control role can create databases
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P0-02
 - **Files:** `docker/postgres/init-control.sql` (new), `docker-compose.yml`, `docker-compose.prod.yml`
 - **Done when:**
@@ -372,9 +373,9 @@ Provisioning runs in the scheduler process (or a dedicated `python manage.py run
   - The control login is not used as the Django connection for tenant queries.
   - App startup still waits on Postgres via `docker/entrypoint.sh`.
 
-### [ ] P3-02 SQL steps for a new tenant
+### [x] P3-02 SQL steps for a new tenant
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P3-01, P1-03
 - **Files:** `control/provisioning.py`
 
@@ -390,9 +391,9 @@ Sequence, each step recorded on `ProvisionJob.step`:
 
 **Done when:** a second tenant role cannot `psql` into the first tenant’s database.
 
-### [ ] P3-03 Migrate and seed inside the new database
+### [x] P3-03 Migrate and seed inside the new database
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P3-02, P1-05
 - **Files:** `control/provisioning.py`
 - **Done when:**
@@ -401,9 +402,9 @@ Sequence, each step recorded on `ProvisionJob.step`:
   - The minimum `Company` row your current install expects is created in that same database.
   - Failure sets `Tenant.status = failed` and does not insert a usable primary `Domain`.
 
-### [ ] P3-04 Activate the hostname
+### [x] P3-04 Activate the hostname
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P3-03
 - **Files:** `control/provisioning.py`
 - **Done when:**
@@ -411,19 +412,19 @@ Sequence, each step recorded on `ProvisionJob.step`:
   - `Tenant.status` becomes `active` only after migrate and seed succeed.
   - A request to that host reaches Horilla login and sees only the seeded company.
 
-### [ ] P3-05 Provisioner loop
+### [x] P3-05 Provisioner loop
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P3-04
 - **Files:** `control/management/commands/run_provisioner.py` or an extra job inside `base/management/commands/run_scheduler.py`
 - **Done when:**
   - Queued jobs run one at a time.
-  - A crashed worker leaves the job `running` with `started_at` set; a restart reclaims jobs older than a documented timeout (proposed: 30 minutes) by marking them `failed`.
+  - A crashed worker leaves the job `running` with `started_at` set; a restart reclaims jobs older than 30 minutes by marking them `failed`.
   - Two provisioners cannot run: the process lives in the single scheduler replica.
 
-### [ ] P3-06 Suspend and resume
+### [x] P3-06 Suspend and resume
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P2-03, P3-05
 - **Files:** `control/provisioning.py`
 - **Done when:**
@@ -431,20 +432,20 @@ Sequence, each step recorded on `ProvisionJob.step`:
   - The host then returns 403.
   - Resume sets `active` without re-running `CREATE DATABASE`.
 
-### [ ] P3-07 Delete
+### [x] P3-07 Delete
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). The dump file itself is still P5-05. Until that lands, `dump_tenant` raises and a real delete cannot drop the database.
 - **Depends on:** P3-05, P5-05
 - **Files:** `control/provisioning.py`
 - **Done when:**
   - Delete requires the job payload to contain the exact slug.
   - A dump is taken first (P5-05).
-  - Then `DROP DATABASE` and `DROP ROLE`, domain rows are removed, and status ends `deleted` or the row is removed. Pick one and record it here when implementing: **proposed: keep the row with status `deleted` and a `deleted_at` timestamp**.
+  - Then `DROP DATABASE` and `DROP ROLE`, domain rows are removed, and status ends `deleted` or the row is removed. Decision: keep the row with status `deleted` and `deleted_at`. `dump_tenant` fails closed until P5-05 replaces it with `pg_dump`.
   - The hostname 404s afterwards.
 
-### [ ] P3-08 Retry from the last successful step
+### [x] P3-08 Retry from the last successful step
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P3-05
 - **Files:** `control/provisioning.py`
 - **Done when:** a tenant left in `failed` after `CREATE DATABASE` can be retried without a second `CREATE DATABASE` error, and the job log shows the resumed step.
