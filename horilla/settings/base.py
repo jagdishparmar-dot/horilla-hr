@@ -268,6 +268,10 @@ def _configure_sqlite_connection(sender, connection, **kwargs):
 
 connection_created.connect(_configure_sqlite_connection)
 
+# Control-plane tables stay on ``default``. HR apps move to a tenant alias
+# only when HORILLA_MULTITENANT is on; until then the router is a no-op.
+DATABASE_ROUTERS = ["control.router.TenantRouter"]
+
 # ========================================
 # CACHE (optional Redis when REDIS_URL is set)
 # ========================================

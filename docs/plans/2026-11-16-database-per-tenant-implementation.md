@@ -22,7 +22,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | Phase | Tasks | Done |
 | --- | ---: | ---: |
 | 0. Guardrails | 4 | 4 |
-| 1. Control plane | 6 | 0 |
+| 1. Control plane | 6 | 6 |
 | 2. Request routing | 7 | 0 |
 | 3. Provisioning engine | 8 | 0 |
 | 4. Operator dashboard | 8 | 0 |
@@ -30,7 +30,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 6. Deploy and hosts | 6 | 0 |
 | 7. Isolation tests | 6 | 0 |
 | 8. Cutover | 5 | 0 |
-| **Total** | **57** | **4** |
+| **Total** | **57** | **10** |
 
 ### Progress log
 
@@ -38,6 +38,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | --- | --- | --- |
 | 2026-11-16 | — | Plan drafted from the database-per-tenant design. No code yet. |
 | 2026-11-16 | P0 | Guardrails committed on `feature/database-per-tenant`. Local hosts are `<slug>.localhost` and `manage.localhost`. Production domain stays in `HORILLA_PLATFORM_DOMAIN`. |
+| 2026-11-16 | P1 | Control models, Fernet password storage, router, and `migrate_tenants` are in place. Strict routing stays off until `HORILLA_MULTITENANT` is enabled. 23 control tests passed. |
 
 ## Locked decisions
 
@@ -177,18 +178,18 @@ Starting limits:
 
 ## Phase 1 — Control plane
 
-### [ ] P1-01 Add the `control` app
+### [x] P1-01 Add the `control` app
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P0-01
 - **Files:** `control/models.py` (`control` is already installed from P0)
 - **Done when:**
   - `control` models exist and are the only new tables intended for the control database.
   - No Horilla HR model is imported into `control`.
 
-### [ ] P1-02 Models: `Operator`, `Tenant`, `Domain`, `ProvisionJob`
+### [x] P1-02 Models: `Operator`, `Tenant`, `Domain`, `ProvisionJob`
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P1-01, P0-02, P0-03
 - **Files:** `control/models.py`, `control/migrations/0001_initial.py`
 
@@ -215,9 +216,11 @@ Starting limits:
 
 **Done when:** `migrate` on a scratch control database creates only these tables plus Django tables that Phase 2 explicitly allows in the control database.
 
-### [ ] P1-03 Encrypt and decrypt the tenant DB password
+`control.0001_initial` creates these four tables. While `HORILLA_MULTITENANT` is off they live in the current database. The control allow-list, used once the flag is on, is `control`, `contenttypes`, `auth`, `sessions`, and `django_apscheduler`. `horilla_auth` and `employee` are not on that list.
 
-- **Status:** Not started
+### [x] P1-03 Encrypt and decrypt the tenant DB password
+
+- **Status:** Done (2026-11-16)
 - **Depends on:** P1-02, P0-03
 - **Files:** `control/crypto.py`
 - **Done when:**
@@ -225,9 +228,9 @@ Starting limits:
   - A missing `TENANT_DB_FERNET_KEY` raises at first use in production.
   - `__str__` on `Tenant` does not include the password or the ciphertext.
 
-### [ ] P1-04 Database router
+### [x] P1-04 Database router
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P1-01
 - **Files:** `control/router.py`, `horilla/settings/base.py` (`DATABASE_ROUTERS`)
 
@@ -240,9 +243,11 @@ Behavior:
 
 **Done when:** a test that queries `employee` models with no alias fails, and a test that migrates `control` does not create `Employee` in the control database.
 
-### [ ] P1-05 Management command `migrate_tenants`
+Strict routing runs only when `HORILLA_MULTITENANT` is on. With the flag off the router is a no-op, so the current single-tenant stack keeps using `default`. The alias holder is `control/context.py`; Phase 2 still wraps it around each request.
 
-- **Status:** Not started
+### [x] P1-05 Management command `migrate_tenants`
+
+- **Status:** Done (2026-11-16)
 - **Depends on:** P1-02, P1-04
 - **Files:** `control/management/commands/migrate_tenants.py`
 - **Done when:**
@@ -250,9 +255,9 @@ Behavior:
   - One failure is recorded on a `ProvisionJob` and the command continues to the next tenant, then exits non-zero if any tenant failed.
   - It refuses to migrate a `suspended` tenant unless `--include-suspended` is passed.
 
-### [ ] P1-06 Split startup migrate
+### [x] P1-06 Split startup migrate
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P1-05
 - **Files:** `docker/entrypoint.sh`
 - **Done when:**
@@ -268,7 +273,7 @@ Behavior:
 
 - **Status:** Not started
 - **Depends on:** P1-04
-- **Files:** `control/context.py`
+- **Files:** `control/context.py` (alias get/activate/clear landed in P1; this task still adds the request `finally` and the two-request test)
 - **Done when:**
   - `activate(alias)` / `clear()` work, and `clear()` runs in a `finally` so a request cannot leak an alias into the next request on the same thread.
   - Tests cover two sequential requests on different aliases.
@@ -277,7 +282,7 @@ Behavior:
 
 - **Status:** Not started
 - **Depends on:** P2-01, P1-03
-- **Files:** `control/db.py`
+- **Files:** `control/db.py` (`ensure_tenant_connection` landed in P1; this task still proves first use from a request)
 
 Register `connections.databases["tenant_<slug>"]` on first use with:
 

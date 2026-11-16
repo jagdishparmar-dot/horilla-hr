@@ -72,6 +72,9 @@ if [ "${HORILLA_SKIP_RELEASE_TASKS:-0}" = "1" ]; then
 fi
 
 python manage.py migrate --noinput
+# Tenant databases are migrated one at a time after the control database.
+# With HORILLA_MULTITENANT left off this finds no tenants and exits cleanly.
+python manage.py migrate_tenants
 
 # Collect static files.
 #

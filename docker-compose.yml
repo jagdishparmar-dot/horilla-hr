@@ -49,7 +49,10 @@ services:
 
   # Background jobs run here, NOT in the web workers. Keep this at exactly one
   # replica: the jobs are not idempotent, so a second copy means a second
-  # payslip run and a second backup. Scaling `web` is safe; scaling this is not.
+  # payslip run and a second backup. Scaling this service is not safe.
+  # migrate and migrate_tenants run only from the web entrypoint. A second
+  # container that also runs those release tasks will deadlock on DDL.
+  # Extra web replicas must set HORILLA_SKIP_RELEASE_TASKS=1.
   scheduler:
     image: horilla-hr:local
     build:
