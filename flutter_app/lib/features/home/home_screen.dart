@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +15,7 @@ import '../shell/main_shell.dart';
 import 'fence_status_line.dart';
 import 'home_extra_sections.dart';
 import 'home_provider.dart';
+import 'home_typography.dart';
 import 'models.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -24,38 +25,57 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final homeAsync = ref.watch(mobileHomeProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      body: SafeArea(
-        child: homeAsync.when(
-          skipLoadingOnReload: true,
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorPane(
-            message: userFacingError(e),
-            onRetry: () => ref.invalidate(mobileHomeProvider),
-            onLogout: () => ref.read(authProvider.notifier).logout(),
-          ),
-          data: (home) => RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(mobileHomeProvider);
-              ref.invalidate(punchFenceProvider);
-              await ref.read(mobileHomeProvider.future);
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
+    Future<void> refresh() async {
+      ref.invalidate(mobileHomeProvider);
+      ref.invalidate(punchFenceProvider);
+      try {
+        await ref.read(mobileHomeProvider.future);
+      } catch (_) {
+        // The provider keeps the error; the pane below shows it.
+      }
+    }
+
+    return Theme(
+      data: HomeType.of(context),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
+        child: Scaffold(
+          backgroundColor: AppColors.scaffold,
+          body: homeAsync.when(
+            skipLoadingOnReload: true,
+            loading: () => const SafeArea(
+              bottom: false,
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.navBlue),
               ),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            ),
+            error: (e, _) => _PinnedRefresh(
+              onRefresh: refresh,
+              header: const SizedBox(height: 4),
+              child: _ErrorPane(
+                message: userFacingError(e),
+                onRetry: () {
+                  refresh();
+                },
+                onLogout: () => ref.read(authProvider.notifier).logout(),
+              ),
+            ),
+            data: (home) => _PinnedRefresh(
+              onRefresh: refresh,
+              header: HomeReveal(index: 0, child: _Header(home: home)),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  HomeReveal(index: 0, child: _Header(home: home)),
-                  const SizedBox(height: 16),
                   HomeReveal(index: 1, child: _AttendanceCard(home: home)),
                   const SizedBox(height: 16),
                   HomeReveal(index: 2, child: _QuickActions(home: home)),
                   if (home.announcement != null) ...[
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 24),
                     HomeReveal(
                       index: 3,
                       child: HomeAnnouncementSection(
@@ -63,12 +83,12 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 24),
                   HomeReveal(
                     index: 4,
                     child: HomeWorkScheduleSection(schedule: home.workSchedule),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 24),
                   HomeReveal(
                     index: 5,
                     child: HomeRecentRequestsSection(
@@ -76,27 +96,27 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   if (home.birthdays.isNotEmpty) ...[
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 24),
                     HomeReveal(
                       index: 6,
                       child: HomePeopleMessageSection(
-                        title: 'Birthdays',
+                        title: 'Birthdays Today',
                         colleagues: home.birthdays,
                         placeholder: 'Write a birthday wish...',
-                        avatarColor: const Color(0xFFEC4899),
+                        avatarColor: AppColors.navBlue,
                         icon: HugeIcons.strokeRoundedGift,
                       ),
                     ),
                   ],
                   if (home.newHires.isNotEmpty) ...[
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 24),
                     HomeReveal(
                       index: 7,
                       child: HomePeopleMessageSection(
                         title: 'New Hires',
                         colleagues: home.newHires,
                         placeholder: 'Write a welcome message...',
-                        avatarColor: const Color(0xFF22B8E8),
+                        avatarColor: AppColors.navBlue,
                         icon: HugeIcons.strokeRoundedUserAdd01,
                       ),
                     ),
@@ -107,6 +127,75 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Keeps [header] fixed under the status bar while only [child] scrolls
+/// and accepts the pull-to-refresh gesture.
+class _PinnedRefresh extends StatelessWidget {
+  const _PinnedRefresh({
+    required this.header,
+    required this.child,
+    required this.onRefresh,
+  });
+
+  final Widget header;
+  final Widget child;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFF0F5FF), Colors.white],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, top + 10, 16, 12),
+                child: header,
+              ),
+              const Divider(height: 1, thickness: 1, color: homeLine),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ClipRect(
+            child: RefreshIndicator(
+              color: AppColors.navBlue,
+              backgroundColor: Colors.white,
+              displacement: 28,
+              onRefresh: onRefresh,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight > 32
+                            ? constraints.maxHeight - 32
+                            : 0,
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -133,131 +222,201 @@ class _Header extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final avatar = _resolveAvatar(home.avatarUrl);
     final role = home.roleLine;
-    final dateLabel = DateFormat('EEE, MMM d').format(DateTime.now());
+    final dateLabel = DateFormat('EEEE, MMM d').format(DateTime.now());
+    final hour = DateTime.now().hour;
+    final greetingIcon = hour < 17
+        ? HugeIcons.strokeRoundedSun03
+        : HugeIcons.strokeRoundedMoon02;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2F6BFF), Color(0xFF6D5CFF), Color(0xFF9B5CFF)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2F6BFF).withValues(alpha: 0.28),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        PopupMenuButton<String>(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          onSelected: (value) {
+            if (value == 'logout') {
+              ref.read(authProvider.notifier).logout();
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'logout', child: Text('Sign out')),
+          ],
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                Text(
-                  '$_greeting 👋',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                DecoratedBox(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomLeft,
+                      end: Alignment.topRight,
+                      colors: [
+                        homePrimary,
+                        Color(0xFF638AFF),
+                        Color(0xFFA3F69C),
+                      ],
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: Colors.white,
+                      backgroundImage: avatar != null
+                          ? CachedNetworkImageProvider(avatar)
+                          : null,
+                      child: avatar == null
+                          ? Text(
+                              home.firstName.isNotEmpty
+                                  ? home.firstName[0].toUpperCase()
+                                  : '?',
+                              style: HomeType.headline(
+                                color: homePrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            )
+                          : null,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  home.firstName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    height: 1.1,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-                if (role.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    role,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.82),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: homeGreenDeep,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
                     ),
                   ),
-                ],
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _HeaderChip(
-                      icon: HugeIcons.strokeRoundedLocation01,
-                      label: home.placeLabel,
-                    ),
-                    _HeaderChip(
-                      icon: HugeIcons.strokeRoundedCalendar03,
-                      label: dateLabel,
-                    ),
-                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Column(
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _NotifyButton(count: home.unreadNotifications),
-              const SizedBox(height: 12),
-              PopupMenuButton<String>(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                onSelected: (value) {
-                  if (value == 'logout') {
-                    ref.read(authProvider.notifier).logout();
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'logout', child: Text('Sign out')),
+              Row(
+                children: [
+                  HugeIcon(icon: greetingIcon, color: homeAmber, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$_greeting, ',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      home.firstName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: HomeType.headline(
+                        color: AppColors.textPrimary,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
                 ],
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+              ),
+              const SizedBox(height: 3),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (role.isNotEmpty)
+                    Text(
+                      role,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF4B5563),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: homePrimarySoft,
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(
+                        color: homePrimary.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: homePrimary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          home.placeLabel,
+                          style: const TextStyle(
+                            color: homePrimary,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: AppColors.purpleSoft,
-                    backgroundImage: avatar != null
-                        ? CachedNetworkImageProvider(avatar)
-                        : null,
-                    child: avatar == null
-                        ? Text(
-                            home.firstName.isNotEmpty
-                                ? home.firstName[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: AppColors.purple,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          )
-                        : null,
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const HugeIcon(
+                    icon: HugeIcons.strokeRoundedCalendar03,
+                    color: Color(0xFF9CA3AF),
+                    size: 13,
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      dateLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        _NotifyButton(count: home.unreadNotifications),
+      ],
     );
   }
 }
@@ -271,26 +430,31 @@ class _NotifyButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final label = count > 9 ? '9+' : '$count';
     return Material(
-      color: Colors.white.withValues(alpha: 0.2),
-      shape: const CircleBorder(),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        customBorder: const CircleBorder(),
+        borderRadius: BorderRadius.circular(14),
         onTap: () => ref.read(shellIndexProvider.notifier).state = 3,
-        child: SizedBox(
-          width: 44,
-          height: 44,
+        child: Ink(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: homeLine),
+          ),
           child: Stack(
             alignment: Alignment.center,
+            clipBehavior: Clip.none,
             children: [
               const HugeIcon(
                 icon: HugeIcons.strokeRoundedNotification03,
-                color: Colors.white,
+                color: Color(0xFF24334A),
                 size: 21,
               ),
               if (count > 0)
                 Positioned(
-                  right: 4,
-                  top: 4,
+                  right: -4,
+                  top: -4,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     constraints: const BoxConstraints(
@@ -320,46 +484,6 @@ class _NotifyButton extends ConsumerWidget {
   }
 }
 
-class _HeaderChip extends StatelessWidget {
-  const _HeaderChip({required this.icon, required this.label});
-
-  final List<List<dynamic>> icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 190),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          HugeIcon(icon: icon, size: 14, color: Colors.white),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _QuickActions extends ConsumerWidget {
   const _QuickActions({required this.home});
 
@@ -375,35 +499,39 @@ class _QuickActions extends ConsumerWidget {
           child: _QuickAction(
             label: 'Attendance',
             icon: HugeIcons.strokeRoundedCalendarCheckIn01,
-            color: const Color(0xFF8B5CF6),
+            wellColor: homePrimarySoft,
+            iconColor: homePrimary,
             onTap: () => go(1),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: _QuickAction(
             label: 'Requests',
             icon: HugeIcons.strokeRoundedFileAdd,
-            color: const Color(0xFFF59E0B),
+            wellColor: homeGreenSoft,
+            iconColor: homeGreenDeep,
             onTap: () => go(2),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: _QuickAction(
             label: 'Alerts',
             icon: HugeIcons.strokeRoundedNotification03,
-            color: const Color(0xFFEC4899),
+            wellColor: homeAmberSoft,
+            iconColor: homeAmber,
             badge: unread > 0 ? (unread > 9 ? '9+' : '$unread') : null,
             onTap: () => go(3),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: _QuickAction(
             label: 'Profile',
             icon: HugeIcons.strokeRoundedUser,
-            color: const Color(0xFF22B8E8),
+            wellColor: const Color(0xFFD5E3FF),
+            iconColor: const Color(0xFF0052E1),
             onTap: () => go(4),
           ),
         ),
@@ -416,14 +544,16 @@ class _QuickAction extends StatelessWidget {
   const _QuickAction({
     required this.label,
     required this.icon,
-    required this.color,
+    required this.wellColor,
+    required this.iconColor,
     required this.onTap,
     this.badge,
   });
 
   final String label;
   final List<List<dynamic>> icon;
-  final Color color;
+  final Color wellColor;
+  final Color iconColor;
   final VoidCallback onTap;
   final String? badge;
 
@@ -431,22 +561,15 @@ class _QuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      elevation: 0,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: Ink(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.14),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            border: Border.all(color: homeLine),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -455,22 +578,14 @@ class _QuickAction extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   Container(
-                    width: 42,
-                    height: 42,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color.lerp(color, Colors.white, 0.28)!, color],
-                      ),
+                      color: wellColor,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Center(
-                      child: HugeIcon(
-                        icon: icon,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                      child: HugeIcon(icon: icon, color: iconColor, size: 20),
                     ),
                   ),
                   if (badge != null)
@@ -494,7 +609,7 @@ class _QuickAction extends StatelessWidget {
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 9,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -504,9 +619,11 @@ class _QuickAction extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary,
                 ),
               ),
@@ -601,6 +718,56 @@ class _AttendanceCardState extends ConsumerState<_AttendanceCard> {
     return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
   }
 
+  String _compactDuration(Duration duration) {
+    if (duration.isNegative) duration = Duration.zero;
+    if (duration.inHours > 0) {
+      final minutes = duration.inMinutes.remainder(60);
+      if (minutes == 0) return '${duration.inHours}h';
+      return '${duration.inHours}h ${minutes.toString().padLeft(2, '0')}m';
+    }
+    if (duration.inMinutes > 0) return '${duration.inMinutes}m';
+    return '0m';
+  }
+
+  HomeScheduleDay? _todayShift(MobileHome home) {
+    for (final day in home.workSchedule?.days ?? const <HomeScheduleDay>[]) {
+      if (day.isToday) return day;
+    }
+    return null;
+  }
+
+  String _shiftTime(MobileHome home) {
+    final today = _todayShift(home);
+    if (today != null &&
+        today.hasSchedule &&
+        today.startTime != null &&
+        today.endTime != null) {
+      return '${today.startTime} – ${today.endTime}';
+    }
+    return _shiftLabel(home);
+  }
+
+  Duration? _shiftGoal(MobileHome home) {
+    final today = _todayShift(home);
+    if (today == null || !today.hasSchedule) return null;
+    final start = _parseClock(today.startTime);
+    final end = _parseClock(today.endTime);
+    if (start == null || end == null) return null;
+    var span = end.difference(start);
+    if (span.inSeconds <= 0) span += const Duration(hours: 24);
+    return span;
+  }
+
+  DateTime? _parseClock(String? raw) {
+    if (raw == null) return null;
+    final parts = raw.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return DateTime(2000, 1, 1, hour, minute);
+  }
+
   Future<void> _onPunch() async {
     final err = await ref.read(punchActionProvider).togglePunch(widget.home);
     if (!mounted) return;
@@ -616,191 +783,358 @@ class _AttendanceCardState extends ConsumerState<_AttendanceCard> {
   Widget build(BuildContext context) {
     final home = widget.home;
     final busy = ref.watch(punchBusyProvider);
-    final dateLabel = DateFormat('EEEE, MMM d').format(DateTime.now());
-    final checkOutLabel = home.clockOutTime ?? '—';
     final onSite = home.isClockedIn;
+    final location = (home.geofenceName ?? '').trim();
+    final goal = _shiftGoal(home);
+    final progress = goal == null || goal.inSeconds <= 0
+        ? null
+        : (_live.inSeconds / goal.inSeconds).clamp(0.0, 1.0);
+    final remaining = goal == null ? null : goal - _live;
+    final overtime = _parseHms(home.overtime);
 
-    final tint = onSite ? const Color(0xFFE7F8EE) : const Color(0xFFEEF2FF);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 450),
       curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.center,
-          colors: [tint, Colors.white],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: (onSite ? AppColors.green : AppColors.navBlue).withValues(
-              alpha: 0.10,
-            ),
-            blurRadius: 26,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: homeSurface(radius: 22),
       child: Column(
         children: [
           Row(
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: onSite
+                            ? const Color(0xFFE8F5E9)
+                            : const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(
+                          color: onSite
+                              ? const Color(0x1A2E7D32)
+                              : const Color(0x0A000000),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: onSite
+                                  ? const Color(0xFF2E7D32)
+                                  : AppColors.textSecondary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            onSite ? 'Clocked in' : 'Clocked out',
+                            style: HomeType.body(
+                              color: onSite
+                                  ? const Color(0xFF2E7D32)
+                                  : AppColors.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (location.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FA),
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(color: const Color(0x0A000000)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            HugeIcon(
+                              icon: HugeIcons.strokeRoundedLocation01,
+                              size: 12,
+                              color: onSite
+                                  ? const Color(0xFF2E7D32)
+                                  : AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 120),
+                              child: Text(
+                                location,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: HomeType.body(
+                                  color: const Color(0xFF4B5563),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: (onSite ? AppColors.green : AppColors.navBlue)
-                      .withValues(alpha: 0.14),
+                  color: homePrimarySoft,
                   borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                    color: homePrimary.withValues(alpha: 0.15),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: onSite ? AppColors.green : AppColors.navBlue,
-                        shape: BoxShape.circle,
-                      ),
+                    const HugeIcon(
+                      icon: HugeIcons.strokeRoundedClock01,
+                      color: homePrimary,
+                      size: 12,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      onSite ? 'Clocked in' : 'Clocked out',
-                      style: TextStyle(
-                        color: onSite ? AppColors.green : AppColors.navBlue,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(width: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        _shiftTime(home),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: HomeType.body(
+                          color: homePrimary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const Spacer(),
-              Text(
-                dateLabel,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            _fmt(_live),
-            style: const TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-              letterSpacing: 0.4,
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFFF8F9FA),
+                  homePrimary.withValues(alpha: 0.06),
+                  const Color(0xFFEAF0FF).withValues(alpha: 0.85),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: homePrimary.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Worked Today',
+                        style: HomeType.body(
+                          color: const Color(0xFF6B7280),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _fmt(_live),
+                          style: HomeType.headline(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            letterSpacing: -0.5,
+                            height: 1.1,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                      if (progress != null && goal != null) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Shift Goal: ${_compactDuration(goal)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: HomeType.body(
+                                  color: const Color(0xFF4B5563),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${(progress * 100).round()}%',
+                              style: HomeType.body(
+                                color: homePrimary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(99),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 6,
+                            backgroundColor: Colors.white,
+                            valueColor: const AlwaysStoppedAnimation(
+                              homePrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  children: [
+                    _CheckButton(
+                      isClockedIn: home.isClockedIn,
+                      busy: busy,
+                      onPressed: busy ? null : _onPunch,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      onSite ? 'Tap to clock out' : 'Tap to clock in',
+                      style: HomeType.body(
+                        color: const Color(0xFF6B7280),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-          const Text(
-            'Worked today',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _shiftLabel(home),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.navBlue,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _CheckButton(
-            isClockedIn: home.isClockedIn,
-            busy: busy,
-            onPressed: busy ? null : _onPunch,
-          ),
-          if (home.geofenceEnabled) ...[
-            const SizedBox(height: 12),
-            const FenceStatusLine(),
-          ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: _StatTile(
-                  label: 'Check-in',
-                  value: home.clockInTime ?? '--:--',
-                  color: const Color(0xFF16A34A),
+                child: _MetricCell(
                   icon: HugeIcons.strokeRoundedLogin01,
+                  label: 'In',
+                  value: home.clockInTime ?? '--:--',
+                  color: homePrimary,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
-                child: _StatTile(
-                  label: home.isClockedIn && home.clockOutTime != null
-                      ? 'Last out'
-                      : 'Check-out',
-                  value: checkOutLabel,
-                  color: const Color(0xFFE5484D),
-                  icon: HugeIcons.strokeRoundedLogout01,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  label: 'Break',
-                  value: _shortClock(home.breakTime),
-                  color: const Color(0xFFF59E0B),
+                child: _MetricCell(
                   icon: HugeIcons.strokeRoundedCoffee01,
+                  label: 'Break',
+                  value: _compactDuration(_parseHms(home.breakTime)),
+                  color: homeAmber,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
-                child: _StatTile(
-                  label: 'Overtime',
-                  value: _shortClock(home.overtime),
-                  color: const Color(0xFF8B5CF6),
+                child: remaining != null
+                    ? _MetricCell(
+                        icon: HugeIcons.strokeRoundedTimer02,
+                        label: 'Left',
+                        value: _compactDuration(remaining),
+                        color: const Color(0xFF0052E1),
+                      )
+                    : _MetricCell(
+                        icon: HugeIcons.strokeRoundedLogout01,
+                        label: home.isClockedIn && home.clockOutTime != null
+                            ? 'Last out'
+                            : 'Out',
+                        value: home.clockOutTime ?? '--:--',
+                        color: homePrimary,
+                      ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _MetricCell(
                   icon: HugeIcons.strokeRoundedAnalyticsUp,
+                  label: 'OT',
+                  value: overtime == Duration.zero
+                      ? '0m'
+                      : '+${_shortClock(home.overtime)}',
+                  color: homeGreenDeep,
                 ),
               ),
             ],
           ),
           if (home.punches.isNotEmpty) ...[
             const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F7FB),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Today's punches",
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
+            Row(
+              children: [
+                Text(
+                  "Today's punches",
+                  style: HomeType.headline(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: homePrimarySoft,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    '${home.punches.length} '
+                    '${home.punches.length == 1 ? 'Punch' : 'Punches'}',
+                    style: HomeType.body(
+                      color: homePrimary,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  for (final punch in home.punches) _PunchLine(punch: punch),
-                ],
-              ),
+                ),
+              ],
             ),
+            const SizedBox(height: 8),
+            for (final punch in home.punches) _PunchLine(punch: punch),
+          ],
+          if (home.geofenceEnabled) ...[
+            const SizedBox(height: 10),
+            const FenceStatusLine(align: TextAlign.left),
           ],
         ],
       ),
@@ -816,37 +1150,59 @@ class _PunchLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: punch.open ? AppColors.green : AppColors.textSecondary,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              punch.rangeLabel,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: AppColors.textPrimary,
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            punch.open
+                ? Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  )
+                : const HugeIcon(
+                    icon: HugeIcons.strokeRoundedCheckmarkCircle02,
+                    color: AppColors.textSecondary,
+                    size: 14,
+                  ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                punch.rangeLabel,
+                style: HomeType.headline(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
-          ),
-          Text(
-            punch.open ? 'In' : 'Done',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: punch.open ? AppColors.green : AppColors.textSecondary,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: punch.open
+                    ? const Color(0xFFE8F5E9)
+                    : const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                punch.open ? 'In' : 'Done',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: punch.open ? AppColors.green : const Color(0xFF4B5563),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -869,303 +1225,335 @@ class _CheckButton extends StatefulWidget {
 
 class _CheckButtonState extends State<_CheckButton>
     with TickerProviderStateMixin {
-  late final AnimationController _pulseController;
-  late final AnimationController _spinController;
   late final AnimationController _pressController;
-  late final Animation<double> _pulseScale;
-  late final Animation<double> _pulseOpacity;
+  late final AnimationController _breathController;
+  late final AnimationController _shimmerController;
+  late final AnimationController _burstController;
   late final Animation<double> _pressScale;
+  late final Animation<double> _breath;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat(reverse: true);
-
-    _spinController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 4200),
-    )..repeat();
-
     _pressController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 120),
     );
-
-    _pulseScale = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-    _pulseOpacity = Tween<double>(begin: 0.55, end: 0.18).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
     _pressScale = Tween<double>(
-      begin: 1.0,
-      end: 0.94,
+      begin: 1,
+      end: 0.95,
     ).animate(CurvedAnimation(parent: _pressController, curve: Curves.easeOut));
+    _breathController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+    _breath = CurvedAnimation(
+      parent: _breathController,
+      curve: Curves.easeInOut,
+    );
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4200),
+    );
+    _burstController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncLoops();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CheckButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncLoops();
+    if (oldWidget.isClockedIn != widget.isClockedIn) {
+      final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+      if (!reduce) _burstController.forward(from: 0);
+    }
+  }
+
+  /// Breathing and shimmer run while the button is idle. They stop during a
+  /// punch and when the system asks for reduced motion.
+  void _syncLoops() {
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final shouldRun = !widget.busy && !reduce;
+    if (shouldRun) {
+      if (!_breathController.isAnimating) {
+        _breathController.repeat(reverse: true);
+      }
+      if (!_shimmerController.isAnimating) _shimmerController.repeat();
+    } else {
+      _breathController.stop();
+      _shimmerController.stop();
+    }
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _spinController.dispose();
     _pressController.dispose();
+    _breathController.dispose();
+    _shimmerController.dispose();
+    _burstController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isClockedIn ? AppColors.red : AppColors.green;
-    final highlight = Color.lerp(color, Colors.white, 0.28)!;
-    final deep = Color.lerp(color, Colors.black, 0.14)!;
+    final target = widget.isClockedIn ? AppColors.red : homePrimary;
 
-    return GestureDetector(
-      onTapDown: widget.onPressed == null
-          ? null
-          : (_) => _pressController.forward(),
-      onTapUp: widget.onPressed == null
-          ? null
-          : (_) {
-              _pressController.reverse();
-              widget.onPressed?.call();
-            },
-      onTapCancel: () => _pressController.reverse(),
-      child: AnimatedBuilder(
-        animation: Listenable.merge([
-          _pulseController,
-          _spinController,
-          _pressController,
-        ]),
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _pressScale.value,
-            child: SizedBox(
-              width: 176,
-              height: 176,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Soft pulsing halo
-                  Transform.scale(
-                    scale: _pulseScale.value,
-                    child: Container(
-                      width: 168,
-                      height: 168,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: color.withValues(alpha: _pulseOpacity.value),
-                            blurRadius: 28,
-                            spreadRadius: 2,
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: target),
+      duration: const Duration(milliseconds: 450),
+      builder: (context, animated, _) {
+        final color = animated ?? target;
+        return GestureDetector(
+          onTapDown: widget.onPressed == null
+              ? null
+              : (_) => _pressController.forward(),
+          onTapUp: widget.onPressed == null
+              ? null
+              : (_) {
+                  _pressController.reverse();
+                  widget.onPressed?.call();
+                },
+          onTapCancel: () => _pressController.reverse(),
+          child: SizedBox(
+            width: 118,
+            height: 118,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                RepaintBoundary(
+                  child: AnimatedBuilder(
+                    animation: _burstController,
+                    builder: (context, _) => CustomPaint(
+                      size: const Size(118, 118),
+                      painter: _BurstPainter(
+                        color: color,
+                        progress: _burstController.value,
+                        running: _burstController.isAnimating,
+                      ),
+                    ),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: Listenable.merge([_breath, _pressScale]),
+                  builder: (context, child) {
+                    final b = _breath.value;
+                    return Transform.scale(
+                      scale: _pressScale.value * (1 + 0.035 * b),
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color.lerp(color, Colors.white, 0.18)!,
+                              color,
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Rotating soft arc ring
-                  CustomPaint(
-                    size: const Size(168, 168),
-                    painter: _RingArcPainter(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      progress: _spinController.value,
-                      strokeWidth: 2.4,
-                    ),
-                  ),
-                  // Static white outer ring
-                  Container(
-                    width: 158,
-                    height: 158,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.22),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Main button
-                  Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        center: const Alignment(-0.2, -0.35),
-                        radius: 0.95,
-                        colors: [highlight, color, deep],
-                        stops: const [0.0, 0.55, 1.0],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.35),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: widget.busy
-                        ? const Center(
-                            child: SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 3,
-                              ),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.55),
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withValues(alpha: 0.18 + 0.20 * b),
+                              blurRadius: 16 + 14 * b,
+                              spreadRadius: 2 * b,
+                              offset: const Offset(0, 8),
                             ),
-                          )
-                        : child,
+                          ],
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: ClipOval(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        IgnorePointer(
+                          child: AnimatedBuilder(
+                            animation: _shimmerController,
+                            builder: (context, _) {
+                              // Sweep during the first part of each cycle,
+                              // then rest.
+                              final v = _shimmerController.value;
+                              final t = (v / 0.4).clamp(0.0, 1.0);
+                              if (v > 0.4) return const SizedBox.shrink();
+                              return Transform.translate(
+                                offset: Offset(-150 + 300 * t, 0),
+                                child: Transform.rotate(
+                                  angle: 0.45,
+                                  child: Container(
+                                    width: 38,
+                                    height: 240,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.white.withValues(alpha: 0),
+                                          Colors.white.withValues(alpha: 0.30),
+                                          Colors.white.withValues(alpha: 0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 260),
+                          switchInCurve: Curves.easeOutBack,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: animation,
+                                  child: child,
+                                ),
+                              ),
+                          child: widget.busy
+                              ? const SizedBox(
+                                  key: ValueKey('busy'),
+                                  width: 26,
+                                  height: 26,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Column(
+                                  key: ValueKey(widget.isClockedIn),
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const HugeIcon(
+                                      icon: HugeIcons.strokeRoundedFingerPrint,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      widget.isClockedIn
+                                          ? 'Check-out'
+                                          : 'Check-in',
+                                      style: HomeType.headline(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          );
-        },
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            HugeIcon(
-              icon: HugeIcons.strokeRoundedTouch02,
-              color: Colors.white.withValues(alpha: 0.95),
-              size: 34,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              widget.isClockedIn ? 'Check-out' : 'Check-in',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _RingArcPainter extends CustomPainter {
-  _RingArcPainter({
+/// One expanding ring that fades out after the state changes.
+class _BurstPainter extends CustomPainter {
+  _BurstPainter({
     required this.color,
     required this.progress,
-    required this.strokeWidth,
+    required this.running,
   });
 
   final Color color;
   final double progress;
-  final double strokeWidth;
+  final bool running;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.shortestSide - strokeWidth) / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    // Soft full ring base
+    if (!running) return;
+    final center = size.center(Offset.zero);
+    final t = Curves.easeOutCubic.transform(progress);
     canvas.drawCircle(
       center,
-      radius,
+      50 + 22 * t,
       Paint()
-        ..color = color.withValues(alpha: 0.35)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth * 0.7,
-    );
-
-    // Sweeping highlight arcs
-    final start = progress * 2 * math.pi;
-    canvas.drawArc(rect, start, 1.35, false, paint);
-    canvas.drawArc(
-      rect,
-      start + math.pi,
-      0.85,
-      false,
-      paint..color = color.withValues(alpha: 0.55),
+        ..strokeWidth = 3.5 * (1 - t) + 1
+        ..color = color.withValues(alpha: 0.45 * (1 - t)),
     );
   }
 
   @override
-  bool shouldRepaint(covariant _RingArcPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth;
-  }
+  bool shouldRepaint(covariant _BurstPainter old) =>
+      old.progress != progress || old.color != color || old.running != running;
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({
+class _MetricCell extends StatelessWidget {
+  const _MetricCell({
     required this.label,
     required this.value,
-    required this.color,
     required this.icon,
+    required this.color,
   });
 
   final String label;
   final String value;
-  final Color color;
   final List<List<dynamic>> icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x05000000)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: HugeIcon(icon: icon, color: Colors.white, size: 16),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              HugeIcon(icon: icon, color: color, size: 13),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  label.toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: color,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
                   ),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: HomeType.headline(
+              color: AppColors.textPrimary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -1190,6 +1578,7 @@ class _ErrorPane extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(message, textAlign: TextAlign.center),

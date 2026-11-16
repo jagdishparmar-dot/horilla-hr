@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:horilla_employee/core/api/api_exception.dart';
 import 'package:horilla_employee/core/api/dio_client.dart';
 import 'package:horilla_employee/core/auth/session_revocation.dart';
+import 'package:horilla_employee/core/server_url_provider.dart';
 import 'package:horilla_employee/core/storage/token_storage.dart';
 import 'package:horilla_employee/features/auth/auth_provider.dart';
 import 'package:horilla_employee/features/auth/auth_repository.dart';
@@ -222,9 +223,15 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({
       'horilla_access': 'access-old',
       'horilla_refresh': 'refresh-old',
+      TokenStorage.serverUrlKey: 'https://example.test/api/v1',
     });
     final container = ProviderContainer();
     addTearDown(container.dispose);
+
+    for (var i = 0; i < 20; i++) {
+      await Future<void>.delayed(Duration.zero);
+      if (container.read(serverUrlProvider).isReady) break;
+    }
 
     AuthStatus status = AuthStatus.unknown;
     for (var i = 0; i < 20 && status == AuthStatus.unknown; i++) {

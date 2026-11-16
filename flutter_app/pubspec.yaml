@@ -1,7 +1,7 @@
 name: horilla_employee
-description: Horilla HR employee mobile app — check-in / check-out.
+description: ClockMe employee attendance app — check-in / check-out.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.3+6
 
 environment:
   sdk: ^3.13.1
@@ -36,25 +36,51 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/
+  fonts:
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Geist-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Geist-ExtraBold.ttf
+          weight: 800
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/branding/app_icon.png
+  image_path: assets/branding/new_app_icon.png
   adaptive_icon_background: "#2F6BFF"
-  adaptive_icon_foreground: assets/branding/app_icon.png
+  adaptive_icon_foreground: assets/branding/new_app_icon.png
+  adaptive_icon_foreground_inset: 0
+  background_color_ios: "#2F6BFF"
   remove_alpha_ios: true
   min_sdk_android: 21
 
 flutter_native_splash:
   color: "#2F6BFF"
   color_dark: "#2F6BFF"
-  image: assets/branding/splash_logo.png
+  image: assets/branding/new_app_icon.png
   android_12:
     color: "#2F6BFF"
     color_dark: "#2F6BFF"
-    image: assets/branding/splash_logo.png
+    image: assets/branding/new_app_icon.png
     icon_background_color: "#2F6BFF"
+    icon_background_color_dark: "#2F6BFF"
   android: true
   ios: true
   web: false

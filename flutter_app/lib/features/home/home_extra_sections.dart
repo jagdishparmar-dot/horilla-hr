@@ -11,7 +11,62 @@ import '../attendance/models.dart';
 import '../requests/models.dart';
 import '../requests/request_details_sheet.dart';
 import '../shell/main_shell.dart';
+import 'home_typography.dart';
 import 'models.dart';
+
+const Color homeLine = Color(0x1A000000);
+
+/// One accent for the whole screen: primary blue and a soft tint of it.
+const Color homePrimary = AppColors.navBlue;
+const Color homePrimarySoft = Color(0xFFEAF0FF);
+const Color homeAmber = Color(0xFF854D0E);
+const Color homeAmberSoft = Color(0xFFFEF9C3);
+const Color homeGreenSoft = Color(0xFFDCFCE7);
+const Color homeGreenDeep = Color(0xFF166534);
+
+BoxDecoration homeSurface({double radius = 16}) {
+  return BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: homeLine),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.05),
+        blurRadius: 16,
+        offset: const Offset(0, 4),
+      ),
+    ],
+  );
+}
+
+/// Rounded tinted square that holds a primary-colored icon.
+class HomeIconBadge extends StatelessWidget {
+  const HomeIconBadge({
+    super.key,
+    required this.icon,
+    this.size = 40,
+    this.iconSize = 20,
+  });
+
+  final List<List<dynamic>> icon;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: homePrimarySoft,
+        borderRadius: BorderRadius.circular(size * 0.3),
+      ),
+      child: Center(
+        child: HugeIcon(icon: icon, color: homePrimary, size: iconSize),
+      ),
+    );
+  }
+}
 
 /// Fades and slides a section in once, staggered by [index].
 class HomeReveal extends StatelessWidget {
@@ -43,40 +98,43 @@ class HomeSectionTitle extends StatelessWidget {
   const HomeSectionTitle({
     super.key,
     required this.title,
-    required this.color,
-    required this.icon,
+    this.icon,
     this.actionLabel,
     this.onAction,
+    this.showBar = false,
   });
 
   final String title;
-  final Color color;
-  final List<List<dynamic>> icon;
+  final List<List<dynamic>>? icon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool showBar;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
+        if (showBar) ...[
+          Container(
+            width: 4,
+            height: 16,
+            decoration: BoxDecoration(
+              color: homePrimary,
+              borderRadius: BorderRadius.circular(99),
+            ),
           ),
-          child: Center(
-            child: HugeIcon(icon: icon, color: color, size: 16),
-          ),
-        ),
-        const SizedBox(width: 10),
+          const SizedBox(width: 8),
+        ],
+        if (icon != null) ...[
+          HugeIcon(icon: icon!, color: homePrimary, size: 18),
+          const SizedBox(width: 8),
+        ],
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 17,
+            style: HomeType.headline(
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
               color: AppColors.textPrimary,
               letterSpacing: -0.2,
             ),
@@ -87,13 +145,13 @@ class HomeSectionTitle extends StatelessWidget {
             onTap: onAction,
             behavior: HitTestBehavior.opaque,
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
               child: Text(
                 actionLabel!,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12.5,
+                style: const TextStyle(
+                  color: homePrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
                 ),
               ),
             ),
@@ -124,119 +182,122 @@ class HomeAnnouncementSection extends StatelessWidget {
             : DateFormat('MMM d, yyyy').format(announcement.expireDate!);
         final body = (announcement.description ?? '').trim();
 
-        return Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD1D5DB),
-                  borderRadius: BorderRadius.circular(99),
+        return Theme(
+          data: HomeType.of(context),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.orange.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Center(
-                        child: HugeIcon(
-                          icon: HugeIcons.strokeRoundedMegaphone01,
-                          color: AppColors.orange,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Announcement',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const HugeIcon(
-                        icon: HugeIcons.strokeRoundedCancel01,
-                        color: AppColors.textSecondary,
-                        size: 22,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottom),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                  child: Row(
                     children: [
-                      Text(
-                        announcement.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 20,
-                          color: AppColors.textPrimary,
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: homePrimarySoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: HugeIcon(
+                            icon: HugeIcons.strokeRoundedMegaphone01,
+                            color: homePrimary,
+                            size: 20,
+                          ),
                         ),
                       ),
-                      if (created != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          created,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Announcement',
+                          style: HomeType.headline(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
                           ),
                         ),
-                      ],
-                      if (expires != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Expires $expires',
-                          style: const TextStyle(
-                            color: AppColors.orange,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Text(
-                        body.isEmpty ? 'No additional details.' : body,
-                        style: TextStyle(
-                          color: body.isEmpty
-                              ? AppColors.textSecondary
-                              : AppColors.textPrimary,
-                          fontSize: 15,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedCancel01,
+                          color: AppColors.textSecondary,
+                          size: 22,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottom),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          announcement.title,
+                          style: HomeType.headline(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        if (created != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            created,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                        if (expires != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Expires $expires',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Text(
+                          body.isEmpty ? 'No additional details.' : body,
+                          style: TextStyle(
+                            color: body.isEmpty
+                                ? AppColors.textSecondary
+                                : AppColors.textPrimary,
+                            fontSize: 15,
+                            height: 1.45,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -247,60 +308,46 @@ class HomeAnnouncementSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final created = announcement.createdAt == null
         ? null
-        : DateFormat('MMM d, yyyy').format(announcement.createdAt!.toLocal());
+        : DateFormat('MMM d').format(announcement.createdAt!.toLocal());
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const HomeSectionTitle(
           title: 'Announcement',
-          color: Color(0xFFF59E0B),
           icon: HugeIcons.strokeRoundedMegaphone01,
+          showBar: true,
         ),
         const SizedBox(height: 12),
         Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: InkWell(
             onTap: () => _openDetails(context),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFFFF1D6), Color(0xFFFFE7F0)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
+              decoration: homeSurface(),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFFFFB84D), Color(0xFFF97316)],
+                        colors: [homePrimary, Color(0xFF0052E1)],
                       ),
-                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Center(
                       child: HugeIcon(
                         icon: HugeIcons.strokeRoundedMegaphone01,
                         color: Colors.white,
-                        size: 21,
+                        size: 18,
                       ),
                     ),
                   ),
@@ -309,14 +356,42 @@ class HomeAnnouncementSection extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          announcement.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                announcement.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: HomeType.headline(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            if (created != null) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: homeAmberSoft,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  created,
+                                  style: const TextStyle(
+                                    color: homeAmber,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -326,31 +401,10 @@ class HomeAnnouncementSection extends StatelessWidget {
                           style: const TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             height: 1.35,
                           ),
                         ),
-                        if (created != null) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const HugeIcon(
-                                icon: HugeIcons.strokeRoundedCalendar03,
-                                color: AppColors.textSecondary,
-                                size: 14,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                created,
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -370,84 +424,86 @@ class HomeAnnouncementSection extends StatelessWidget {
   }
 }
 
-class HomeWorkScheduleSection extends ConsumerWidget {
+class HomeWorkScheduleSection extends ConsumerStatefulWidget {
   const HomeWorkScheduleSection({super.key, required this.schedule});
 
   final HomeWorkSchedule? schedule;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final now = DateTime.now();
-    final weekStart =
-        schedule?.weekStart ?? now.subtract(Duration(days: (now.weekday % 7)));
-    final weekEnd = schedule?.weekEnd ?? weekStart.add(const Duration(days: 6));
-    final range =
-        '${DateFormat('dd-MMM-yyyy').format(weekStart)} / ${DateFormat('dd-MMM-yyyy').format(weekEnd)}';
+  ConsumerState<HomeWorkScheduleSection> createState() =>
+      _HomeWorkScheduleSectionState();
+}
 
-    final days = schedule?.previewDays ?? const <HomeScheduleDay>[];
+class _HomeWorkScheduleSectionState
+    extends ConsumerState<HomeWorkScheduleSection> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final schedule = widget.schedule;
+    final allDays = schedule?.days ?? const <HomeScheduleDay>[];
+    final days = allDays.length <= 7
+        ? allDays
+        : () {
+            final today = allDays.indexWhere((d) => d.isToday);
+            final start = (today < 0 ? 0 : today - 3).clamp(
+              0,
+              allDays.length - 7,
+            );
+            return allDays.sublist(start, start + 7);
+          }();
+    final monthLabel = DateFormat('MMMM yyyy')
+        .format(schedule?.companyToday ?? DateTime.now());
+    final todayIndex = days.indexWhere((d) => d.isToday);
+    final selectedIndex = days.isEmpty
+        ? 0
+        : (_selectedIndex ?? (todayIndex >= 0 ? todayIndex : 0)).clamp(
+            0,
+            days.length - 1,
+          );
+    final selected = days.isEmpty ? null : days[selectedIndex];
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.navBlue.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+      decoration: homeSurface(),
       child: Column(
         children: [
           Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF5B8CFF), Color(0xFF2F6BFF)],
-                  ),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: const Center(
-                  child: HugeIcon(
-                    icon: HugeIcons.strokeRoundedClock01,
-                    color: Colors.white,
-                    size: 20,
+              const HomeIconBadge(
+                icon: HugeIcons.strokeRoundedCalendar03,
+                size: 28,
+                iconSize: 15,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Work Schedule',
+                  style: HomeType.headline(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Work Schedule',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      range,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: homePrimarySoft,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  monthLabel,
+                  style: const TextStyle(
+                    color: homePrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           if (days.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
@@ -462,11 +518,26 @@ class HomeWorkScheduleSection extends ConsumerWidget {
                 ),
               ),
             )
-          else
-            for (var i = 0; i < days.length; i++) ...[
-              if (i > 0) const SizedBox(height: 10),
-              _ScheduleDayRow(day: days[i]),
+          else ...[
+            Row(
+              children: [
+                for (var i = 0; i < days.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 4),
+                  Expanded(
+                    child: _WeekDayCell(
+                      day: days[i],
+                      selected: i == selectedIndex,
+                      onTap: () => setState(() => _selectedIndex = i),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            if (selected != null) ...[
+              const SizedBox(height: 12),
+              _SelectedShiftCard(day: selected),
             ],
+          ],
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
@@ -474,23 +545,25 @@ class HomeWorkScheduleSection extends ConsumerWidget {
               onPressed: () {
                 ref.read(attendanceSegmentProvider.notifier).state =
                     AttendanceSegment.shift;
-                final companyStart = schedule?.weekStart;
-                ref.read(attendanceWeekStartProvider.notifier).state =
-                    companyStart != null
+                final companyStart = widget.schedule?.weekStart;
+                ref
+                    .read(attendanceWeekStartProvider.notifier)
+                    .state = companyStart != null
                     ? DateTime(
                         companyStart.year,
                         companyStart.month,
                         companyStart.day,
                       )
                     : weekStartOf(
-                        schedule?.companyToday ?? DateTime.now(),
+                        widget.schedule?.companyToday ?? DateTime.now(),
                       );
                 ref.read(shellIndexProvider.notifier).state = 1;
               },
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.navBlue,
-                side: const BorderSide(color: Color(0xFFD1D5DB)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                foregroundColor: homePrimary,
+                backgroundColor: const Color(0xFFF0F5FF),
+                side: BorderSide(color: homePrimary.withValues(alpha: 0.3)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -500,12 +573,12 @@ class HomeWorkScheduleSection extends ConsumerWidget {
                 children: [
                   Text(
                     'View Full Schedule',
-                    style: TextStyle(fontWeight: FontWeight.w700),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                   SizedBox(width: 4),
                   HugeIcon(
                     icon: HugeIcons.strokeRoundedArrowRight01,
-                    color: AppColors.navBlue,
+                    color: homePrimary,
                     size: 18,
                   ),
                 ],
@@ -518,90 +591,163 @@ class HomeWorkScheduleSection extends ConsumerWidget {
   }
 }
 
-class _ScheduleDayRow extends StatelessWidget {
-  const _ScheduleDayRow({required this.day});
+class _WeekDayCell extends StatelessWidget {
+  const _WeekDayCell({
+    required this.day,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final HomeScheduleDay day;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final weekday = DateFormat('EEE').format(day.date).toUpperCase();
+    final dayNum = DateFormat('dd').format(day.date);
+    final muted = !day.hasSchedule && !selected;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: muted ? 0.6 : 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+          decoration: BoxDecoration(
+            color: selected ? homePrimary : const Color(0xFFF8F9FA),
+            borderRadius: BorderRadius.circular(12),
+            border: selected ? null : Border.all(color: homeLine),
+          ),
+          child: Column(
+            children: [
+              Text(
+                weekday,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.9)
+                      : const Color(0xFF9CA3AF),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                dayNum,
+                style: HomeType.headline(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : const Color(0xFF4B5563),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected
+                      ? Colors.white
+                      : (day.hasSchedule
+                            ? homePrimary.withValues(alpha: 0.4)
+                            : Colors.transparent),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedShiftCard extends StatelessWidget {
+  const _SelectedShiftCard({required this.day});
 
   final HomeScheduleDay day;
 
   @override
   Widget build(BuildContext context) {
-    final dayNum = DateFormat('dd').format(day.date);
-    final weekday = DateFormat('EEE').format(day.date).toUpperCase();
+    final title = day.hasSchedule
+        ? (day.shiftName.trim().isEmpty ? 'Shift' : day.shiftName)
+        : 'Day off';
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: day.isToday
-            ? const LinearGradient(
-                colors: [Color(0xFFE3ECFF), Color(0xFFF0E9FF)],
-              )
-            : null,
-        color: day.isToday ? null : const Color(0xFFF8F9FC),
+        color: const Color(0xFFF0F5FF),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: homePrimary.withValues(alpha: 0.2)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 48,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: day.isToday ? AppColors.navBlue : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$dayNum\n$weekday',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                height: 1.15,
-                fontSize: 11,
-                color: day.isToday ? Colors.white : AppColors.navBlue,
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: day.hasSchedule
+                      ? AppColors.green
+                      : AppColors.textSecondary,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  day.hasSchedule
-                      ? (day.shiftName.trim().isEmpty
-                            ? 'Shift'
-                            : day.shiftName)
-                      : 'Day off',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: HomeType.headline(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
                   ),
                 ),
-                Text(
-                  day.hasSchedule ? day.timingLabel : 'No hours scheduled',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              ),
+              if (day.isToday)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: homePrimary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: const Text(
+                    'Today',
+                    style: TextStyle(
+                      color: homePrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
-          if (day.isToday)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.navBlue,
-                borderRadius: BorderRadius.circular(20),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const HugeIcon(
+                icon: HugeIcons.strokeRoundedClock01,
+                color: homePrimary,
+                size: 15,
               ),
-              child: const Text(
-                'Today',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 11,
+              const SizedBox(width: 6),
+              Text(
+                day.hasSchedule ? day.timingLabel : 'No hours scheduled',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
                 ),
               ),
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -642,8 +788,6 @@ class HomeRecentRequestsSection extends ConsumerWidget {
       children: [
         HomeSectionTitle(
           title: 'Recent Requests',
-          color: const Color(0xFF8B5CF6),
-          icon: HugeIcons.strokeRoundedFile02,
           actionLabel: 'View all',
           onAction: () => ref.read(shellIndexProvider.notifier).state = 2,
         ),
@@ -652,17 +796,7 @@ class HomeRecentRequestsSection extends ConsumerWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
+            decoration: homeSurface(),
             child: Column(
               children: [
                 HugeIcon(
@@ -722,41 +856,15 @@ class _HomeRequestCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          gradient: LinearGradient(
-            colors: [item.status.softBackground, Colors.white],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: item.status.color.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+        decoration: homeSurface(),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
             child: Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: HugeIcon(
-                      icon: item.icon,
-                      color: item.accent,
-                      size: 20,
-                    ),
-                  ),
-                ),
+                HomeIconBadge(icon: item.icon, size: 40, iconSize: 18),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -767,8 +875,8 @@ class _HomeRequestCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               item.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
+                              style: HomeType.headline(
+                                fontWeight: FontWeight.w700,
                                 fontSize: 14,
                               ),
                             ),
@@ -786,48 +894,23 @@ class _HomeRequestCard extends StatelessWidget {
                               item.status.label,
                               style: TextStyle(
                                 color: item.status.color,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 11,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const HugeIcon(
-                            icon: HugeIcons.strokeRoundedClock01,
-                            color: AppColors.textSecondary,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            item.durationLabel,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          const HugeIcon(
-                            icon: HugeIcons.strokeRoundedCalendar03,
-                            color: AppColors.textSecondary,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              _dateLabel,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.durationLabel}  ·  $_dateLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
@@ -900,33 +983,11 @@ class _HomePeopleMessageSectionState extends State<HomePeopleMessageSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        HomeSectionTitle(
-          title: widget.title,
-          color: widget.avatarColor,
-          icon: widget.icon,
-        ),
+        HomeSectionTitle(title: widget.title, icon: widget.icon),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                widget.avatarColor.withValues(alpha: 0.12),
-                Colors.white,
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: widget.avatarColor.withValues(alpha: 0.12),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
+          decoration: homeSurface(),
           child: Column(
             children: [
               if (people.length > 1) ...[
@@ -969,7 +1030,7 @@ class _HomePeopleMessageSectionState extends State<HomePeopleMessageSection> {
                                           person.name.isNotEmpty
                                               ? person.name[0].toUpperCase()
                                               : '?',
-                                          style: TextStyle(
+                                          style: HomeType.headline(
                                             color: widget.avatarColor,
                                             fontWeight: FontWeight.w800,
                                             fontSize: 12,
@@ -983,7 +1044,7 @@ class _HomePeopleMessageSectionState extends State<HomePeopleMessageSection> {
                                 person.name.split(' ').first,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
+                                style: HomeType.headline(
                                   fontSize: 11,
                                   fontWeight: selected
                                       ? FontWeight.w800
@@ -1015,7 +1076,7 @@ class _HomePeopleMessageSectionState extends State<HomePeopleMessageSection> {
                             colleague.name.isNotEmpty
                                 ? colleague.name[0].toUpperCase()
                                 : '?',
-                            style: TextStyle(
+                            style: HomeType.headline(
                               color: widget.avatarColor,
                               fontWeight: FontWeight.w800,
                             ),
@@ -1029,7 +1090,7 @@ class _HomePeopleMessageSectionState extends State<HomePeopleMessageSection> {
                       children: [
                         Text(
                           colleague.name,
-                          style: const TextStyle(
+                          style: HomeType.headline(
                             fontWeight: FontWeight.w800,
                             fontSize: 14,
                           ),
@@ -1055,8 +1116,8 @@ class _HomePeopleMessageSectionState extends State<HomePeopleMessageSection> {
                       controller: _controller,
                       decoration: InputDecoration(
                         hintText: widget.placeholder,
-                        hintStyle: const TextStyle(
-                          color: Color(0xFF9CA3AF),
+                        hintStyle: HomeType.body(
+                          color: const Color(0xFF9CA3AF),
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1083,8 +1144,8 @@ class _HomePeopleMessageSectionState extends State<HomePeopleMessageSection> {
                   ),
                   const SizedBox(width: 8),
                   Material(
-                    color: AppColors.navBlue,
-                    borderRadius: BorderRadius.circular(12),
+                    color: homePrimary,
+                    borderRadius: BorderRadius.circular(14),
                     child: InkWell(
                       onTap: () {
                         final text = _controller.text.trim();

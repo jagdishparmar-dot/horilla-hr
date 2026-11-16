@@ -1,11 +1,14 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/dio_client.dart';
+import '../../core/storage/token_storage.dart';
 import '../../core/theme.dart';
+import '../home/home_typography.dart';
 import 'more_models.dart';
 
 const heroGradient = LinearGradient(
@@ -13,6 +16,15 @@ const heroGradient = LinearGradient(
   end: Alignment.bottomRight,
   colors: [Color(0xFF2F6BFF), Color(0xFF6D5CFF), Color(0xFF9B5CFF)],
 );
+
+const moreCanvas = Color(0xFFF2F2F7);
+const moreText = Color(0xFF1C1C1E);
+const moreMuted = Color(0xFF8E8E93);
+const moreSecondary = Color(0xFF636366);
+const moreBlue = AppColors.navBlue;
+const moreGreen = Color(0xFF34C759);
+const moreRed = Color(0xFFFF3B30);
+const moreHairline = Color(0x0A000000);
 
 /// Widest a content column gets on tablets / landscape; phones are unaffected.
 const double kMaxContentWidth = 640;
@@ -26,6 +38,7 @@ class MorePage extends StatelessWidget {
     this.actions,
     this.floatingActionButton,
     this.bottom,
+    this.backLabel,
   });
 
   final String title;
@@ -33,31 +46,71 @@ class MorePage extends StatelessWidget {
   final List<Widget>? actions;
   final Widget? floatingActionButton;
   final PreferredSizeWidget? bottom;
+  final String? backLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      appBar: AppBar(
-        backgroundColor: AppColors.scaffold,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+    return Theme(
+      data: HomeType.of(context),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
         ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.navBlue,
-            fontWeight: FontWeight.w800,
+        child: Scaffold(
+          backgroundColor: moreCanvas,
+          appBar: AppBar(
+            backgroundColor: moreCanvas,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leadingWidth: backLabel == null ? 56 : 96,
+            leading: TextButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              style: TextButton.styleFrom(
+                foregroundColor: moreBlue,
+                padding: const EdgeInsets.only(left: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                  if (backLabel != null) ...[
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        backLabel!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: HomeType.body(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 17,
+                          color: moreBlue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            title: Text(
+              title,
+              style: HomeType.headline(
+                color: moreText,
+                fontWeight: FontWeight.w600,
+                fontSize: 17,
+              ),
+            ),
+            centerTitle: true,
+            actions: actions,
+            bottom: bottom,
           ),
+          floatingActionButton: floatingActionButton,
+          body: ConstrainedContent(child: body),
         ),
-        actions: actions,
-        bottom: bottom,
       ),
-      floatingActionButton: floatingActionButton,
-      body: ConstrainedContent(child: body),
     );
   }
 }
@@ -277,48 +330,56 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       width: double.infinity,
-      padding: padding,
+      padding: title == null
+          ? padding
+          : const EdgeInsets.fromLTRB(14, 6, 14, 10),
       decoration: cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title!,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  ?trailing,
-                ],
-              ),
-            ),
-          ...children,
-        ],
+        children: children,
       ),
+    );
+    if (title == null) return card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title!.toUpperCase(),
+                  style: HomeType.headline(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                    color: moreMuted,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
+          ),
+        ),
+        card,
+      ],
     );
   }
 }
 
-BoxDecoration cardDecoration({double radius = 18}) {
+BoxDecoration cardDecoration({double radius = 13}) {
   return BoxDecoration(
     color: Colors.white,
     borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: moreHairline),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withValues(alpha: 0.05),
-        blurRadius: 14,
-        offset: const Offset(0, 5),
+        color: Colors.black.withValues(alpha: 0.04),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
       ),
     ],
   );
@@ -345,50 +406,55 @@ class InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = value;
     if (text == null || text.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: EdgeInsets.only(bottom: last ? 0 : 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Center(
-              child: HugeIcon(icon: icon, color: color, size: 18),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  text,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                  ),
+                child: Center(
+                  child: HugeIcon(icon: icon, color: color, size: 16),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: HomeType.body(
+                        color: moreMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      text,
+                      style: HomeType.headline(
+                        color: moreText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        if (!last) const Divider(height: 1, color: moreHairline),
+      ],
     );
   }
 }
@@ -482,7 +548,7 @@ class EmployeeAvatar extends ConsumerWidget {
       child: Text(
         initial,
         style: TextStyle(
-          color: AppColors.purple,
+          color: moreBlue,
           fontWeight: FontWeight.w800,
           fontSize: radius * 0.72,
         ),
@@ -493,7 +559,7 @@ class EmployeeAvatar extends ConsumerWidget {
       width: radius * 2,
       height: radius * 2,
       decoration: const BoxDecoration(
-        color: AppColors.purpleSoft,
+        color: const Color(0xFFEAF0FF),
         shape: BoxShape.circle,
       ),
       clipBehavior: Clip.antiAlias,

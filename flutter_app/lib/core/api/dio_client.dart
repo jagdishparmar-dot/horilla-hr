@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/session_revocation.dart';
 import '../config.dart';
+import '../server_url_provider.dart';
 import '../storage/token_storage.dart';
 import 'api_exception.dart';
 
+export '../storage/token_storage.dart' show TokenStorage, tokenStorageProvider;
+
 const _connectTimeout = Duration(seconds: 20);
 const _receiveTimeout = Duration(seconds: 30);
-
-final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
 /// Bumped after a refresh saves a new access token so cached Bearer headers
 /// are rebuilt.
@@ -19,9 +20,15 @@ final accessGenerationProvider = StateProvider<int>((ref) => 0);
 final dioProvider = Provider<Dio>((ref) {
   final storage = ref.watch(tokenStorageProvider);
   final revocation = ref.watch(sessionRevocationProvider);
+  final baseUrl = ref.watch(
+    serverUrlProvider.select((state) => state.apiBaseUrl),
+  );
+  if (baseUrl == null || baseUrl.isEmpty) {
+    throw StateError('Server URL is not configured');
+  }
   final dio = Dio(
     BaseOptions(
-      baseUrl: AppConfig.apiBaseUrl,
+      baseUrl: baseUrl,
       connectTimeout: _connectTimeout,
       receiveTimeout: _receiveTimeout,
       headers: {
@@ -39,16 +46,17 @@ final dioProvider = Provider<Dio>((ref) {
       ref.read(accessGenerationProvider.notifier).state =
           ref.read(accessGenerationProvider) + 1;
     },
+    refreshDioFactory: () => newPlainDio(baseUrl: baseUrl),
   );
 
   return dio;
 });
 
 /// Dio with the same timeouts as the API client and no auth interceptor.
-Dio newPlainDio() {
+Dio newPlainDio({String? baseUrl}) {
   return Dio(
     BaseOptions(
-      baseUrl: AppConfig.apiBaseUrl,
+      baseUrl: baseUrl ?? AppConfig.apiBaseUrl,
       connectTimeout: _connectTimeout,
       receiveTimeout: _receiveTimeout,
       headers: const {
@@ -259,7 +267,8 @@ String messageFromDio(DioException e) {
   if (server != null) return server;
 
   final code = e.response?.statusCode;
-  final offline = e.type == DioExceptionType.connectionError ||
+  final offline =
+      e.type == DioExceptionType.connectionError ||
       e.type == DioExceptionType.connectionTimeout ||
       e.type == DioExceptionType.sendTimeout ||
       e.type == DioExceptionType.receiveTimeout ||

@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
@@ -8,20 +9,59 @@ import '../../core/api/dio_client.dart';
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../home/home_provider.dart';
+import '../home/home_typography.dart';
 import '../home/models.dart';
 import 'models.dart';
 import 'new_request_sheet.dart';
 import 'request_details_sheet.dart';
 import 'requests_provider.dart';
 
-const _heroGradient = LinearGradient(
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-  colors: [Color(0xFF2F6BFF), Color(0xFF6D5CFF), Color(0xFF9B5CFF)],
-);
+const _iosBg = Color(0xFFF2F2F7);
+const _iosText = Color(0xFF1C1C1E);
+const _iosMuted = Color(0xFF8E8E93);
+const _iosSecondary = Color(0xFF636366);
+const _iosBlue = AppColors.navBlue;
+const _iosGreen = Color(0xFF34C759);
+const _iosGreenText = Color(0xFF248A3D);
+const _iosAmberText = Color(0xFFC97000);
+const _iosRed = Color(0xFFFF3B30);
+const _iosHairline = Color(0x0A000000);
+
+BoxDecoration _iosCard({double radius = 13}) {
+  return BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: _iosHairline),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.04),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  );
+}
+
+(Color, Color) _statusTone(RequestStatus status) => switch (status) {
+  RequestStatus.pending ||
+  RequestStatus.cancelRequested => (_iosAmberText, const Color(0x26FF9500)),
+  RequestStatus.approved => (_iosGreenText, const Color(0x2634C759)),
+  RequestStatus.rejected => (_iosRed, const Color(0x26FF3B30)),
+  RequestStatus.cancelled => (_iosSecondary, const Color(0x1F767680)),
+};
+
+Color _statusAccent(RequestStatus status) => switch (status) {
+  RequestStatus.pending ||
+  RequestStatus.cancelRequested => const Color(0xFFFF9500),
+  RequestStatus.approved => _iosGreen,
+  RequestStatus.rejected => _iosRed,
+  RequestStatus.cancelled => _iosSecondary,
+};
 
 bool _isOpen(RequestStatus s) =>
     s == RequestStatus.pending || s == RequestStatus.cancelRequested;
+
+const _balanceCardHeight = 164.0;
 
 class RequestsScreen extends ConsumerWidget {
   const RequestsScreen({super.key});
@@ -40,249 +80,262 @@ class RequestsScreen extends ConsumerWidget {
     final statusFilter = ref.watch(requestStatusFilterProvider);
     final items = requestsAsync.asData?.value;
 
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      floatingActionButton: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: _heroGradient,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.navBlue.withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
+    return Theme(
+      data: HomeType.of(context),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
         ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: () => _openNew(context, ref),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  HugeIcon(
-                    icon: HugeIcons.strokeRoundedFileAdd,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'New request',
-                    style: TextStyle(
+        child: Scaffold(
+          backgroundColor: _iosBg,
+          floatingActionButton: Material(
+            color: _iosBlue,
+            elevation: 4,
+            shadowColor: _iosBlue.withValues(alpha: 0.38),
+            borderRadius: BorderRadius.circular(99),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(99),
+              onTap: () => _openNew(context, ref),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 18, 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const HugeIcon(
+                      icon: HugeIcons.strokeRoundedFileAdd,
                       color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
+                      size: 18,
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-      body: SafeArea(
-        bottom: false,
-        child: homeAsync.when(
-          skipLoadingOnReload: true,
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(userFacingError(e), textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => ref.invalidate(mobileHomeProvider),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          data: (home) => RefreshIndicator(
-            onRefresh: () async {
-              invalidateRequests(ref);
-              ref.invalidate(mobileHomeProvider);
-              await ref.read(leaveRequestsProvider.future);
-            },
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                    child: _RequestsHeader(
-                      home: home,
-                      openCount: items?.where((e) => _isOpen(e.status)).length,
-                    ),
-                  ),
-                ),
-                if (items != null && items.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: _StatusSummary(
-                        items: items,
-                        selected: statusFilter,
-                        onSelected: (value) =>
-                            ref
-                                    .read(requestStatusFilterProvider.notifier)
-                                    .state =
-                                value,
-                      ),
-                    ),
-                  ),
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(20, 22, 20, 12),
-                    child: _SectionTitle(
-                      title: 'Leave balance',
-                      icon: HugeIcons.strokeRoundedSun03,
-                      color: Color(0xFF22C55E),
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 176,
-                    child: balancesAsync.when(
-                      skipLoadingOnReload: true,
-                      loading: () => const Center(
-                        child: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(strokeWidth: 2.5),
-                        ),
-                      ),
-                      error: (e, _) => Center(
-                        child: TextButton(
-                          onPressed: () =>
-                              ref.invalidate(leaveBalancesProvider),
-                          child: const Text('Retry balances'),
-                        ),
-                      ),
-                      data: (balances) => balances.isEmpty
-                          ? const _InlineEmpty(
-                              label: 'No leave balances assigned yet',
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
-                              scrollDirection: Axis.horizontal,
-                              itemCount: balances.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: 12),
-                              itemBuilder: (context, index) =>
-                                  _BalanceCard(balance: balances[index]),
-                            ),
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(20, 10, 20, 4),
-                    child: _SectionTitle(
-                      title: 'My requests',
-                      icon: HugeIcons.strokeRoundedFile02,
-                      color: Color(0xFF8B5CF6),
-                    ),
-                  ),
-                ),
-                if (items != null && items.isNotEmpty)
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: _FilterBarDelegate(
-                      child: _FilterBar(
-                        items: items,
-                        selected: typeFilter,
-                        onSelected: (value) =>
-                            ref.read(requestListFilterProvider.notifier).state =
-                                value,
-                      ),
-                    ),
-                  ),
-                ...requestsAsync.when(
-                  skipLoadingOnReload: true,
-                  loading: () => [
-                    const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 48),
-                        child: Center(child: CircularProgressIndicator()),
+                    const SizedBox(width: 8),
+                    Text(
+                      'New request',
+                      style: HomeType.headline(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
                       ),
                     ),
                   ],
-                  error: (e, _) => [
+                ),
+              ),
+            ),
+          ),
+          body: SafeArea(
+            bottom: false,
+            child: homeAsync.when(
+              skipLoadingOnReload: true,
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: _iosBlue),
+              ),
+              error: (e, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(userFacingError(e), textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: () => ref.invalidate(mobileHomeProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              data: (home) => RefreshIndicator(
+                onRefresh: () async {
+                  invalidateRequests(ref);
+                  ref.invalidate(mobileHomeProvider);
+                  await ref.read(leaveRequestsProvider.future);
+                },
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  slivers: [
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            Text(userFacingError(e), textAlign: TextAlign.center),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                              onPressed: () =>
-                                  ref.invalidate(leaveRequestsProvider),
-                              child: const Text('Retry'),
-                            ),
-                          ],
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: _RequestsHeader(
+                          home: home,
+                          openCount: items
+                              ?.where((e) => _isOpen(e.status))
+                              .length,
                         ),
                       ),
                     ),
-                  ],
-                  data: (all) {
-                    final visible = [
-                      for (final item in all)
-                        if (item.matchesFilter(typeFilter) &&
-                            (statusFilter == null ||
-                                (statusFilter == RequestStatus.pending
-                                    ? _isOpen(item.status)
-                                    : item.status == statusFilter)))
-                          item,
-                    ];
-                    if (all.isEmpty) {
-                      return [
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: _EmptyRequests(
-                            onAdd: () => _openNew(context, ref),
+                    if (items != null && items.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: _StatusSummary(
+                            items: items,
+                            selected: statusFilter,
+                            onSelected: (value) =>
+                                ref
+                                        .read(
+                                          requestStatusFilterProvider.notifier,
+                                        )
+                                        .state =
+                                    value,
                           ),
                         ),
-                      ];
-                    }
-                    if (visible.isEmpty) {
-                      return [
-                        SliverFillRemaining(
+                      ),
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: _SectionTitle(
+                          title: 'Leave balance',
+                          icon: HugeIcons.strokeRoundedSun03,
+                          color: _iosGreen,
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: _balanceCardHeight,
+                        child: balancesAsync.when(
+                          skipLoadingOnReload: true,
+                          loading: () => const Center(
+                            child: SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                          ),
+                          error: (e, _) => Center(
+                            child: TextButton(
+                              onPressed: () =>
+                                  ref.invalidate(leaveBalancesProvider),
+                              child: const Text('Retry balances'),
+                            ),
+                          ),
+                          data: (balances) => balances.isEmpty
+                              ? const _InlineEmpty(
+                                  label: 'No leave balances assigned yet',
+                                )
+                              : ListView.separated(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: balances.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: 8),
+                                  itemBuilder: (context, index) =>
+                                      _BalanceCard(balance: balances[index]),
+                                ),
+                        ),
+                      ),
+                    ),
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: _SectionTitle(title: 'My requests'),
+                      ),
+                    ),
+                    if (items != null && items.isNotEmpty)
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _FilterBarDelegate(
+                          child: _FilterBar(
+                            items: items,
+                            selected: typeFilter,
+                            onSelected: (value) =>
+                                ref
+                                        .read(
+                                          requestListFilterProvider.notifier,
+                                        )
+                                        .state =
+                                    value,
+                          ),
+                        ),
+                      ),
+                    ...requestsAsync.when(
+                      skipLoadingOnReload: true,
+                      loading: () => [
+                        const SliverFillRemaining(
                           hasScrollBody: false,
-                          child: _NoMatches(
-                            onClear: () {
-                              ref
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 48),
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        ),
+                      ],
+                      error: (e, _) => [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              children: [
+                                Text(
+                                  userFacingError(e),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  onPressed: () =>
+                                      ref.invalidate(leaveRequestsProvider),
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      data: (all) {
+                        final visible = [
+                          for (final item in all)
+                            if (item.matchesFilter(typeFilter) &&
+                                (statusFilter == null ||
+                                    (statusFilter == RequestStatus.pending
+                                        ? _isOpen(item.status)
+                                        : item.status == statusFilter)))
+                              item,
+                        ];
+                        if (all.isEmpty) {
+                          return [
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: _EmptyRequests(
+                                onAdd: () => _openNew(context, ref),
+                              ),
+                            ),
+                          ];
+                        }
+                        if (visible.isEmpty) {
+                          return [
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: _NoMatches(
+                                onClear: () {
+                                  ref
                                       .read(requestListFilterProvider.notifier)
-                                      .state =
-                                  RequestListFilter.all;
-                              ref
-                                      .read(
-                                        requestStatusFilterProvider.notifier,
-                                      )
-                                      .state =
-                                  null;
-                            },
-                          ),
-                        ),
-                      ];
-                    }
-                    return [_groupedList(context, visible)];
-                  },
+                                      .state = RequestListFilter
+                                      .all;
+                                  ref
+                                          .read(
+                                            requestStatusFilterProvider
+                                                .notifier,
+                                          )
+                                          .state =
+                                      null;
+                                },
+                              ),
+                            ),
+                          ];
+                        }
+                        return [_groupedList(context, visible)];
+                      },
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -309,29 +362,35 @@ class RequestsScreen extends ConsumerWidget {
       if (heading != null) {
         rows.add(
           Padding(
-            padding: EdgeInsets.fromLTRB(4, i == 0 ? 6 : 16, 4, 8),
+            padding: EdgeInsets.fromLTRB(2, i == 0 ? 8 : 16, 2, 8),
             child: Row(
               children: [
                 Text(
-                  heading,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12.5,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.2,
+                  heading.toUpperCase(),
+                  style: HomeType.body(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                    color: _iosMuted,
+                    letterSpacing: 0.6,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(height: 1, color: const Color(0xFFE5E7EB)),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '${counts[heading]}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0x0A000000),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${counts[heading]}',
+                    style: HomeType.body(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 11,
+                      color: _iosMuted,
+                    ),
                   ),
                 ),
               ],
@@ -339,7 +398,7 @@ class RequestsScreen extends ConsumerWidget {
           ),
         );
       } else {
-        rows.add(const SizedBox(height: 10));
+        rows.add(const SizedBox(height: 8));
       }
       rows.add(
         _RequestCard(
@@ -356,41 +415,38 @@ class RequestsScreen extends ConsumerWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.title,
-    required this.icon,
-    required this.color,
-  });
+  const _SectionTitle({required this.title, this.icon, this.color});
 
   final String title;
-  final List<List<dynamic>> icon;
-  final Color color;
+  final List<List<dynamic>>? icon;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(
-            child: HugeIcon(icon: icon, color: color, size: 16),
-          ),
-        ),
-        const SizedBox(width: 10),
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-            letterSpacing: -0.2,
+          style: HomeType.body(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: _iosText,
           ),
         ),
+        if (icon != null && color != null) ...[
+          const Spacer(),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color!.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Center(
+              child: HugeIcon(icon: icon!, color: color!, size: 16),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -424,58 +480,78 @@ class _RequestsHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Requests',
-                style: TextStyle(
+                style: HomeType.headline(
                   fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navBlue,
+                  fontWeight: FontWeight.w700,
+                  color: _iosText,
                   letterSpacing: -0.4,
+                  height: 1.1,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+                style: HomeType.body(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: _iosMuted,
                 ),
               ),
             ],
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(2),
-          decoration: const BoxDecoration(
-            gradient: _heroGradient,
-            shape: BoxShape.circle,
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(2),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: CircleAvatar(
+                backgroundColor: const Color(0xFFEAF0FF),
+                backgroundImage: avatar != null
+                    ? CachedNetworkImageProvider(avatar)
+                    : null,
+                child: avatar == null
+                    ? Text(
+                        home.firstName.isNotEmpty
+                            ? home.firstName[0].toUpperCase()
+                            : '?',
+                        style: HomeType.headline(
+                          color: _iosBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : null,
+              ),
             ),
-            child: CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.purpleSoft,
-              backgroundImage: avatar != null
-                  ? CachedNetworkImageProvider(avatar)
-                  : null,
-              child: avatar == null
-                  ? Text(
-                      home.firstName.isNotEmpty
-                          ? home.firstName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        color: AppColors.purple,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    )
-                  : null,
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: _iosGreen,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
@@ -516,7 +592,7 @@ class _StatusSummary extends StatelessWidget {
     return Row(
       children: [
         for (var i = 0; i < entries.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
+          if (i > 0) const SizedBox(width: 8),
           Expanded(
             child: _StatusTile(
               status: entries[i].$1,
@@ -550,52 +626,62 @@ class _StatusTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = status.color;
+    final accent = _statusAccent(status);
+    final tint = _statusTone(status).$2;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(13),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
+          duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: active ? color : status.softBackground,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: active ? 0.30 : 0.10),
-                blurRadius: 12,
-                offset: const Offset(0, 5),
-              ),
-            ],
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          decoration: _iosCard().copyWith(
+            border: Border.all(
+              color: active ? accent : _iosHairline,
+              width: active ? 1.5 : 1,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              HugeIcon(
-                icon: icon,
-                color: active ? Colors.white : color,
-                size: 20,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      status.label.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: HomeType.body(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: _iosMuted,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: tint,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Center(
+                      child: HugeIcon(icon: icon, color: accent, size: 18),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
                 '$count',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22,
-                  height: 1,
-                  color: active ? Colors.white : AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                status.label,
-                style: TextStyle(
+                style: HomeType.headline(
                   fontWeight: FontWeight.w700,
-                  fontSize: 11.5,
-                  color: active ? Colors.white.withValues(alpha: 0.92) : color,
+                  fontSize: 20,
+                  height: 1,
+                  color: _iosText,
                 ),
               ),
             ],
@@ -616,10 +702,7 @@ class _InlineEmpty extends StatelessWidget {
     return Center(
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-          fontWeight: FontWeight.w600,
-        ),
+        style: HomeType.body(color: _iosMuted, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -637,124 +720,93 @@ class _BalanceCard extends StatelessWidget {
     final total = balance.total.toDouble();
     final fraction = total <= 0 ? 0.0 : (used / total).clamp(0.0, 1.0);
 
-    return Container(
-      width: 152,
-      padding: const EdgeInsets.fromLTRB(14, 14, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: 0.14),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color.lerp(accent, Colors.white, 0.3)!, accent],
+    return SizedBox(
+      width: 148,
+      height: _balanceCardHeight,
+      child: DecoratedBox(
+        decoration: _iosCard(),
+        child: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.1,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(9),
                   ),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Center(
-                  child: HugeIcon(
-                    icon: balance.icon,
-                    color: Colors.white,
-                    size: 17,
+                  child: Center(
+                    child: HugeIcon(
+                      icon: balance.icon,
+                      color: accent,
+                      size: 16,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
+                const SizedBox(height: 6),
+                Text(
                   balance.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
-                    height: 1.15,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                balance.availableFigure,
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 28,
-                  height: 1,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 1),
-                child: Text(
-                  balance.availableCaption,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11,
-                    height: 1.15,
-                    color: accent.withValues(alpha: 0.85),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: fraction,
-              minHeight: 5,
-              backgroundColor: accent.withValues(alpha: 0.14),
-              valueColor: AlwaysStoppedAnimation(accent),
-            ),
-          ),
-          const SizedBox(height: 7),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  balance.usedLine,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10.5,
+                  style: HomeType.body(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.2,
+                    color: _iosText,
                   ),
                 ),
-              ),
-              Text(
-                balance.totalLine,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                const SizedBox(height: 8),
+                Text(
+                  balance.availableFigure,
+                  style: HomeType.headline(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 28,
+                    height: 1,
+                    color: _iosText,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  balance.availableCaption.replaceAll('\n', ' '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: HomeType.body(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 11,
+                    height: 1.2,
+                    color: _iosMuted,
+                  ),
+                ),
+                const Spacer(),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: fraction,
+                    minHeight: 4,
+                    backgroundColor: const Color(0x0F000000),
+                    valueColor: AlwaysStoppedAnimation(accent),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${balance.usedLine}  ${balance.totalLine}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: HomeType.body(
+                    fontSize: 10,
+                    height: 1.2,
+                    fontWeight: FontWeight.w500,
+                    color: _iosMuted,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -766,10 +818,10 @@ class _FilterBarDelegate extends SliverPersistentHeaderDelegate {
   final Widget child;
 
   @override
-  double get minExtent => 54;
+  double get minExtent => 44;
 
   @override
-  double get maxExtent => 54;
+  double get maxExtent => 44;
 
   @override
   Widget build(
@@ -777,11 +829,7 @@ class _FilterBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(
-      color: AppColors.scaffold,
-      alignment: Alignment.center,
-      child: child,
-    );
+    return Container(color: _iosBg, alignment: Alignment.center, child: child);
   }
 
   @override
@@ -803,86 +851,58 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     const filters = RequestListFilter.values;
     return SizedBox(
-      height: 38,
+      height: 32,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final filter = filters[index];
           final count = items
               .where((item) => item.matchesFilter(filter))
               .length;
           final active = filter == selected;
-          final (label, color) = switch (filter) {
-            RequestListFilter.all => ('All', AppColors.navBlue),
-            RequestListFilter.leave => ('Leave', const Color(0xFF22C55E)),
-            RequestListFilter.permission => (
-              'Permission',
-              const Color(0xFFF59E0B),
-            ),
-            RequestListFilter.remote => ('Remote', const Color(0xFF22B8E8)),
-            RequestListFilter.attendance => (
-              'Attendance',
-              const Color(0xFF8B5CF6),
-            ),
-            RequestListFilter.shift => ('Shift', const Color(0xFF6366F1)),
+          final label = switch (filter) {
+            RequestListFilter.all => 'All',
+            RequestListFilter.leave => 'Leave',
+            RequestListFilter.permission => 'Permission',
+            RequestListFilter.remote => 'Remote',
+            RequestListFilter.attendance => 'Attendance',
+            RequestListFilter.shift => 'Shift',
           };
           return GestureDetector(
             onTap: () => onSelected(filter),
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+              duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: active ? color : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: active ? color : color.withValues(alpha: 0.28),
-                ),
-                boxShadow: active
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.30),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
+                color: active ? _iosBlue : const Color(0x1F767680),
+                borderRadius: BorderRadius.circular(99),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5,
-                      color: active ? Colors.white : color,
+                    style: HomeType.body(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                      color: active ? Colors.white : _iosSecondary,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
+                  const SizedBox(width: 5),
+                  Text(
+                    '$count',
+                    style: HomeType.body(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
                       color: active
-                          ? Colors.white.withValues(alpha: 0.25)
-                          : color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      '$count',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11,
-                        color: active ? Colors.white : color,
-                      ),
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : _iosMuted,
                     ),
                   ),
                 ],
@@ -909,64 +929,61 @@ class _EmptyRequests extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 96,
-              height: 96,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.navBlue.withValues(alpha: 0.16),
-                    const Color(0xFF9B5CFF).withValues(alpha: 0.16),
-                  ],
-                ),
+                color: _iosBlue.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: Center(
                 child: HugeIcon(
                   icon: HugeIcons.strokeRoundedFile02,
-                  color: AppColors.navBlue,
-                  size: 44,
+                  color: _iosBlue,
+                  size: 28,
                 ),
               ),
             ),
-            const SizedBox(height: 18),
-            const Text(
+            const SizedBox(height: 14),
+            Text(
               'No requests yet',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
+              style: HomeType.headline(
+                fontWeight: FontWeight.w700,
                 fontSize: 18,
-                color: AppColors.textPrimary,
+                color: _iosText,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Leave, permission, remote work, attendance fixes and shift changes you file will show up here.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textSecondary,
+              style: HomeType.body(
+                color: _iosMuted,
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
                 height: 1.4,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             FilledButton(
               onPressed: onAdd,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.navBlue,
+                backgroundColor: _iosBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 22,
-                  vertical: 14,
+                  horizontal: 18,
+                  vertical: 12,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              child: const Text(
+              child: Text(
                 'Add new request',
-                style: TextStyle(fontWeight: FontWeight.w700),
+                style: HomeType.headline(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
@@ -991,24 +1008,28 @@ class _NoMatches extends StatelessWidget {
           children: [
             HugeIcon(
               icon: HugeIcons.strokeRoundedSearch01,
-              color: const Color(0xFFCBD5E1),
-              size: 48,
+              color: _iosMuted,
+              size: 36,
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Nothing matches these filters',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
+              textAlign: TextAlign.center,
+              style: HomeType.headline(
+                fontWeight: FontWeight.w600,
                 fontSize: 16,
-                color: AppColors.textPrimary,
+                color: _iosText,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             TextButton(
               onPressed: onClear,
-              child: const Text(
+              child: Text(
                 'Clear filters',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: HomeType.body(
+                  fontWeight: FontWeight.w600,
+                  color: _iosBlue,
+                ),
               ),
             ),
           ],
@@ -1042,50 +1063,31 @@ class _RequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = item.status;
 
+    final (fg, tint) = _statusTone(status);
+
     return Material(
       color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [status.softBackground, Colors.white],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: status.color.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: Ink(
+          decoration: _iosCard(),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 14, 8, 14),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
             child: Row(
               children: [
                 Container(
-                  width: 46,
-                  height: 46,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: item.accent.withValues(alpha: 0.18),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+                    color: item.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(9),
                   ),
                   child: Center(
                     child: HugeIcon(
                       icon: item.icon,
                       color: item.accent,
-                      size: 21,
+                      size: 20,
                     ),
                   ),
                 ),
@@ -1094,96 +1096,48 @@ class _RequestCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: status.pillBackground,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              status.label,
-                              style: TextStyle(
-                                color: status.color,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
                       Text(
-                        item.categoryLabel,
-                        style: TextStyle(
-                          color: item.accent,
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: HomeType.headline(
                           fontWeight: FontWeight.w700,
-                          fontSize: 11.5,
+                          fontSize: 14,
+                          color: _iosText,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          HugeIcon(
-                            icon: HugeIcons.strokeRoundedClock01,
-                            color: AppColors.textSecondary,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            item.durationLabel,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          HugeIcon(
-                            icon: HugeIcons.strokeRoundedCalendar03,
-                            color: AppColors.textSecondary,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              _dateLabel,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 2),
+                      Text(
+                        '${item.categoryLabel} · ${item.durationLabel} · $_dateLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: HomeType.body(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: _iosMuted,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFB0B7C3),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tint,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    status.label,
+                    style: HomeType.body(
+                      color: fg,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                    ),
+                  ),
                 ),
               ],
             ),

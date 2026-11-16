@@ -15,7 +15,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>horilla_employee</string>
+		<string>ClockMe</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -72,6 +72,8 @@
 		<string>ClockMe uses Face ID to unlock the app when app lock is turned on.</string>
 		<key>NSAppTransportSecurity</key>
 		<dict>
+			<key>NSAllowsArbitraryLoads</key>
+			<true/>
 			<key>NSAllowsLocalNetworking</key>
 			<true/>
 		</dict>

@@ -40,20 +40,20 @@ def health_check(request):
     Liveness probe — cheap, no dependency checks (Docker HEALTHCHECK).
 
     Also identifies the product and the API contract it speaks. Mobile and
-    other API clients need to know whether a host is a Horilla server, and one
+    other API clients need to know whether a host is a ClockMe server, and one
     they can talk to, *before* posting credentials: a typo'd host should
-    report "not a Horilla server" rather than "invalid credentials".
+    report "not a ClockMe server" rather than "invalid credentials".
 
     Deliberately not the release string. This route is unauthenticated, and
     published security advisories name exact patched versions -- handing the
     precise release to anyone who asks turns a scan into a list of which
-    advisories apply to this host. ``product`` answers "is this Horilla" and
+    advisories apply to this host. ``product`` answers "is this ClockMe" and
     ``api`` answers "can I talk to it"; neither narrows an install to a patch
     level. The exact version is still available to a signed-in client, in the
     capabilities payload.
     """
     return JsonResponse(
-        {"status": "ok", "product": "horilla", "api": API_VERSION}, status=200
+        {"status": "ok", "product": "clockme", "api": API_VERSION}, status=200
     )
 
 

@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../core/branding.dart';
 
-/// In-app hold while the stored session is read. Same blue as the native
-/// launch screen so the hand-off does not flash white.
+/// In-app hold while the stored session is read. Same blue plate as the
+/// native launch screen so the hand-off does not flash.
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
@@ -21,7 +21,7 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ClockMeLogo(size: 96),
+              const ClockMeLogo(size: 96, elevated: false),
               const SizedBox(height: 22),
               const Text(
                 'ClockMe',

@@ -8,11 +8,7 @@ import 'models.dart';
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthState {
-  const AuthState({
-    required this.status,
-    this.session,
-    this.error,
-  });
+  const AuthState({required this.status, this.session, this.error});
 
   final AuthStatus status;
   final AuthSession? session;
@@ -34,7 +30,8 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._repo) : super(const AuthState(status: AuthStatus.unknown)) {
+  AuthNotifier(this._repo)
+    : super(const AuthState(status: AuthStatus.unknown)) {
     _bootstrap();
   }
 

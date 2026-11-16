@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release and profile do not permit cleartext. Debug overrides this file. -->
+<!-- User-entered Horilla hosts may be http:// on a company LAN. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

@@ -1,4 +1,7 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
 class TokenStorage {
   TokenStorage({FlutterSecureStorage? storage})
@@ -22,8 +25,12 @@ class TokenStorage {
   static const _accessKey = 'horilla_access';
   static const _refreshKey = 'horilla_refresh';
   static const _appLockKey = 'horilla_app_lock';
+  static const serverUrlKey = 'horilla_server_url';
 
-  Future<void> saveTokens({required String access, required String refresh}) async {
+  Future<void> saveTokens({
+    required String access,
+    required String refresh,
+  }) async {
     await _storage.write(key: _accessKey, value: access);
     await _storage.write(key: _refreshKey, value: refresh);
   }
@@ -49,4 +56,11 @@ class TokenStorage {
   Future<void> writeAppLock(bool enabled) async {
     await _storage.write(key: _appLockKey, value: enabled ? 'true' : 'false');
   }
+
+  Future<String?> readServerUrl() => _storage.read(key: serverUrlKey);
+
+  Future<void> writeServerUrl(String url) =>
+      _storage.write(key: serverUrlKey, value: url);
+
+  Future<void> clearServerUrl() => _storage.delete(key: serverUrlKey);
 }

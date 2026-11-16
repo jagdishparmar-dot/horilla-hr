@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
@@ -9,41 +10,67 @@ import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../home/fence_status_line.dart';
 import '../home/home_provider.dart';
+import '../home/home_typography.dart';
 import '../home/models.dart';
 import 'attendance_mapper.dart';
 import 'attendance_provider.dart';
 import 'models.dart';
 
-const _heroGradient = LinearGradient(
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-  colors: [Color(0xFF2F6BFF), Color(0xFF6D5CFF), Color(0xFF9B5CFF)],
-);
+const _iosBg = Color(0xFFF2F2F7);
+const _iosText = Color(0xFF1C1C1E);
+const _iosMuted = Color(0xFF8E8E93);
+const _iosSecondary = Color(0xFF636366);
+const _iosBlue = AppColors.navBlue;
+const _iosGreen = Color(0xFF34C759);
+const _iosGreenText = Color(0xFF248A3D);
+const _iosAmber = Color(0xFFFF9500);
+const _iosAmberText = Color(0xFFC97000);
+const _iosRed = Color(0xFFFF3B30);
+const _iosHairline = Color(0x0A000000);
+
+BoxDecoration _iosCard({
+  double radius = 13,
+  Color? borderColor,
+  double borderWidth = 1,
+}) {
+  return BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: borderColor ?? _iosHairline, width: borderWidth),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.04),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  );
+}
 
 Color _accentOf(AttendanceStatus status) => switch (status) {
-  AttendanceStatus.present => const Color(0xFF16A34A),
-  AttendanceStatus.late => const Color(0xFFF97316),
-  AttendanceStatus.overtime => const Color(0xFF8B5CF6),
-  AttendanceStatus.shortHours => const Color(0xFFD97706),
-  AttendanceStatus.missingOut => const Color(0xFFEF4444),
-  AttendanceStatus.absent => const Color(0xFFEF4444),
-  AttendanceStatus.leave => const Color(0xFF2563EB),
-  AttendanceStatus.holiday => const Color(0xFF0F766E),
-  AttendanceStatus.weekend => const Color(0xFF94A3B8),
-  AttendanceStatus.none => const Color(0xFF64748B),
+  AttendanceStatus.present => _iosGreenText,
+  AttendanceStatus.late => _iosAmberText,
+  AttendanceStatus.overtime => _iosGreenText,
+  AttendanceStatus.shortHours => _iosAmberText,
+  AttendanceStatus.missingOut => _iosRed,
+  AttendanceStatus.absent => _iosRed,
+  AttendanceStatus.leave => _iosBlue,
+  AttendanceStatus.holiday => const Color(0xFF30B0C7),
+  AttendanceStatus.weekend => _iosSecondary,
+  AttendanceStatus.none => _iosMuted,
 };
 
 Color _tintOf(AttendanceStatus status) => switch (status) {
-  AttendanceStatus.present => const Color(0xFFE7F8EE),
-  AttendanceStatus.late => const Color(0xFFFFF0E4),
-  AttendanceStatus.overtime => const Color(0xFFF3EEFF),
-  AttendanceStatus.shortHours => const Color(0xFFFFF7ED),
-  AttendanceStatus.missingOut => const Color(0xFFFDECEE),
-  AttendanceStatus.absent => const Color(0xFFFDECEE),
-  AttendanceStatus.leave => const Color(0xFFEFF6FF),
-  AttendanceStatus.holiday => const Color(0xFFCCFBF1),
-  AttendanceStatus.weekend => const Color(0xFFF3F4F6),
-  AttendanceStatus.none => Colors.white,
+  AttendanceStatus.present => const Color(0x2634C759),
+  AttendanceStatus.late => const Color(0x26FF9500),
+  AttendanceStatus.overtime => const Color(0x2634C759),
+  AttendanceStatus.shortHours => const Color(0x26FF9500),
+  AttendanceStatus.missingOut => const Color(0x26FF3B30),
+  AttendanceStatus.absent => const Color(0x26FF3B30),
+  AttendanceStatus.leave => const Color(0x262F6BFF),
+  AttendanceStatus.holiday => const Color(0x2630B0C7),
+  AttendanceStatus.weekend => const Color(0x1F767680),
+  AttendanceStatus.none => _iosBg,
 };
 
 class AttendanceScreen extends ConsumerWidget {
@@ -88,73 +115,95 @@ class AttendanceScreen extends ConsumerWidget {
       }
     });
 
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: homeAsync.when(
-                skipLoadingOnReload: true,
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+    return Theme(
+      data: HomeType.of(context),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
+        child: Scaffold(
+          backgroundColor: _iosBg,
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Expanded(
+                  child: homeAsync.when(
+                    skipLoadingOnReload: true,
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(color: _iosBlue),
+                    ),
+                    error: (e, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              userFacingError(e),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: () =>
+                                  ref.invalidate(mobileHomeProvider),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    data: (home) => Column(
                       children: [
-                        Text(userFacingError(e), textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: () => ref.invalidate(mobileHomeProvider),
-                          child: const Text('Retry'),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          child: _AttendanceHeader(home: home),
+                        ),
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _SummaryShiftToggle(
+                            segment: segment,
+                            onChanged: (s) =>
+                                ref
+                                        .read(
+                                          attendanceSegmentProvider.notifier,
+                                        )
+                                        .state =
+                                    s,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: () async {
+                              invalidateAttendance(ref);
+                              ref.invalidate(mobileHomeProvider);
+                            },
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              switchInCurve: Curves.easeOutCubic,
+                              child: segment == AttendanceSegment.shift
+                                  ? const _ShiftPane(key: ValueKey('shift'))
+                                  : viewMode == AttendanceViewMode.list
+                                  ? const _ListPane(key: ValueKey('list'))
+                                  : const _CalendarPane(
+                                      key: ValueKey('calendar'),
+                                    ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                data: (home) => Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                      child: _AttendanceHeader(home: home),
-                    ),
-                    const SizedBox(height: 14),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _SummaryShiftToggle(
-                        segment: segment,
-                        onChanged: (s) =>
-                            ref.read(attendanceSegmentProvider.notifier).state =
-                                s,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: () async {
-                          invalidateAttendance(ref);
-                          ref.invalidate(mobileHomeProvider);
-                        },
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 260),
-                          switchInCurve: Curves.easeOutCubic,
-                          child: segment == AttendanceSegment.shift
-                              ? const _ShiftPane(key: ValueKey('shift'))
-                              : viewMode == AttendanceViewMode.list
-                              ? const _ListPane(key: ValueKey('list'))
-                              : const _CalendarPane(key: ValueKey('calendar')),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                if (segment != AttendanceSegment.shift)
+                  _AttendanceFooter(home: homeAsync.asData?.value),
+              ],
             ),
-            if (segment != AttendanceSegment.shift)
-              _AttendanceFooter(home: homeAsync.asData?.value),
-          ],
+          ),
         ),
       ),
     );
@@ -183,58 +232,78 @@ class _AttendanceHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Attendance',
-                style: TextStyle(
+                style: HomeType.headline(
                   fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navBlue,
+                  fontWeight: FontWeight.w700,
+                  color: _iosText,
                   letterSpacing: -0.4,
+                  height: 1.1,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 dateLabel,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+                style: HomeType.body(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: _iosMuted,
                 ),
               ),
             ],
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(2),
-          decoration: const BoxDecoration(
-            gradient: _heroGradient,
-            shape: BoxShape.circle,
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(2),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: CircleAvatar(
+                backgroundColor: const Color(0xFFEAF0FF),
+                backgroundImage: avatar != null
+                    ? CachedNetworkImageProvider(avatar)
+                    : null,
+                child: avatar == null
+                    ? Text(
+                        home.firstName.isNotEmpty
+                            ? home.firstName[0].toUpperCase()
+                            : '?',
+                        style: HomeType.headline(
+                          color: _iosBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : null,
+              ),
             ),
-            child: CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.purpleSoft,
-              backgroundImage: avatar != null
-                  ? CachedNetworkImageProvider(avatar)
-                  : null,
-              child: avatar == null
-                  ? Text(
-                      home.firstName.isNotEmpty
-                          ? home.firstName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        color: AppColors.purple,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    )
-                  : null,
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: _iosGreen,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
@@ -250,11 +319,11 @@ class _SummaryShiftToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 46,
-      padding: const EdgeInsets.all(4),
+      height: 32,
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: const Color(0xFFE9EDF7),
-        borderRadius: BorderRadius.circular(24),
+        color: const Color(0x1F767680),
+        borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
         children: [
@@ -299,18 +368,23 @@ class _SegmentChip extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          gradient: selected ? _heroGradient : null,
-          borderRadius: BorderRadius.circular(20),
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: AppColors.navBlue.withValues(alpha: 0.30),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 1,
+                    offset: const Offset(0, 1),
                   ),
                 ]
               : null,
@@ -321,16 +395,22 @@ class _SegmentChip extends StatelessWidget {
             HugeIcon(
               icon: icon,
               size: 16,
-              color: selected ? Colors.white : AppColors.textSecondary,
+              color: selected ? _iosBlue : _iosSecondary,
             ),
             const SizedBox(width: 6),
             Text(
               label,
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: selected ? Colors.white : AppColors.textSecondary,
-              ),
+              style: selected
+                  ? HomeType.headline(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: _iosText,
+                    )
+                  : HomeType.body(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                      color: _iosSecondary,
+                    ),
             ),
           ],
         ),
@@ -339,7 +419,7 @@ class _SegmentChip extends StatelessWidget {
   }
 }
 
-/// Big gradient card with the period's total hours and day counts.
+/// Period totals as compact iOS metric tiles. Same stats as before.
 class _SummaryHero extends StatelessWidget {
   const _SummaryHero({required this.label, required this.days});
 
@@ -351,165 +431,159 @@ class _SummaryHero extends StatelessWidget {
     final stats = buildMonthStats(days);
     final total = formatTotalWorked(days);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        gradient: _heroGradient,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2F6BFF).withValues(alpha: 0.26),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: _iosCard(),
+          child: Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      label,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      total,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        height: 1.05,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
+                      label.toUpperCase(),
+                      style: HomeType.body(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: _iosMuted,
+                        letterSpacing: 0.6,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Total worked',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
+                      style: HomeType.body(
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
+                        color: _iosSecondary,
                       ),
                     ),
                   ],
                 ),
               ),
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: HugeIcon(
-                    icon: HugeIcons.strokeRoundedTimer02,
-                    color: Colors.white,
-                    size: 26,
-                  ),
+              Text(
+                total,
+                style: HomeType.headline(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: _iosText,
+                  letterSpacing: -0.4,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _HeroStat(
-                  value: '${stats.presentDays}',
-                  label: 'Present',
-                  dot: const Color(0xFF4ADE80),
-                ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricTile(
+                label: 'Present',
+                value: '${stats.presentDays}',
+                icon: HugeIcons.strokeRoundedCheckmarkCircle02,
+                accent: _iosGreen,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroStat(
-                  value: '${stats.lateDays}',
-                  label: 'Late',
-                  dot: const Color(0xFFFDBA74),
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricTile(
+                label: 'Late',
+                value: '${stats.lateDays}',
+                icon: HugeIcons.strokeRoundedTimer02,
+                accent: _iosAmber,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroStat(
-                  value: stats.overtimeLabel,
-                  label: 'Overtime',
-                  dot: const Color(0xFFD8B4FE),
-                ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricTile(
+                label: 'Overtime',
+                value: stats.overtimeLabel,
+                icon: HugeIcons.strokeRoundedAnalyticsUp,
+                accent: _iosGreen,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroStat(
-                  value: '${stats.absentDays}',
-                  label: 'Absent',
-                  dot: const Color(0xFFFCA5A5),
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricTile(
+                label: 'Absent',
+                value: '${stats.absentDays}',
+                icon: HugeIcons.strokeRoundedCancelCircle,
+                accent: _iosRed,
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
 
-class _HeroStat extends StatelessWidget {
-  const _HeroStat({
-    required this.value,
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
     required this.label,
-    required this.dot,
+    required this.value,
+    required this.icon,
+    required this.accent,
   });
 
-  final String value;
   final String label;
-  final Color dot;
+  final String value;
+  final List<List<dynamic>> icon;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: _iosCard(),
+      child: Row(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 17,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: HomeType.body(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: _iosMuted,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: HomeType.headline(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: _iosText,
+                    letterSpacing: -0.4,
+                    height: 1,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 3),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10.5,
-                ),
-              ),
-            ],
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Center(
+              child: HugeIcon(icon: icon, color: accent, size: 18),
+            ),
           ),
         ],
       ),
@@ -576,39 +650,47 @@ class _DateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = day.isToday;
-    final accent = _accentOf(day.status);
     final dayNum = DateFormat('dd').format(day.date);
     final weekday = DateFormat('EEE').format(day.date).toUpperCase();
-    final fg = today ? Colors.white : accent;
 
     return Container(
-      width: 52,
-      height: 58,
+      width: 44,
+      height: 44,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        gradient: today ? _heroGradient : null,
-        color: today ? null : accent.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
+        color: today ? _iosBlue : _iosBg,
+        borderRadius: BorderRadius.circular(9),
+        border: today ? null : Border.all(color: const Color(0x08000000)),
+        boxShadow: today
+            ? [
+                BoxShadow(
+                  color: _iosBlue.withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            dayNum,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              color: fg,
-              height: 1,
+            weekday,
+            style: HomeType.body(
+              fontWeight: FontWeight.w600,
+              fontSize: 9,
+              letterSpacing: 0.4,
+              color: today ? Colors.white.withValues(alpha: 0.9) : _iosMuted,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           Text(
-            weekday,
-            style: TextStyle(
+            dayNum,
+            style: HomeType.headline(
               fontWeight: FontWeight.w700,
-              fontSize: 10.5,
-              color: today ? Colors.white.withValues(alpha: 0.9) : fg,
+              fontSize: 15,
+              color: today ? Colors.white : _iosText,
+              height: 1.1,
             ),
           ),
         ],
@@ -628,17 +710,17 @@ class _StatusPill extends StatelessWidget {
     if (label.isEmpty) return const SizedBox.shrink();
     final accent = _accentOf(day.status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.14),
+        color: _tintOf(day.status),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
         label,
-        style: TextStyle(
+        style: HomeType.headline(
           color: accent,
-          fontWeight: FontWeight.w800,
-          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          fontSize: 10,
         ),
       ),
     );
@@ -794,7 +876,7 @@ class _ListPane extends ConsumerWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               itemCount: days.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 if (index == 0) {
                   final isThisWeek = weekStart == weekStartOf(DateTime.now());
@@ -926,16 +1008,16 @@ class _RoundIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.navBlue.withValues(alpha: 0.12),
-      shape: const CircleBorder(),
+      color: _iosBlue.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(7),
       child: InkWell(
-        customBorder: const CircleBorder(),
+        borderRadius: BorderRadius.circular(7),
         onTap: onTap,
         child: SizedBox(
-          width: 38,
-          height: 38,
+          width: 28,
+          height: 28,
           child: Center(
-            child: HugeIcon(icon: icon, color: AppColors.navBlue, size: 19),
+            child: HugeIcon(icon: icon, color: _iosBlue, size: 16),
           ),
         ),
       ),
@@ -962,52 +1044,55 @@ class _PeriodNav extends StatelessWidget {
       children: [
         Expanded(
           child: Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: _iosCard(),
             child: Row(
               children: [
                 IconButton(
                   visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   onPressed: onPrev,
                   icon: const Icon(
                     Icons.chevron_left_rounded,
-                    color: AppColors.navBlue,
+                    color: _iosBlue,
+                    size: 22,
                   ),
                 ),
                 Expanded(
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13.5,
-                      color: AppColors.textPrimary,
+                    style: HomeType.headline(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: _iosText,
                     ),
                   ),
                 ),
                 IconButton(
                   visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   onPressed: onNext,
                   icon: const Icon(
                     Icons.chevron_right_rounded,
-                    color: AppColors.navBlue,
+                    color: _iosBlue,
+                    size: 22,
                   ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         trailing,
       ],
     );
@@ -1031,31 +1116,16 @@ class _AttendanceDayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = _accentOf(day.status);
-
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [_tintOf(day.status), Colors.white]),
-        borderRadius: BorderRadius.circular(20),
-        border: day.isToday
-            ? Border.all(
-                color: AppColors.navBlue.withValues(alpha: 0.35),
-                width: 1.2,
-              )
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: 0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: _iosCard(
+        borderColor: day.isToday ? _iosBlue : _iosHairline,
+        borderWidth: day.isToday ? 2 : 1,
+      ).copyWith(color: day.isToday ? const Color(0x082F6BFF) : Colors.white),
       child: Row(
         children: [
           _DateTile(day: day),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(child: day.hasPunch ? _punchBody() : _emptyBody()),
           const SizedBox(width: 8),
           _StatusPill(day: day),
@@ -1069,10 +1139,10 @@ class _AttendanceDayCard extends StatelessWidget {
       _emptyLabel,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        fontWeight: FontWeight.w600,
+      style: HomeType.body(
+        fontWeight: FontWeight.w500,
         fontSize: 13,
-        color: AppColors.textSecondary,
+        color: _iosMuted,
       ),
     );
   }
@@ -1092,79 +1162,87 @@ class _AttendanceDayCard extends StatelessWidget {
           children: [
             Text(
               inLabel,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
-                color: Color(0xFF16A34A),
+              style: HomeType.headline(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: _iosGreen,
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(child: _TimelineDots(status: day.status)),
-            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                '→',
+                style: HomeType.body(fontSize: 11, color: _iosMuted),
+              ),
+            ),
             Text(
-              outLabel,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
-                color: day.clockOut == null
-                    ? AppColors.textSecondary
-                    : const Color(0xFFE5484D),
+              day.clockOut == null ? '—' : outLabel,
+              style: HomeType.headline(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: day.clockOut == null ? _iosMuted : _iosRed,
               ),
             ),
           ],
         ),
         if (extraPunches.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           for (final punch in extraPunches)
             Text(
               '${formatPunchClock(punch.clockIn, punch.clockInDate, day.date)} → ${punch.open ? 'now' : formatPunchClock(punch.clockOut, punch.clockOutDate, day.date)}',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                color: AppColors.textSecondary,
+              style: HomeType.body(
+                fontWeight: FontWeight.w500,
+                fontSize: 10,
+                color: _iosMuted,
               ),
             ),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Wrap(
-          spacing: 6,
+          spacing: 4,
           runSpacing: 4,
           children: [
+            if (day.clockOut == null && day.hasPunch)
+              const _MiniChip(
+                icon: HugeIcons.strokeRoundedClock01,
+                label: 'In progress',
+                color: _iosGreenText,
+              ),
             if (day.workedLabel != null)
               _MiniChip(
                 icon: HugeIcons.strokeRoundedClock01,
                 label: day.workedLabel!,
-                color: AppColors.navBlue,
+                color: _iosBlue,
               ),
             if (day.overtimeLabel != null)
               _MiniChip(
                 icon: HugeIcons.strokeRoundedAnalyticsUp,
                 label: '+${day.overtimeLabel}',
-                color: const Color(0xFF8B5CF6),
+                color: _iosGreenText,
               ),
             if (day.overtimePending)
-              _MiniChip(
+              const _MiniChip(
                 icon: HugeIcons.strokeRoundedAnalyticsUp,
                 label: 'OT pending',
-                color: const Color(0xFFD97706),
+                color: _iosAmberText,
               ),
             if (day.hoursPending != null)
               _MiniChip(
                 icon: HugeIcons.strokeRoundedClock01,
                 label: 'Short ${day.hoursPending}',
-                color: const Color(0xFFD97706),
+                color: _iosAmberText,
               ),
             if (day.isEarlyOut)
-              _MiniChip(
+              const _MiniChip(
                 icon: HugeIcons.strokeRoundedLogout01,
                 label: 'Early out',
-                color: const Color(0xFFF97316),
+                color: _iosAmberText,
               ),
             if (day.isRequestPending)
-              _MiniChip(
+              const _MiniChip(
                 icon: HugeIcons.strokeRoundedCalendar03,
                 label: 'Pending',
-                color: const Color(0xFFF97316),
+                color: _iosAmberText,
               ),
           ],
         ),
@@ -1187,7 +1265,7 @@ class _MiniChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(99),
@@ -1195,66 +1273,15 @@ class _MiniChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          HugeIcon(icon: icon, size: 12, color: color),
-          const SizedBox(width: 4),
+          HugeIcon(icon: icon, size: 11, color: color),
+          const SizedBox(width: 3),
           Text(
             label,
-            style: TextStyle(
+            style: HomeType.body(
               color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimelineDots extends StatelessWidget {
-  const _TimelineDots({required this.status});
-
-  final AttendanceStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 10,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            height: 3,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(2),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF86EFAC), Color(0xFFFCA5A5)],
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              Container(
-                width: 9,
-                height: 9,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16A34A),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                width: 9,
-                height: 9,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5484D),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -1288,17 +1315,7 @@ class _MonthCalendarGrid extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.navBlue.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+      decoration: _iosCard(radius: 16),
       child: Column(
         children: [
           Row(
@@ -1383,11 +1400,10 @@ class _MonthCalendarGrid extends StatelessWidget {
             curve: Curves.easeOutCubic,
             height: 54,
             decoration: BoxDecoration(
-              gradient: isSelected ? _heroGradient : null,
-              color: isSelected ? null : _tintOf(day.status),
+              color: isSelected ? _iosBlue : _tintOf(day.status),
               borderRadius: BorderRadius.circular(14),
               border: day.isToday && !isSelected
-                  ? Border.all(color: AppColors.navBlue, width: 1.4)
+                  ? Border.all(color: _iosBlue, width: 1.4)
                   : null,
             ),
             child: Column(
@@ -1431,14 +1447,14 @@ class _CalendarLegend extends StatelessWidget {
       spacing: 14,
       runSpacing: 6,
       children: [
-        _LegendDot(color: Color(0xFF16A34A), label: 'Present'),
-        _LegendDot(color: Color(0xFFF97316), label: 'Late'),
-        _LegendDot(color: Color(0xFF8B5CF6), label: 'Overtime'),
-        _LegendDot(color: Color(0xFFD97706), label: 'Short'),
-        _LegendDot(color: Color(0xFFEF4444), label: 'Absent'),
-        _LegendDot(color: Color(0xFF2563EB), label: 'Leave'),
-        _LegendDot(color: Color(0xFF0F766E), label: 'Holiday'),
-        _LegendDot(color: Color(0xFF94A3B8), label: 'Off'),
+        _LegendDot(color: _iosGreen, label: 'Present'),
+        _LegendDot(color: _iosAmber, label: 'Late'),
+        _LegendDot(color: _iosGreen, label: 'Overtime'),
+        _LegendDot(color: _iosAmber, label: 'Short'),
+        _LegendDot(color: _iosRed, label: 'Absent'),
+        _LegendDot(color: _iosBlue, label: 'Leave'),
+        _LegendDot(color: Color(0xFF30B0C7), label: 'Holiday'),
+        _LegendDot(color: _iosMuted, label: 'Off'),
       ],
     );
   }
@@ -1568,7 +1584,8 @@ class _SelectedDayCard extends StatelessWidget {
                   child: _FactTile(
                     icon: HugeIcons.strokeRoundedAnalyticsUp,
                     label: 'Overtime',
-                    value: day.overtimeLabel ??
+                    value:
+                        day.overtimeLabel ??
                         (day.overtimePending ? 'Pending' : 'None'),
                     color: day.overtimePending
                         ? const Color(0xFFD97706)
@@ -1732,22 +1749,13 @@ class _AttendanceFooter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final busy = ref.watch(punchBusyProvider);
     final isClockedIn = home?.isClockedIn ?? false;
-    final buttonColor = isClockedIn
-        ? const Color(0xFFE5484D)
-        : const Color(0xFF16A34A);
+    final buttonColor = isClockedIn ? _iosRed : _iosGreen;
     final buttonLabel = isClockedIn ? 'Check-out' : 'Check-in';
 
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, -4),
-          ),
-        ],
+        border: Border(top: BorderSide(color: Color(0x0F000000))),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 12, 16, 12),
@@ -1764,19 +1772,17 @@ class _AttendanceFooter extends ConsumerWidget {
                         width: 9,
                         height: 9,
                         decoration: BoxDecoration(
-                          color: isClockedIn
-                              ? const Color(0xFF16A34A)
-                              : AppColors.textSecondary,
+                          color: isClockedIn ? _iosGreen : _iosMuted,
                           shape: BoxShape.circle,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         isClockedIn ? 'Clocked in' : 'Clocked out',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
+                        style: HomeType.headline(
+                          fontWeight: FontWeight.w700,
                           fontSize: 15,
-                          color: AppColors.textPrimary,
+                          color: _iosText,
                         ),
                       ),
                     ],
@@ -1784,10 +1790,10 @@ class _AttendanceFooter extends ConsumerWidget {
                   const SizedBox(height: 3),
                   Text(
                     _statusLine(home),
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: HomeType.body(
+                      color: _iosMuted,
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   if (home?.geofenceEnabled == true) ...[
@@ -1812,7 +1818,7 @@ class _AttendanceFooter extends ConsumerWidget {
                   vertical: 15,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               child: busy
@@ -1835,8 +1841,8 @@ class _AttendanceFooter extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Text(
                           buttonLabel,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
+                          style: HomeType.headline(
+                            fontWeight: FontWeight.w700,
                             fontSize: 15,
                           ),
                         ),

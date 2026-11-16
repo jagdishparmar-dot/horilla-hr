@@ -118,3 +118,80 @@ class PasswordResetAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("newsecret99"))
+
+
+class ForgotPasswordAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.company = make_company("Forgot Co")
+        self.user = make_user("forgot_me", password="secret123")
+        self.employee = make_employee(
+            company=self.company,
+            email="forgot_me@test.horilla",
+            user=self.user,
+        )
+
+    def _post(self, payload, send_mail=None, backend=None):
+        from unittest.mock import MagicMock, patch
+
+        from base.forms import PassWordResetForm
+
+        mail = send_mail if send_mail is not None else MagicMock()
+        mail_backend = backend if backend is not None else MagicMock()
+        if not hasattr(mail_backend, "configuration"):
+            mail_backend.configuration = object()
+        if not hasattr(mail_backend, "dynamic_from_email_with_display_name"):
+            mail_backend.dynamic_from_email_with_display_name = "hr@test.horilla"
+        with patch(
+            "horilla_api.api_views.auth.views.ConfiguredEmailBackend",
+            return_value=mail_backend,
+        ):
+            with patch.object(PassWordResetForm, "send_mail", mail):
+                return self.client.post(
+                    "/api/v1/auth/forgot-password/",
+                    payload,
+                    format="json",
+                ), mail
+
+    def test_sends_reset_mail_for_username(self):
+        response, mail = self._post({"email": "forgot_me"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("***@", response.data["message"])
+        self.assertIn("test.horilla", response.data["message"])
+        self.assertTrue(mail.called)
+        context = None
+        args, kwargs = mail.call_args
+        context = kwargs.get("context")
+        if context is None:
+            for arg in args:
+                if isinstance(arg, dict) and "reset_url" in arg:
+                    context = arg
+                    break
+        self.assertIsNotNone(context)
+        self.assertIn("/reset/", context["reset_url"])
+
+    def test_sends_reset_mail_for_email_address(self):
+        response, mail = self._post({"email": "forgot_me@test.horilla"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(mail.called)
+
+    def test_unknown_account_is_400(self):
+        response, mail = self._post({"email": "nobody"})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(mail.called)
+        self.assertIn("No account found", response.data["error"])
+
+    def test_empty_identifier_is_400(self):
+        response, mail = self._post({"email": "  "})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(mail.called)
+
+    def test_unconfigured_mail_server_is_400(self):
+        from unittest.mock import MagicMock
+
+        backend = MagicMock()
+        backend.configuration = None
+        response, mail = self._post({"email": "forgot_me"}, backend=backend)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(mail.called)
+        self.assertIn("mail server", response.data["error"].lower())

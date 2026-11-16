@@ -46,3 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Play Store secrets (example files are committed)
+store/dart_defines.release.json
+ClockMe-KeyStore-Details/
+*keystore*.zip
+*.jks
+*.keystore

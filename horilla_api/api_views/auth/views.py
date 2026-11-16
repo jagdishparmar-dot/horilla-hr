@@ -1,4 +1,5 @@
 from axes.handlers.proxy import AxesProxyHandler
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
@@ -13,14 +14,25 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.utils import get_md5_hash_password
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 
+from base.backends import ConfiguredEmailBackend
+from base.forms import PassWordResetForm, find_reset_user
 from horilla_api.docs import document_api
 
 from ...api_methods.base.capabilities import build_capabilities
 from ...api_serializers.auth.serializers import (
+    ForgotPasswordSerializer,
     GetEmployeeSerializer,
     LoginRequestSerializer,
     PasswordResetSerializer,
 )
+
+
+def _mask_email(email):
+    """j***@acme.com: the first character of the name and the whole domain."""
+    name, _sep, domain = email.partition("@")
+    if not domain:
+        return email
+    return f"{name[:1]}***@{domain}"
 
 
 class LoginAPIView(APIView):
@@ -151,6 +163,105 @@ class LoginAPIView(APIView):
             return Response(
                 {"error": _("Please provide Username and Password")}, status=400
             )
+
+
+class ForgotPasswordAPIView(APIView):
+    """
+    Send the same password-reset link the HTML forgot-password form uses.
+
+    Unauthenticated. The mail contains a one-use URL the employee opens in a
+    browser to choose a new password. ``email`` may be a username or an
+    address — matching ``PassWordResetForm``.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_scope = "login"
+
+    @document_api(
+        operation_description=(
+            "Email a password reset link. Accepts a username or email address. "
+            "The link is the same one-use URL as the web forgot-password form."
+        ),
+        request_body=ForgotPasswordSerializer,
+        responses={
+            200: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    "message": openapi.Schema(type=openapi.TYPE_STRING),
+                },
+            ),
+        },
+        tags=["auth"],
+    )
+    def post(self, request):
+        identifier = (
+            request.data.get("email") or request.data.get("username") or ""
+        )
+        if isinstance(identifier, str):
+            identifier = identifier.strip()
+        else:
+            identifier = ""
+        if not identifier:
+            return Response(
+                {"error": _("Enter your username or email.")},
+                status=400,
+            )
+
+        email_backend = ConfiguredEmailBackend()
+        default = "base.backends.ConfiguredEmailBackend"
+        is_default_backend = True
+        email_backend_setting = getattr(settings, "EMAIL_BACKEND", "")
+        if email_backend_setting and default != email_backend_setting:
+            is_default_backend = False
+        if is_default_backend and not email_backend.configuration:
+            return Response(
+                {"error": _("Primary mail server is not configured")},
+                status=400,
+            )
+
+        form = PassWordResetForm(data={"email": identifier})
+        if not form.is_valid():
+            return Response(
+                {"error": _("Enter your username or email.")},
+                status=400,
+            )
+
+        user = find_reset_user(form.cleaned_data["email"])
+        if not user:
+            return Response(
+                {
+                    "error": _(
+                        "No account found with this username or email. "
+                        "Check it and try again."
+                    )
+                },
+                status=400,
+            )
+
+        form.save(
+            use_https=request.is_secure(),
+            from_email=email_backend.dynamic_from_email_with_display_name,
+            request=request,
+            subject_template_name="base/mail_templates/password_reset_subject.txt",
+            email_template_name="base/mail_templates/password_reset_email.txt",
+            html_email_template_name="base/mail_templates/password_reset_email.html",
+        )
+        if not form.sent_to_email:
+            return Response(
+                {
+                    "error": _(
+                        "This account has no email address to send the reset link to."
+                    )
+                },
+                status=400,
+            )
+        return Response(
+            {
+                "message": _("Password reset link sent to %(email)s")
+                % {"email": _mask_email(form.sent_to_email)}
+            },
+            status=200,
+        )
 
 
 class PasswordResetAPIView(APIView):

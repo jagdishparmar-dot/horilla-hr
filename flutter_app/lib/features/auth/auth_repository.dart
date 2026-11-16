@@ -14,11 +14,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 });
 
 class AuthRepository {
-  AuthRepository({
-    required this._dio,
-    required this._storage,
-    this._logoutDio,
-  });
+  AuthRepository({required this._dio, required this._storage, this._logoutDio});
 
   final Dio _dio;
   final TokenStorage _storage;
@@ -86,5 +82,29 @@ class AuthRepository {
     try {
       await _storage.clear();
     } catch (_) {}
+  }
+
+  /// Emails the web password-reset link. [identifier] is a username or email.
+  Future<String> requestPasswordReset(String identifier) async {
+    final owned = _logoutDio == null;
+    final dio = _logoutDio ?? newPlainDio();
+    try {
+      final response = await dio.post(
+        '/auth/forgot-password/',
+        data: {'email': identifier},
+      );
+      final data = response.data;
+      if (data is Map) {
+        final message = data['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+      return 'If an account exists, a reset link has been sent.';
+    } on DioException catch (e) {
+      throwApi(e);
+    } finally {
+      if (owned) dio.close();
+    }
   }
 }

@@ -10,20 +10,16 @@ class Brand {
     colors: [Color(0xFF2F6BFF), Color(0xFF6D5CFF), Color(0xFF9B5CFF)],
   );
 
-  /// Native splash and Android 12 background. Matches the hero's first stop
-  /// so the OS launch screen does not flash a different color.
+  /// Native splash, Android 12, and in-app splash plate. Matches the
+  /// launcher icon background so the OS launch screen does not flash.
   static const splash = Color(0xFF2F6BFF);
 
-  static const assetIcon = 'assets/branding/app_icon.png';
-  static const assetSplash = 'assets/branding/splash_logo.png';
+  static const assetIcon = 'assets/branding/new_app_icon.png';
+  static const assetSplash = 'assets/branding/new_app_icon.png';
 }
 
 class ClockMeLogo extends StatelessWidget {
-  const ClockMeLogo({
-    super.key,
-    this.size = 88,
-    this.elevated = true,
-  });
+  const ClockMeLogo({super.key, this.size = 88, this.elevated = true});
 
   final double size;
   final bool elevated;
@@ -34,6 +30,7 @@ class ClockMeLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
+        color: Brand.splash,
         borderRadius: BorderRadius.circular(size * 0.24),
         boxShadow: elevated
             ? [

@@ -15,10 +15,12 @@ class AuthSession {
     final employee = json['employee'] as Map<String, dynamic>? ?? {};
     return AuthSession(
       employeeId: employee['id'] as int? ?? 0,
-      fullName: employee['full_name'] as String? ??
+      fullName:
+          employee['full_name'] as String? ??
           employee['employee_first_name'] as String? ??
           'Employee',
-      avatarUrl: employee['employee_profile'] as String? ??
+      avatarUrl:
+          employee['employee_profile'] as String? ??
           employee['get_avatar'] as String?,
       geoFencing: json['geo_fencing'] as bool? ?? false,
     );

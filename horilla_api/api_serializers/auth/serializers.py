@@ -24,6 +24,14 @@ class LoginRequestSerializer(serializers.Serializer):
     password = serializers.CharField()
 
 
+class ForgotPasswordSerializer(serializers.Serializer):
+    """Username or email for the unauthenticated reset-link mail."""
+
+    email = serializers.CharField(
+        help_text="Username or email address of the account.",
+    )
+
+
 class PasswordResetSerializer(serializers.Serializer):
     """Request body for changing the logged-in user's password."""
 

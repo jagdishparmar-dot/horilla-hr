@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 
+import '../../core/config.dart';
+import '../../core/server_url_provider.dart';
 import '../../core/theme.dart';
 import '../auth/app_lock.dart';
 import '../auth/auth_provider.dart';
+import '../auth/server_url_screen.dart';
 import '../home/home_provider.dart';
+import '../home/home_typography.dart';
 import '../home/models.dart';
 import 'activity_center_screen.dart';
 import 'change_password_screen.dart';
@@ -44,19 +49,36 @@ class MoreScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Sign out?'),
-        content: const Text('You will need to sign in again to use ClockMe.'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          'Sign out?',
+          style: HomeType.headline(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            color: moreText,
+          ),
+        ),
+        content: Text(
+          'You will need to sign in again to use ClockMe.',
+          style: HomeType.body(fontSize: 14, color: moreSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: HomeType.body(
+                fontWeight: FontWeight.w600,
+                color: moreBlue,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
+            child: Text(
               'Sign out',
-              style: TextStyle(color: AppColors.red),
+              style: HomeType.body(fontWeight: FontWeight.w600, color: moreRed),
             ),
           ),
         ],
@@ -88,9 +110,9 @@ class MoreScreen extends ConsumerWidget {
       }
       return;
     }
-    final saved = await ref.read(appLockEnabledProvider.notifier).setEnabled(
-      enabled,
-    );
+    final saved = await ref
+        .read(appLockEnabledProvider.notifier)
+        .setEnabled(enabled);
     if (!saved) {
       if (context.mounted) showSnack(context, 'Could not update app lock.');
       return;
@@ -115,150 +137,180 @@ class MoreScreen extends ConsumerWidget {
         documents?.where((d) => d.document.canUpload).length ?? 0;
     final openTickets = tickets?.where((t) => t.status.isOpen).length ?? 0;
     final appLock = ref.watch(appLockEnabledProvider);
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      body: SafeArea(
-        bottom: false,
-        child: homeAsync.when(
-          skipLoadingOnReload: true,
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: ErrorPanel(
-              message: cleanError(e),
-              onRetry: () => ref.invalidate(mobileHomeProvider),
-            ),
-          ),
-          data: (home) => ConstrainedContent(
-            child: RefreshIndicator(
-              onRefresh: () => _refresh(ref),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
-                    child: Text(
-                      'More',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.navBlue,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                  ),
-                  _ProfileCard(
-                    home: home,
-                    onViewProfile: () => _open(context, const ProfileScreen()),
-                  ),
-                  const _SectionTitle('My work'),
-                  _MenuGroup(
+    final serverDisplay = ServerUrl.display(
+      ref.watch(serverUrlProvider).apiBaseUrl,
+    );
+    return Theme(
+      data: HomeType.of(context),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
+        child: Scaffold(
+          backgroundColor: moreCanvas,
+          body: SafeArea(
+            bottom: false,
+            child: homeAsync.when(
+              skipLoadingOnReload: true,
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(
+                child: ErrorPanel(
+                  message: cleanError(e),
+                  onRetry: () => ref.invalidate(mobileHomeProvider),
+                ),
+              ),
+              data: (home) => ConstrainedContent(
+                child: RefreshIndicator(
+                  onRefresh: () => _refresh(ref),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                     children: [
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedInvoice03,
-                        color: const Color(0xFF16A34A),
-                        title: 'Payslips',
-                        subtitle: payslips == null
-                            ? 'Monthly salary breakdown'
-                            : payslips.isEmpty
-                            ? 'No payslips issued yet'
-                            : 'Latest: ${payslips.first.periodLabel}',
-                        onTap: () => _open(context, const PayslipsScreen()),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
+                        child: Text(
+                          'More',
+                          style: HomeType.headline(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: moreText,
+                            letterSpacing: -0.4,
+                            height: 1.1,
+                          ),
+                        ),
                       ),
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedFolder01,
-                        color: const Color(0xFF0EA5E9),
-                        title: 'Documents',
-                        subtitle: documents == null
-                            ? 'Your files and requests from HR'
-                            : documents.isEmpty
-                            ? 'No documents yet'
-                            : docsWaiting > 0
-                            ? '$docsWaiting need${docsWaiting == 1 ? 's' : ''} your attention'
-                            : '${documents.length} on file',
-                        badge: docsWaiting,
-                        onTap: () => _open(context, const DocumentsScreen()),
+                      _ProfileCard(
+                        home: home,
+                        onViewProfile: () =>
+                            _open(context, const ProfileScreen()),
                       ),
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedAnalyticsUp,
-                        color: const Color(0xFFF97316),
-                        title: 'Activity center',
-                        subtitle: 'Recent punches and updates',
-                        showDivider: false,
-                        onTap: () =>
-                            _open(context, const ActivityCenterScreen()),
+                      const _SectionTitle('My work'),
+                      _MenuGroup(
+                        children: [
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedInvoice03,
+                            color: const Color(0xFF16A34A),
+                            title: 'Payslips',
+                            subtitle: payslips == null
+                                ? 'Monthly salary breakdown'
+                                : payslips.isEmpty
+                                ? 'No payslips issued yet'
+                                : 'Latest: ${payslips.first.periodLabel}',
+                            onTap: () => _open(context, const PayslipsScreen()),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedFolder01,
+                            color: const Color(0xFF0EA5E9),
+                            title: 'Documents',
+                            subtitle: documents == null
+                                ? 'Your files and requests from HR'
+                                : documents.isEmpty
+                                ? 'No documents yet'
+                                : docsWaiting > 0
+                                ? '$docsWaiting need${docsWaiting == 1 ? 's' : ''} your attention'
+                                : '${documents.length} on file',
+                            badge: docsWaiting,
+                            onTap: () =>
+                                _open(context, const DocumentsScreen()),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedAnalyticsUp,
+                            color: const Color(0xFFF97316),
+                            title: 'Activity center',
+                            subtitle: 'Recent punches and updates',
+                            showDivider: false,
+                            onTap: () =>
+                                _open(context, const ActivityCenterScreen()),
+                          ),
+                        ],
+                      ),
+                      const _SectionTitle('Company'),
+                      _MenuGroup(
+                        children: [
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedUserGroup,
+                            color: const Color(0xFF22B8E8),
+                            title: 'Directory',
+                            subtitle: 'Find colleagues and contact details',
+                            onTap: () =>
+                                _open(context, const DirectoryScreen()),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedShield01,
+                            color: const Color(0xFF8B5CF6),
+                            title: 'Company policies',
+                            subtitle: policies == null
+                                ? 'Guidelines shared with you'
+                                : policies.isEmpty
+                                ? 'No policies published'
+                                : '${policies.length} polic${policies.length == 1 ? 'y' : 'ies'} published',
+                            showDivider: false,
+                            onTap: () => _open(context, const PoliciesScreen()),
+                          ),
+                        ],
+                      ),
+                      const _SectionTitle('Support'),
+                      _MenuGroup(
+                        children: [
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedCustomerService01,
+                            color: const Color(0xFF22B8E8),
+                            title: 'Help desk',
+                            subtitle: tickets == null
+                                ? 'Raise tickets and read FAQs'
+                                : openTickets == 0
+                                ? 'No open tickets'
+                                : '$openTickets open ticket${openTickets == 1 ? '' : 's'}',
+                            badge: openTickets,
+                            showDivider: false,
+                            onTap: () => _open(context, const HelpDeskScreen()),
+                          ),
+                        ],
+                      ),
+                      const _SectionTitle('Account'),
+                      _MenuGroup(
+                        children: [
+                          _AppLockTile(
+                            enabled: appLock.enabled,
+                            loaded: appLock.loaded,
+                            onChanged: (value) =>
+                                _setAppLock(context, ref, value),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedLink01,
+                            color: moreBlue,
+                            title: 'Server address',
+                            subtitle: serverDisplay.isEmpty
+                                ? 'ClockMe URL used by this device'
+                                : serverDisplay,
+                            onTap: () => _open(
+                              context,
+                              const ServerUrlScreen(editing: true),
+                            ),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedSquareLockPassword,
+                            color: AppColors.orange,
+                            title: 'Change password',
+                            subtitle: 'Keep your account secure',
+                            onTap: () =>
+                                _open(context, const ChangePasswordScreen()),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedLogout01,
+                            color: const Color(0xFFEF4444),
+                            title: 'Sign out',
+                            showDivider: false,
+                            destructive: true,
+                            onTap: () => _confirmSignOut(context, ref),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const _SectionTitle('Company'),
-                  _MenuGroup(
-                    children: [
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedUserGroup,
-                        color: const Color(0xFF22B8E8),
-                        title: 'Directory',
-                        subtitle: 'Find colleagues and contact details',
-                        onTap: () => _open(context, const DirectoryScreen()),
-                      ),
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedShield01,
-                        color: const Color(0xFF8B5CF6),
-                        title: 'Company policies',
-                        subtitle: policies == null
-                            ? 'Guidelines shared with you'
-                            : policies.isEmpty
-                            ? 'No policies published'
-                            : '${policies.length} polic${policies.length == 1 ? 'y' : 'ies'} published',
-                        showDivider: false,
-                        onTap: () => _open(context, const PoliciesScreen()),
-                      ),
-                    ],
-                  ),
-                  const _SectionTitle('Support'),
-                  _MenuGroup(
-                    children: [
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedCustomerService01,
-                        color: const Color(0xFF22B8E8),
-                        title: 'Help desk',
-                        subtitle: tickets == null
-                            ? 'Raise tickets and read FAQs'
-                            : openTickets == 0
-                            ? 'No open tickets'
-                            : '$openTickets open ticket${openTickets == 1 ? '' : 's'}',
-                        badge: openTickets,
-                        showDivider: false,
-                        onTap: () => _open(context, const HelpDeskScreen()),
-                      ),
-                    ],
-                  ),
-                  const _SectionTitle('Account'),
-                  _MenuGroup(
-                    children: [
-                      _AppLockTile(
-                        enabled: appLock.enabled,
-                        loaded: appLock.loaded,
-                        onChanged: (value) => _setAppLock(context, ref, value),
-                      ),
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedSquareLockPassword,
-                        color: AppColors.orange,
-                        title: 'Change password',
-                        subtitle: 'Keep your account secure',
-                        onTap: () =>
-                            _open(context, const ChangePasswordScreen()),
-                      ),
-                      _MenuTile(
-                        icon: HugeIcons.strokeRoundedLogout01,
-                        color: const Color(0xFFEF4444),
-                        title: 'Sign out',
-                        showDivider: false,
-                        destructive: true,
-                        onTap: () => _confirmSignOut(context, ref),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -276,15 +328,65 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
+      padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
       child: Text(
-        text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w800,
-          fontSize: 15,
-          color: AppColors.textPrimary,
+        text.toUpperCase(),
+        style: HomeType.headline(
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+          color: moreMuted,
+          letterSpacing: 0.6,
         ),
       ),
+    );
+  }
+}
+
+class _OnlineAvatar extends StatelessWidget {
+  const _OnlineAvatar({
+    required this.name,
+    required this.url,
+    required this.radius,
+  });
+
+  final String name;
+  final String? url;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: EmployeeAvatar(name: name, url: url, radius: radius),
+        ),
+        Positioned(
+          right: 1,
+          bottom: 1,
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: moreGreen,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -299,36 +401,19 @@ class _ProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final role = home.roleLine;
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: heroGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6D5CFF).withValues(alpha: 0.30),
-            blurRadius: 20,
-            offset: const Offset(0, 9),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(2.5),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: EmployeeAvatar(
-                  name: home.employeeName,
-                  url: home.avatarUrl,
-                  radius: 30,
-                ),
+              _OnlineAvatar(
+                name: home.employeeName,
+                url: home.avatarUrl,
+                radius: 28,
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,10 +422,10 @@ class _ProfileCard extends StatelessWidget {
                       home.employeeName,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
+                      style: HomeType.headline(
+                        color: moreText,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
                       ),
                     ),
                     if (role.isNotEmpty) ...[
@@ -349,29 +434,29 @@ class _ProfileCard extends StatelessWidget {
                         role,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.88),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12.5,
+                        style: HomeType.body(
+                          color: moreMuted,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
                         ),
                       ),
                     ],
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
+                        horizontal: 8,
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: moreCanvas,
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(
                         home.displayBadgeId,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11.5,
+                        style: HomeType.body(
+                          color: moreSecondary,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
                         ),
                       ),
                     ),
@@ -380,22 +465,27 @@ class _ProfileCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               onPressed: onViewProfile,
               style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.navBlue,
+                backgroundColor: moreBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              child: const Text(
+              child: Text(
                 'View profile',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                style: HomeType.headline(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
@@ -413,7 +503,7 @@ class _MenuGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: cardDecoration(radius: 20),
+      decoration: cardDecoration(),
       clipBehavior: Clip.antiAlias,
       // The tiles' ink has to paint above the white card, so give them their
       // own (transparent) Material instead of the scaffold's behind it.
@@ -441,26 +531,25 @@ class _AppLockTile extends StatelessWidget {
     return Column(
       children: [
         SwitchListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-          secondary: const GradientIconTile(
+          contentPadding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
+          secondary: const _TintIcon(
             icon: HugeIcons.strokeRoundedFingerPrint,
-            color: AppColors.navBlue,
-            size: 42,
+            color: moreBlue,
           ),
-          title: const Text(
+          title: Text(
             'App lock',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 14.5,
-              color: AppColors.textPrimary,
+            style: HomeType.headline(
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+              color: moreText,
             ),
           ),
-          subtitle: const Text(
+          subtitle: Text(
             'Ask for fingerprint, face, or PIN',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.textSecondary,
+            style: HomeType.body(
+              color: moreMuted,
               fontWeight: FontWeight.w500,
               fontSize: 12,
             ),
@@ -468,9 +557,9 @@ class _AppLockTile extends StatelessWidget {
           value: enabled,
           onChanged: loaded ? onChanged : null,
           activeThumbColor: Colors.white,
-          activeTrackColor: AppColors.navBlue,
+          activeTrackColor: moreGreen,
         ),
-        const Divider(height: 1, indent: 70, color: Color(0xFFF1F5F9)),
+        const Divider(height: 1, indent: 62, color: moreHairline),
       ],
     );
   }
@@ -507,13 +596,13 @@ class _MenuTile extends StatelessWidget {
             horizontal: 14,
             vertical: 2,
           ),
-          leading: GradientIconTile(icon: icon, color: color, size: 42),
+          leading: _TintIcon(icon: icon, color: color),
           title: Text(
             title,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 14.5,
-              color: destructive ? AppColors.red : AppColors.textPrimary,
+            style: HomeType.headline(
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+              color: destructive ? moreRed : moreText,
             ),
           ),
           subtitle: subtitle == null
@@ -522,8 +611,8 @@ class _MenuTile extends StatelessWidget {
                   subtitle!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: HomeType.body(
+                    color: moreMuted,
                     fontWeight: FontWeight.w500,
                     fontSize: 12,
                   ),
@@ -533,35 +622,57 @@ class _MenuTile extends StatelessWidget {
             children: [
               if (badge > 0)
                 Container(
-                  margin: const EdgeInsets.only(right: 4),
+                  margin: const EdgeInsets.only(right: 6),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: color,
+                    color: moreBlue,
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
                     '$badge',
-                    style: const TextStyle(
+                    style: HomeType.headline(
                       color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
                     ),
                   ),
                 ),
               if (!destructive)
                 const Icon(
                   Icons.chevron_right_rounded,
-                  color: AppColors.textSecondary,
+                  color: Color(0xFFC7C7CC),
                 ),
             ],
           ),
         ),
         if (showDivider)
-          const Divider(height: 1, indent: 70, color: Color(0xFFEEF0F3)),
+          const Divider(height: 1, indent: 62, color: moreHairline),
       ],
+    );
+  }
+}
+
+class _TintIcon extends StatelessWidget {
+  const _TintIcon({required this.icon, required this.color});
+
+  final List<List<dynamic>> icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Center(
+        child: HugeIcon(icon: icon, color: color, size: 18),
+      ),
     );
   }
 }

@@ -1,12 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
+import '../home/home_typography.dart';
 import 'models.dart';
 import 'notifications_provider.dart';
+
+const _iosBg = Color(0xFFF2F2F7);
+const _iosText = Color(0xFF1C1C1E);
+const _iosMuted = Color(0xFF8E8E93);
+const _iosSecondary = Color(0xFF636366);
+const _iosBlue = AppColors.navBlue;
+const _iosRed = Color(0xFFFF3B30);
+const _iosHairline = Color(0x0A000000);
+const _iosFill = Color(0x1F767680);
+
+BoxDecoration _iosCard({double radius = 16}) {
+  return BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: _iosHairline),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.04),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  );
+}
 
 String _relativeTime(DateTime timestamp) {
   final now = DateTime.now();
@@ -47,19 +73,36 @@ class NotificationsScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Clear all notifications?'),
-        content: const Text('This removes every notification from your list.'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          'Clear all notifications?',
+          style: HomeType.headline(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            color: _iosText,
+          ),
+        ),
+        content: Text(
+          'This removes every notification from your list.',
+          style: HomeType.body(fontSize: 14, color: _iosSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep'),
+            child: Text(
+              'Keep',
+              style: HomeType.body(
+                fontWeight: FontWeight.w600,
+                color: _iosBlue,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
+            child: Text(
               'Clear all',
-              style: TextStyle(color: AppColors.red),
+              style: HomeType.body(fontWeight: FontWeight.w600, color: _iosRed),
             ),
           ),
         ],
@@ -101,179 +144,216 @@ class NotificationsScreen extends ConsumerWidget {
     final items = itemsAsync.asData?.value ?? const <AppNotification>[];
     final unread = notificationCount(items, NotificationFilter.unread);
 
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Notifications',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.navBlue,
-                            letterSpacing: -0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          unread == 0
-                              ? "You're all caught up"
-                              : unread == 1
-                              ? '1 unread notification'
-                              : '$unread unread notifications',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: unread == 0
-                                ? AppColors.textSecondary
-                                : AppColors.navBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (unread > 0)
-                    _MarkAllButton(onTap: () => _markAll(context, ref, items)),
-                  PopupMenuButton<String>(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    onSelected: (value) {
-                      if (value == 'clear') _clearAll(context, ref, items);
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'clear',
-                        enabled: items.isNotEmpty,
-                        child: const Text('Clear all'),
-                      ),
-                    ],
-                    icon: HugeIcon(
-                      icon: HugeIcons.strokeRoundedMoreVertical,
-                      color: AppColors.textSecondary,
-                      size: 22,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (items.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              _FilterBar(
-                items: items,
-                selected: filter,
-                onSelected: (value) =>
-                    ref.read(notificationFilterProvider.notifier).state = value,
-              ),
-            ],
-            const SizedBox(height: 8),
-            Expanded(
-              child: sectionsAsync.when(
-                skipLoadingOnReload: true,
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(userFacingError(e), textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: () =>
-                              ref.invalidate(notificationsProvider),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                data: (sections) => RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(notificationsProvider);
-                    await ref.read(notificationsProvider.future);
-                  },
-                  child: sections.isEmpty
-                      ? ListView(
-                          physics: const AlwaysScrollableScrollPhysics(),
+    return Theme(
+      data: HomeType.of(context),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
+        child: Scaffold(
+          backgroundColor: _iosBg,
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 4, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SizedBox(
-                              height: MediaQuery.sizeOf(context).height * 0.5,
-                              child: _EmptyState(
-                                filter: filter,
-                                hasAny: items.isNotEmpty,
-                                onClear: () =>
-                                    ref
-                                        .read(
-                                          notificationFilterProvider.notifier,
-                                        )
-                                        .state = NotificationFilter
-                                        .all,
+                            Text(
+                              'Notifications',
+                              style: HomeType.headline(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: _iosText,
+                                letterSpacing: -0.4,
+                                height: 1.1,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              unread == 0
+                                  ? "You're all caught up"
+                                  : unread == 1
+                                  ? '1 unread notification'
+                                  : '$unread unread notifications',
+                              style: HomeType.body(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: unread == 0 ? _iosMuted : _iosBlue,
                               ),
                             ),
                           ],
-                        )
-                      : ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(
-                            parent: BouncingScrollPhysics(),
-                          ),
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                          itemCount: sections.length,
-                          itemBuilder: (context, sectionIndex) {
-                            final section = sections[sectionIndex];
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _SectionHeader(
-                                  label: section.label,
-                                  count: section.items.length,
-                                  first: sectionIndex == 0,
-                                ),
-                                for (
-                                  var i = 0;
-                                  i < section.items.length;
-                                  i++
-                                ) ...[
-                                  if (i > 0) const SizedBox(height: 10),
-                                  _SwipeToDelete(
-                                    item: section.items[i],
-                                    onDelete: () async {
-                                      final err = await ref
-                                          .read(notificationsActionProvider)
-                                          .delete(section.items[i].id);
-                                      if (err != null && context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                              SnackBar(content: Text(err)),
-                                            );
-                                      }
-                                    },
-                                    child: _NotificationCard(
-                                      item: section.items[i],
-                                      onTap: () =>
-                                          _open(context, ref, section.items[i]),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            );
-                          },
                         ),
+                      ),
+                      PopupMenuButton<String>(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        color: Colors.white,
+                        onSelected: (value) {
+                          if (value == 'clear') _clearAll(context, ref, items);
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'clear',
+                            enabled: items.isNotEmpty,
+                            child: Text(
+                              'Clear all',
+                              style: HomeType.body(
+                                fontWeight: FontWeight.w500,
+                                color: items.isNotEmpty ? _iosRed : _iosMuted,
+                              ),
+                            ),
+                          ),
+                        ],
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedMoreVertical,
+                          color: _iosSecondary,
+                          size: 22,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                if (unread > 0)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _MarkAllButton(
+                        onTap: () => _markAll(context, ref, items),
+                      ),
+                    ),
+                  ),
+                if (items.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _FilterBar(
+                    items: items,
+                    selected: filter,
+                    onSelected: (value) =>
+                        ref.read(notificationFilterProvider.notifier).state =
+                            value,
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Expanded(
+                  child: sectionsAsync.when(
+                    skipLoadingOnReload: true,
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(color: _iosBlue),
+                    ),
+                    error: (e, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              userFacingError(e),
+                              textAlign: TextAlign.center,
+                              style: HomeType.body(color: _iosSecondary),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: () =>
+                                  ref.invalidate(notificationsProvider),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    data: (sections) => RefreshIndicator(
+                      color: _iosBlue,
+                      onRefresh: () async {
+                        ref.invalidate(notificationsProvider);
+                        await ref.read(notificationsProvider.future);
+                      },
+                      child: sections.isEmpty
+                          ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                SizedBox(
+                                  height:
+                                      MediaQuery.sizeOf(context).height * 0.5,
+                                  child: _EmptyState(
+                                    filter: filter,
+                                    hasAny: items.isNotEmpty,
+                                    onClear: () =>
+                                        ref
+                                                .read(
+                                                  notificationFilterProvider
+                                                      .notifier,
+                                                )
+                                                .state =
+                                            NotificationFilter.all,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(
+                                parent: BouncingScrollPhysics(),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                              itemCount: sections.length,
+                              itemBuilder: (context, sectionIndex) {
+                                final section = sections[sectionIndex];
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _SectionHeader(
+                                      label: section.label,
+                                      count: section.items.length,
+                                      first: sectionIndex == 0,
+                                    ),
+                                    for (
+                                      var i = 0;
+                                      i < section.items.length;
+                                      i++
+                                    ) ...[
+                                      if (i > 0) const SizedBox(height: 10),
+                                      _SwipeToDelete(
+                                        item: section.items[i],
+                                        onDelete: () async {
+                                          final err = await ref
+                                              .read(notificationsActionProvider)
+                                              .delete(section.items[i].id);
+                                          if (err != null && context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                                  SnackBar(content: Text(err)),
+                                                );
+                                          }
+                                        },
+                                        child: _NotificationCard(
+                                          item: section.items[i],
+                                          onTap: () => _open(
+                                            context,
+                                            ref,
+                                            section.items[i],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              },
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -287,37 +367,27 @@ class _MarkAllButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 2),
-      child: Material(
-        color: AppColors.navBlue.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(99),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(99),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                HugeIcon(
-                  icon: HugeIcons.strokeRoundedCheckmarkCircle02,
-                  color: AppColors.navBlue,
-                  size: 16,
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  'Mark all read',
-                  style: TextStyle(
-                    color: AppColors.navBlue,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const HugeIcon(
+            icon: HugeIcons.strokeRoundedCheckmarkCircle02,
+            color: _iosBlue,
+            size: 16,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Mark all read',
+            style: HomeType.headline(
+              color: _iosBlue,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -337,94 +407,93 @@ class _FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const filters = NotificationFilter.values;
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        scrollDirection: Axis.horizontal,
-        itemCount: filters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final filter = filters[index];
-          final count = notificationCount(items, filter);
-          final active = filter == selected;
-          final (label, color) = switch (filter) {
-            NotificationFilter.all => ('All', AppColors.navBlue),
-            NotificationFilter.unread => ('Unread', const Color(0xFFEC4899)),
-            NotificationFilter.requests => (
-              'Requests',
-              NotificationCategory.requests.color,
-            ),
-            NotificationFilter.attendance => (
-              'Attendance',
-              NotificationCategory.attendance.color,
-            ),
-            NotificationFilter.updates => (
-              'Updates',
-              NotificationCategory.updates.color,
-            ),
-          };
-          return GestureDetector(
-            onTap: () => onSelected(filter),
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: active ? color : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: active ? color : color.withValues(alpha: 0.28),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: _iosFill,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: filters.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 2),
+          itemBuilder: (context, index) {
+            final filter = filters[index];
+            final count = notificationCount(items, filter);
+            final active = filter == selected;
+            final label = switch (filter) {
+              NotificationFilter.all => 'All',
+              NotificationFilter.unread => 'Unread',
+              NotificationFilter.requests => 'Requests',
+              NotificationFilter.attendance => 'Attendance',
+              NotificationFilter.updates => 'Updates',
+            };
+            return GestureDetector(
+              onTap: () => onSelected(filter),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: active
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : null,
                 ),
-                boxShadow: active
-                    ? [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.30),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5,
-                      color: active ? Colors.white : color,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: active
-                          ? Colors.white.withValues(alpha: 0.25)
-                          : color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      '$count',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11,
-                        color: active ? Colors.white : color,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: HomeType.body(
+                        fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 13,
+                        color: active ? _iosText : _iosSecondary,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: filter == NotificationFilter.unread && !active
+                            ? _iosBlue
+                            : active
+                            ? _iosFill
+                            : Colors.white.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: HomeType.headline(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                          color: filter == NotificationFilter.unread && !active
+                              ? Colors.white
+                              : _iosSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -444,26 +513,25 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(4, first ? 6 : 18, 4, 10),
+      padding: EdgeInsets.fromLTRB(4, first ? 6 : 16, 4, 10),
       child: Row(
         children: [
           Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-              color: AppColors.textPrimary,
+            label.toUpperCase(),
+            style: HomeType.headline(
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              color: _iosMuted,
+              letterSpacing: 0.6,
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(child: Container(height: 1, color: const Color(0xFFE5E7EB))),
-          const SizedBox(width: 8),
+          const Spacer(),
           Text(
             '$count',
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-              color: AppColors.textSecondary,
+            style: HomeType.body(
+              fontWeight: FontWeight.w500,
+              fontSize: 11,
+              color: _iosMuted,
             ),
           ),
         ],
@@ -493,13 +561,13 @@ class _SwipeToDelete extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 22),
         decoration: BoxDecoration(
-          color: const Color(0xFFEF4444),
-          borderRadius: BorderRadius.circular(20),
+          color: _iosRed,
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: HugeIcon(
+        child: const HugeIcon(
           icon: HugeIcons.strokeRoundedDelete02,
           color: Colors.white,
-          size: 24,
+          size: 22,
         ),
       ),
       child: child,
@@ -528,36 +596,29 @@ class _EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 92,
-              height: 92,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.navBlue.withValues(alpha: 0.16),
-                    const Color(0xFF9B5CFF).withValues(alpha: 0.16),
-                  ],
-                ),
+                color: _iosBlue.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: Center(
                 child: HugeIcon(
                   icon: filtered
                       ? HugeIcons.strokeRoundedSearch01
                       : HugeIcons.strokeRoundedNotification03,
-                  color: AppColors.navBlue,
-                  size: 42,
+                  color: _iosBlue,
+                  size: 28,
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Text(
               filtered ? 'Nothing here' : 'No notifications yet',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
+              style: HomeType.headline(
+                fontWeight: FontWeight.w700,
                 fontSize: 17,
-                color: AppColors.textPrimary,
+                color: _iosText,
               ),
             ),
             const SizedBox(height: 6),
@@ -566,8 +627,8 @@ class _EmptyState extends StatelessWidget {
                   ? 'No notifications match this filter.'
                   : 'Approvals, reminders and announcements will appear here.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: HomeType.body(
+                color: _iosMuted,
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
                 height: 1.4,
@@ -577,9 +638,12 @@ class _EmptyState extends StatelessWidget {
               const SizedBox(height: 8),
               TextButton(
                 onPressed: onClear,
-                child: const Text(
+                child: Text(
                   'Show all',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: HomeType.body(
+                    fontWeight: FontWeight.w600,
+                    color: _iosBlue,
+                  ),
                 ),
               ),
             ],
@@ -603,49 +667,28 @@ class _NotificationCard extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: unread
-              ? LinearGradient(
-                  colors: [accent.withValues(alpha: 0.12), Colors.white],
-                )
-              : null,
-          color: unread ? null : Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: (unread ? accent : Colors.black).withValues(
-                alpha: unread ? 0.10 : 0.04,
-              ),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: _iosCard(),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color.lerp(accent, Colors.white, 0.3)!, accent],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
+                    color: accent.withValues(alpha: unread ? 0.15 : 0.10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: HugeIcon(
                       icon: item.icon,
-                      color: Colors.white,
-                      size: 21,
+                      color: unread ? accent : _iosSecondary,
+                      size: 20,
                     ),
                   ),
                 ),
@@ -660,31 +703,43 @@ class _NotificationCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               item.title,
-                              maxLines: 3,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                              style: HomeType.headline(
                                 fontWeight: unread
-                                    ? FontWeight.w800
-                                    : FontWeight.w700,
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
                                 fontSize: 14,
                                 height: 1.25,
-                                color: AppColors.textPrimary,
+                                color: _iosText,
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          if (unread)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4, right: 6),
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: accent,
-                                  shape: BoxShape.circle,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _relativeTime(item.timestamp),
+                                style: HomeType.body(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 11,
+                                  color: _iosMuted,
                                 ),
                               ),
-                            ),
+                              if (unread) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: const BoxDecoration(
+                                    color: _iosBlue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ],
                       ),
                       if (item.body.isNotEmpty) ...[
@@ -693,53 +748,32 @@ class _NotificationCard extends StatelessWidget {
                           item.body,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: HomeType.body(
                             fontWeight: FontWeight.w500,
-                            fontSize: 12.5,
+                            fontSize: 12,
                             height: 1.35,
-                            color: AppColors.textSecondary,
+                            color: _iosMuted,
                           ),
                         ),
                       ],
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: item.category.color.withValues(
-                                alpha: 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            child: Text(
-                              item.category.label,
-                              style: TextStyle(
-                                color: item.category.color,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 10.5,
-                              ),
-                            ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: item.category.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          item.category.label,
+                          style: HomeType.headline(
+                            color: item.category.color,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 10,
                           ),
-                          const SizedBox(width: 8),
-                          HugeIcon(
-                            icon: HugeIcons.strokeRoundedClock01,
-                            color: AppColors.textSecondary,
-                            size: 12,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _relativeTime(item.timestamp),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11.5,
-                              color: unread ? accent : AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
@@ -770,152 +804,126 @@ class _NotificationSheet extends StatelessWidget {
         maxHeight: MediaQuery.sizeOf(context).height * 0.8,
       ),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        color: _iosBg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const SizedBox(height: 10),
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 14, 8, 20),
+            width: 36,
+            height: 5,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color.lerp(accent, Colors.black, 0.08)!,
-                  Color.lerp(accent, const Color(0xFF9B5CFF), 0.45)!,
-                ],
-              ),
+              color: const Color(0x33767680),
+              borderRadius: BorderRadius.circular(99),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: HugeIcon(icon: item.icon, color: accent, size: 20),
+                  ),
                 ),
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: HugeIcon(
-                          icon: item.icon,
-                          color: accent,
-                          size: 24,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.category.label.toUpperCase(),
+                        style: HomeType.body(
+                          color: _iosMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.6,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.category.label.toUpperCase(),
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            when,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 2),
+                      Text(
+                        when,
+                        style: HomeType.body(
+                          color: _iosSecondary,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedCancel01,
+                    color: _iosSecondary,
+                    size: 22,
+                  ),
                 ),
               ],
             ),
           ),
           Flexible(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottom),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      height: 1.3,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  if (body.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF6F7FB),
-                        borderRadius: BorderRadius.circular(16),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 24 + bottom),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                decoration: _iosCard(radius: 13),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: HomeType.headline(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        height: 1.3,
+                        color: _iosText,
                       ),
-                      child: Text(
+                    ),
+                    if (body.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
                         body,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
+                        style: HomeType.body(
+                          fontWeight: FontWeight.w500,
                           fontSize: 14,
                           height: 1.45,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      HugeIcon(
-                        icon: HugeIcons.strokeRoundedClock01,
-                        color: AppColors.textSecondary,
-                        size: 15,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _relativeTime(item.timestamp),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12.5,
+                          color: _iosSecondary,
                         ),
                       ),
                     ],
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const HugeIcon(
+                          icon: HugeIcons.strokeRoundedClock01,
+                          color: _iosMuted,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _relativeTime(item.timestamp),
+                          style: HomeType.body(
+                            color: _iosMuted,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

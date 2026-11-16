@@ -23,21 +23,34 @@ flutter run
 
 ### API base URL
 
-Default (Android emulator → host):
+On first launch the app asks for your ClockMe server (for example
+`http://10.0.2.2:8000` on the Android emulator, or
+`https://hr.yourcompany.com`). It is saved on the device and can be changed
+later under **More → Server address**.
 
-`http://10.0.2.2:8000/api/v1`
-
-Override at build/run time:
+Live API tests / CLI tools can still pass a URL:
 
 ```bash
-# iOS simulator
-flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
-
-# Physical device (use your PC LAN IP)
-flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8000/api/v1
+flutter test test/request_flow_api_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
 ```
 
-Ensure Django `ALLOWED_HOSTS` includes your host/IP (local `.env` already allows `localhost,127.0.0.1`).
+Ensure Django `ALLOWED_HOSTS` includes that host.
+
+## Play Store (Android)
+
+Application ID: **`com.codefest.clockme`**. Display name: **ClockMe**.
+
+The ClockMe URL is entered in the app, so a dart-define is not required for store builds:
+
+```bash
+flutter build appbundle --release
+```
+
+The signed AAB is `build/app/outputs/bundle/release/app-release.aab`. Upload that in Play Console (not an APK). HTTP company LAN hosts are allowed; prefer HTTPS in production.
+
+Signing uses the existing keystore in `ClockMe-KeyStore-Details/` via `android/key.properties` (gitignored). Back the keystore and credentials up offline. If you lose the upload key, you cannot ship updates until Google resets it via Play App Signing.
+
+Play Console still needs a privacy policy URL (location + biometrics), a Data safety form, and listing assets in `store/play/`.
 
 ## Project layout
 

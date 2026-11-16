@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/theme.dart';
 import '../directory/directory_models.dart';
 import '../directory/directory_repository.dart';
 import '../home/home_provider.dart';
+import '../home/home_typography.dart';
 import '../home/models.dart';
 import 'edit_profile_screen.dart';
 import 'more_models.dart';
@@ -35,18 +35,25 @@ class ProfileScreen extends ConsumerWidget {
 
     return MorePage(
       title: 'My Profile',
+      backLabel: 'More',
       actions: [
         if (bundle != null)
           IconButton(
             tooltip: 'Edit profile',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => EditProfileScreen(profile: bundle.profile),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (ctx) => Padding(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.paddingOf(ctx).top + 8,
+                ),
+                child: EditProfileScreen(profile: bundle.profile),
               ),
             ),
-            icon: HugeIcon(
+            icon: const HugeIcon(
               icon: HugeIcons.strokeRoundedPencilEdit02,
-              color: AppColors.navBlue,
+              color: moreBlue,
               size: 22,
             ),
           ),
@@ -107,40 +114,55 @@ class _Hero extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
-      decoration: BoxDecoration(
-        gradient: heroGradient,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6D5CFF).withValues(alpha: 0.32),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+      decoration: cardDecoration(),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: EmployeeAvatar(
-              name: name,
-              url: home?.avatarUrl ?? bundle?.profile.avatarUrl,
-              radius: 44,
-            ),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 6,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: EmployeeAvatar(
+                  name: name,
+                  url: home?.avatarUrl ?? bundle?.profile.avatarUrl,
+                  radius: 44,
+                ),
+              ),
+              Positioned(
+                right: 4,
+                bottom: 4,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: moreGreen,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
             name,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 21,
+            style: HomeType.headline(
+              color: moreText,
+              fontWeight: FontWeight.w700,
+              fontSize: 22,
             ),
           ),
           if (role.isNotEmpty) ...[
@@ -148,9 +170,9 @@ class _Hero extends StatelessWidget {
             Text(
               role,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.88),
-                fontWeight: FontWeight.w600,
+              style: HomeType.body(
+                color: moreMuted,
+                fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
             ),
@@ -159,14 +181,14 @@ class _Hero extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: moreCanvas,
               borderRadius: BorderRadius.circular(99),
             ),
             child: Text(
               badge,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+              style: HomeType.body(
+                color: moreSecondary,
+                fontWeight: FontWeight.w500,
                 fontSize: 12,
               ),
             ),
@@ -176,39 +198,35 @@ class _Hero extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(18),
+                color: moreCanvas,
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
                   for (var i = 0; i < stats.length; i++) ...[
                     if (i > 0)
-                      Container(
-                        width: 1,
-                        height: 30,
-                        color: Colors.white.withValues(alpha: 0.25),
-                      ),
+                      Container(width: 1, height: 30, color: moreHairline),
                     Expanded(
                       child: Column(
                         children: [
+                          Text(
+                            stats[i].$1,
+                            style: HomeType.body(
+                              color: moreMuted,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
                           Text(
                             stats[i].$2,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
+                            style: HomeType.headline(
+                              color: moreText,
+                              fontWeight: FontWeight.w700,
                               fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            stats[i].$1,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
                             ),
                           ),
                         ],
@@ -443,10 +461,10 @@ class _NotProvided extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
+    return Text(
       'No contact details on file.',
-      style: TextStyle(
-        color: AppColors.textSecondary,
+      style: HomeType.body(
+        color: moreMuted,
         fontWeight: FontWeight.w500,
         fontSize: 13,
       ),
@@ -497,22 +515,42 @@ class _WorkSiteCard extends ConsumerWidget {
             icon: HugeIcons.strokeRoundedGps01,
             label: 'Punch geofence',
             value: fenceText,
-            color: site.geofenceEnabled
-                ? const Color(0xFF16A34A)
-                : AppColors.textSecondary,
+            color: site.geofenceEnabled ? moreGreen : moreMuted,
             last: !site.hasCoordinates,
           ),
           if (site.hasCoordinates)
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => openExternal(
-                  context,
-                  _mapsUri(site),
-                  failMessage: 'No maps app is available.',
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 6, 0, 6),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => openExternal(
+                    context,
+                    _mapsUri(site),
+                    failMessage: 'No maps app is available.',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: moreBlue,
+                    side: const BorderSide(color: moreHairline),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                  ),
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedMapPinpoint01,
+                    color: moreBlue,
+                    size: 16,
+                  ),
+                  label: Text(
+                    'Open in maps',
+                    style: HomeType.headline(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: moreBlue,
+                    ),
+                  ),
                 ),
-                icon: const Icon(Icons.map_outlined, size: 18),
-                label: const Text('Open in maps'),
               ),
             ),
         ],
