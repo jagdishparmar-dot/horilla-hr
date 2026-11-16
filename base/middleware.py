@@ -24,6 +24,7 @@ from employee.models import (
     EmployeeBankDetails,
     EmployeeWorkInformation,
 )
+from control.context import get_tenant_alias
 from horilla.horilla_middlewares import _thread_locals, set_selected_company
 from horilla.methods import get_horilla_model_class
 from horilla_documents.models import DocumentRequest
@@ -338,6 +339,11 @@ class CompanyMiddleware:
         return clamped if clamped is not None else "all"
 
     def __call__(self, request):
+        # Dashboard and rejected hosts have no tenant database. Company lookup
+        # would query HR tables on the control connection, so skip it. The
+        # single-tenant install leaves HORILLA_MULTITENANT off and is unchanged.
+        if getattr(settings, "HORILLA_MULTITENANT", False) and not get_tenant_alias():
+            return self.get_response(request)
         # ✅ make request globally accessible (safe)
         _thread_locals.request = request
         try:

@@ -23,14 +23,14 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | --- | ---: | ---: |
 | 0. Guardrails | 4 | 4 |
 | 1. Control plane | 6 | 6 |
-| 2. Request routing | 7 | 0 |
+| 2. Request routing | 7 | 7 |
 | 3. Provisioning engine | 8 | 0 |
 | 4. Operator dashboard | 8 | 0 |
 | 5. Runtime isolation | 7 | 0 |
 | 6. Deploy and hosts | 6 | 0 |
 | 7. Isolation tests | 6 | 0 |
 | 8. Cutover | 5 | 0 |
-| **Total** | **57** | **10** |
+| **Total** | **57** | **17** |
 
 ### Progress log
 
@@ -39,6 +39,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 2026-11-16 | — | Plan drafted from the database-per-tenant design. No code yet. |
 | 2026-11-16 | P0 | Guardrails committed on `feature/database-per-tenant`. Local hosts are `<slug>.localhost` and `manage.localhost`. Production domain stays in `HORILLA_PLATFORM_DOMAIN`. |
 | 2026-11-16 | P1 | Control models, Fernet password storage, router, and `migrate_tenants` are in place. Strict routing stays off until `HORILLA_MULTITENANT` is enabled. 23 control tests passed. |
+| 2026-11-16 | P2 | Host routing is in place and stays off until `HORILLA_MULTITENANT` is enabled. Dashboard and tenant URL confs are separate. |
 
 ## Locked decisions
 
@@ -269,18 +270,18 @@ Strict routing runs only when `HORILLA_MULTITENANT` is on. With the flag off the
 
 ## Phase 2 — Request routing
 
-### [ ] P2-01 Thread-local or context-var for the active database alias
+### [x] P2-01 Thread-local or context-var for the active database alias
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P1-04
 - **Files:** `control/context.py` (alias get/activate/clear landed in P1; this task still adds the request `finally` and the two-request test)
 - **Done when:**
   - `activate(alias)` / `clear()` work, and `clear()` runs in a `finally` so a request cannot leak an alias into the next request on the same thread.
   - Tests cover two sequential requests on different aliases.
 
-### [ ] P2-02 Register a tenant connection lazily
+### [x] P2-02 Register a tenant connection lazily
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P2-01, P1-03
 - **Files:** `control/db.py` (`ensure_tenant_connection` landed in P1; this task still proves first use from a request)
 
@@ -294,9 +295,9 @@ Register `connections.databases["tenant_<slug>"]` on first use with:
 
 **Done when:** the alias appears only after a request for that host, the password in the alias dict is the decrypted password, and settings.py does not list tenant databases.
 
-### [ ] P2-03 `TenantMiddleware`
+### [x] P2-03 `TenantMiddleware`
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P2-02
 - **Files:** `control/middleware.py`, `horilla/settings/base.py`
 
@@ -313,9 +314,9 @@ Behavior:
 
 **Done when:** an unknown `Host` cannot read the control database’s operator list and cannot read another tenant’s employees.
 
-### [ ] P2-04 Host-based URL conf
+### [x] P2-04 Host-based URL conf
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P2-03
 - **Files:** `control/urls.py`, `horilla/urls.py` or a small root splitter
 
@@ -328,9 +329,9 @@ Behavior:
 
 **Done when:** `manage.<platform-domain>/employee/` is 404, and `<slug>.<platform-domain>/control/` (dashboard paths) is 404.
 
-### [ ] P2-05 Cookie and CSRF isolation
+### [x] P2-05 Cookie and CSRF isolation
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P0-01, P2-03
 - **Files:** `horilla/settings/base.py`, `horilla/settings/security.py`
 - **Done when:**
@@ -338,16 +339,16 @@ Behavior:
   - A session cookie issued on tenant A is not presented to tenant B (test in Phase 7).
   - `CSRF_TRUSTED_ORIGINS` can be extended when a custom domain is verified. Until custom domains exist, the wildcard platform origin is documented.
 
-### [ ] P2-06 `ALLOWED_HOSTS` for subdomains
+### [x] P2-06 `ALLOWED_HOSTS` for subdomains
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P0-01
 - **Files:** `horilla/settings/base.py`, `.env` examples
 - **Done when:** `. <platform-domain>` is accepted, the dashboard host is accepted, and a host that is not a verified `Domain` still dies in `TenantMiddleware` even if Django allowed the host header.
 
-### [ ] P2-07 Company middleware runs only after a tenant database is active
+### [x] P2-07 Company middleware runs only after a tenant database is active
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16)
 - **Depends on:** P2-03
 - **Files:** `base/middleware.py` (only if a guard is required), `horilla/settings/base.py` (`MIDDLEWARE` order)
 - **Done when:**

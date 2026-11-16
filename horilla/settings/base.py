@@ -200,6 +200,9 @@ MIDDLEWARE = [
     # ones from middleware below -- carries the correlation id.
     "horilla.observability.RequestIDMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # After the host is accepted, before the session is loaded. No-op until
+    # HORILLA_MULTITENANT is on, so company lookup still runs for this install.
+    "control.middleware.TenantMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -720,6 +723,19 @@ HORILLA_DASHBOARD_HOST = _dashboard_host or f"manage.{HORILLA_PLATFORM_DOMAIN}"
 # Off until the control database and tenant routing exist. When this is on,
 # TENANT_DB_FERNET_KEY must be set. The key is not stored in Django settings.
 HORILLA_MULTITENANT = env.bool("HORILLA_MULTITENANT", default=False)
+if HORILLA_MULTITENANT:
+    from control.hosts import platform_csrf_origins, platform_host_patterns
+
+    ALLOWED_HOSTS = list(ALLOWED_HOSTS)
+    for _host in platform_host_patterns(HORILLA_PLATFORM_DOMAIN, HORILLA_DASHBOARD_HOST):
+        if _host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_host)
+    # Wildcard platform origins only. A verified custom domain is added later
+    # with control.hosts.origin_for_host. Cookies stay host-only.
+    CSRF_TRUSTED_ORIGINS = list(CSRF_TRUSTED_ORIGINS)
+    for _origin in platform_csrf_origins(HORILLA_PLATFORM_DOMAIN):
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
 # Tenant aliases must use this. A persistent connection per customer per
 # worker exhausts Postgres max_connections. PgBouncer is not part of the
 # first cutover. Leave Postgres max_connections at the image default until

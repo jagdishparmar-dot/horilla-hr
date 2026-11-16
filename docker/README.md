@@ -173,8 +173,8 @@ make logs
 |----------|---------|-------------|
 | `DEBUG` | `1` | Set to `0` for production |
 | `SECRET_KEY` | `dev-secret-key...` | **Change for production** — generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated hostnames. Add your domain for production |
-| `CSRF_TRUSTED_ORIGINS` | `http://localhost:8000` | Full URLs for CSRF validation. Must include protocol |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated hostnames. With multitenant on, `.<platform-domain>` and the dashboard host are added |
+| `CSRF_TRUSTED_ORIGINS` | `http://localhost:8000` | Full URLs for CSRF validation. With multitenant on, `https://*.<platform-domain>` is added. Cookies stay host-only |
 | `DATABASE_URL` | `postgres://...@db:5432/...` | PostgreSQL connection string. `db` is the Docker service name |
 | `DB_INIT_PASSWORD` | `dev-init-password...` | Initial database setup password — **change for production** |
 | `REDIS_URL` | `redis://:...@redis:6379/0` | Redis connection string (includes password) |
