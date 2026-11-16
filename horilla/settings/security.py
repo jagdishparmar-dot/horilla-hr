@@ -29,9 +29,17 @@ def is_production_mode(debug: bool, horilla_env: str) -> bool:
     return (not debug) or (horilla_env or "").strip().lower() == "production"
 
 
-def validate_production_secrets(secret_key, allowed_hosts, db_init_password):
+def validate_production_secrets(
+    secret_key, allowed_hosts, db_init_password, database_url=""
+):
     """Raise ImproperlyConfigured when production uses unsafe defaults."""
     errors = []
+
+    if not (database_url or "").strip():
+        errors.append(
+            "DATABASE_URL is required in production and must point at the "
+            "control database. Tenant database URLs are not environment variables."
+        )
 
     if not secret_key or secret_key in INSECURE_SECRET_KEYS:
         errors.append(

@@ -70,6 +70,7 @@ services:
       - CSRF_TRUSTED_ORIGINS=https://${SERVICE_FQDN_WEB},${EXTRA_CSRF_TRUSTED_ORIGINS:-https://localhost}
       - DB_HOST=db
       - DB_PORT=5432
+      # Control database only. Tenant URLs are not environment variables.
       - DATABASE_URL=postgres://${POSTGRES_USER:-horilla}:${SERVICE_PASSWORD_POSTGRES}@db:5432/${POSTGRES_DB:-horilla_db}
       - REDIS_URL=redis://:${SERVICE_PASSWORD_REDIS}@redis:6379/0
       - HORILLA_TRUSTED_PROXIES=${HORILLA_TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
@@ -144,6 +145,7 @@ services:
       - ALLOWED_HOSTS=${SERVICE_FQDN_WEB},localhost,${EXTRA_ALLOWED_HOSTS:-127.0.0.1}
       - DB_HOST=db
       - DB_PORT=5432
+      # Same control database as web.
       - DATABASE_URL=postgres://${POSTGRES_USER:-horilla}:${SERVICE_PASSWORD_POSTGRES}@db:5432/${POSTGRES_DB:-horilla_db}
       - REDIS_URL=redis://:${SERVICE_PASSWORD_REDIS}@redis:6379/0
       - TIME_ZONE=${TIME_ZONE:-Asia/Kolkata}
@@ -183,10 +185,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     shm_size: 256mb
+    # Control database only (POSTGRES_DB). Tenant databases are not probed.
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U ${POSTGRES_USER:-horilla} -d ${POSTGRES_DB:-horilla_db}
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
       interval: 10s
       timeout: 5s
       retries: 10

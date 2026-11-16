@@ -708,7 +708,12 @@ from horilla.settings.security import (  # noqa: E402
 IS_PRODUCTION = is_production_mode(DEBUG, HORILLA_ENV)
 
 if IS_PRODUCTION:
-    validate_production_secrets(SECRET_KEY, ALLOWED_HOSTS, DB_INIT_PASSWORD)
+    validate_production_secrets(
+        SECRET_KEY,
+        ALLOWED_HOSTS,
+        DB_INIT_PASSWORD,
+        env("DATABASE_URL", default=""),
+    )
 
 if IS_PRODUCTION:
     # Same switch as the secrets gate above: HORILLA_ENV=production must not

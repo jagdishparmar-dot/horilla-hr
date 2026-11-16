@@ -175,9 +175,9 @@ make logs
 | `SECRET_KEY` | `dev-secret-key...` | **Change for production** — generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
 | `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated hostnames. With multitenant on, `.<platform-domain>` and the dashboard host are added |
 | `CSRF_TRUSTED_ORIGINS` | `http://localhost:8000` | Full URLs for CSRF validation. With multitenant on, `https://*.<platform-domain>` is added. Cookies stay host-only |
-| `DATABASE_URL` | `postgres://...@db:5432/...` | PostgreSQL connection string. `db` is the Docker service name |
+| `DATABASE_URL` | `postgres://...@db:5432/...` | Control database only. Web and scheduler share it. Tenant URLs are not environment variables. Production refuses to start when this is empty |
 | `DB_INIT_PASSWORD` | `dev-init-password...` | Initial database setup password — **change for production** |
-| `REDIS_URL` | `redis://:...@redis:6379/0` | Redis connection string (includes password) |
+| `REDIS_URL` | `redis://:...@redis:6379/0` | Redis connection string (includes `REDIS_PASSWORD`) |
 | `HORILLA_PLATFORM_DOMAIN` | `localhost` | Parent domain for tenant hosts `<slug>.<domain>`. Local tenants use `<slug>.localhost` |
 | `HORILLA_DASHBOARD_HOST` | `manage.<platform-domain>` | Operator dashboard host. Not a customer tenant |
 | `HORILLA_MULTITENANT` | `false` | When `true`, startup requires `TENANT_DB_FERNET_KEY` |
@@ -189,7 +189,7 @@ make logs
 |----------|---------|-------------|
 | `POSTGRES_DB` | `horilla_db` | Database name |
 | `POSTGRES_USER` | `horilla_user` | Database user |
-| `POSTGRES_PASSWORD` | `horilla_pass` | Database password — **change for production** |
+| `POSTGRES_PASSWORD` | `horilla_pass` | Password for the control role (`POSTGRES_USER`). This login can create tenant databases. Tenant sessions do not use it. **Change for production** |
 
 #### Server Settings
 
@@ -259,6 +259,12 @@ make dev
 docker compose exec web python manage.py test
 ```
 
+The test database is kept after the run, so the next run does not replay every migration. Set `HORILLA_TEST_KEEPDB=0` for one command when you want Django to drop it. If a run is stopped while migrations are still applying, drop the half-built database before the next attempt:
+
+```bash
+docker compose exec -T db psql -U horilla_user -d postgres -c "DROP DATABASE IF EXISTS test_horilla_db;"
+```
+
 ### Accessing the Database Directly
 
 ```bash
@@ -315,24 +321,29 @@ This builds without bind-mounting source, forces `DEBUG=0`, and enables Nginx.
 
 ### Step 4: Set Up SSL/TLS
 
-For HTTPS, add a `443` listener to `docker/nginx.conf`:
+Milestone 1 needs one certificate that covers the dashboard host and every tenant subdomain: `manage.<HORILLA_PLATFORM_DOMAIN>` and `*.<HORILLA_PLATFORM_DOMAIN>`. No platform domain is configured in this repository, so the certificate is not issued here. Set `HORILLA_PLATFORM_DOMAIN` when you have the name, then obtain that certificate (DNS-01 is required for the wildcard).
+
+A customer's own hostname is not on that certificate. Custom-domain certificates are milestone 2, with the dashboard screen in P4-07.
+
+Nginx already forwards the client `Host` unchanged and accepts `manage.<domain>` and `*.<domain>` on port 80. Add a `443` listener only after the certificate files exist:
 
 ```nginx
 server {
     listen 80;
-    server_name yourdomain.com;
+    server_name manage.example.com *.example.com;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
-    server_name yourdomain.com;
+    server_name manage.example.com *.example.com;
 
     ssl_certificate /etc/nginx/ssl/fullchain.pem;
     ssl_certificate_key /etc/nginx/ssl/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    # ... rest of config
+    # ... same proxy locations as the port 80 server, including
+    # proxy_set_header Host $host;
 }
 ```
 
@@ -345,7 +356,7 @@ nginx:
     - ./ssl/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
 ```
 
-**Alternative:** Use [Caddy](https://caddyserver.com/) or [Traefik](https://traefik.io/) for automatic Let's Encrypt SSL.
+Do not commit the certificate or the private key. **Alternative:** [Caddy](https://caddyserver.com/) or [Traefik](https://traefik.io/) can issue the wildcard with a DNS challenge. Coolify's Traefik path is below.
 
 ### Step 5: Create Admin User
 
@@ -389,7 +400,7 @@ What the stack does for production:
 
 | Concern | Handling |
 | --- | --- |
-| TLS / hosts | Traefik terminates TLS. `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` come from the domain you set. |
+| TLS / hosts | Traefik terminates TLS. Milestone 1 needs a certificate for `manage.<domain>` and `*.<domain>`. A custom hostname is a separate certificate (milestone 2). |
 | Client IP | `HORILLA_TRUSTED_PROXIES` trusts the private Docker ranges, so lockouts see the real visitor. Add Cloudflare's ranges if you use it. |
 | Static / media | WhiteNoise serves `/static/`. `/media/` goes through Django so the authenticated `protected_media` check still applies. |
 | Startup order | `web` waits for healthy Postgres and Redis; `scheduler` waits for `web`, which owns the migrations. |
@@ -698,12 +709,15 @@ Before going to production, verify the following:
 
 - [ ] `.env` created from `.env.dist` (not committed to git)
 - [ ] `DEBUG=False` — app refuses insecure defaults when False
-- [ ] `SECRET_KEY` is a unique, random 50+ character string
+- [ ] `SECRET_KEY` is a unique, random 50+ character string and is not committed
+- [ ] `DATABASE_URL` points at the control database only, is not empty, and is not committed. No tenant database URL is in the environment
+- [ ] `POSTGRES_PASSWORD` (the control role) is strong, unique, and not committed
+- [ ] `REDIS_PASSWORD` is strong, unique, and not committed (`REDIS_URL` carries it)
+- [ ] `TENANT_DB_FERNET_KEY` is set only when `HORILLA_MULTITENANT=true`, and the value is not committed
 - [ ] `ALLOWED_HOSTS` lists only your actual domain(s) (not `*`)
 - [ ] `CSRF_TRUSTED_ORIGINS` uses `https://` URLs
 - [ ] `DB_INIT_PASSWORD` is strong and unique (not the documented default)
-- [ ] Database/Redis passwords are strong and unique
-- [ ] SSL/TLS configured; set `SECURE_SSL_REDIRECT=True` behind TLS
+- [ ] SSL/TLS certificate covers `manage.<platform-domain>` and `*.<platform-domain>`; set `SECURE_SSL_REDIRECT=True` behind TLS
 - [ ] Database and Redis ports are NOT exposed to the host
 - [ ] Started via `make prod` (Nginx on, no source bind-mount)
 - [ ] `/health/` and `/ready/` both return OK
@@ -747,6 +761,8 @@ docker/
 │                          - Access/error logging to stdout
 │
 ├── nginx.conf           # Nginx reverse proxy configuration
+│                          - server_name for the platform domain, *.<domain>, and manage.<domain>
+│                          - Host header forwarded unchanged
 │                          - Static files with 1-year cache
 │                          - Gzip compression (9 MIME types)
 │                          - Security headers + server_tokens off

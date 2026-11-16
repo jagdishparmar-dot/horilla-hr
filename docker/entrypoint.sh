@@ -71,6 +71,8 @@ if [ "${HORILLA_SKIP_RELEASE_TASKS:-0}" = "1" ]; then
   exec "$@"
 fi
 
+# Control database first (DATABASE_URL). The scheduler does not start until
+# this container is healthy, so it never migrates and never races this step.
 python manage.py migrate --noinput
 # Tenant databases are migrated one at a time after the control database.
 # With HORILLA_MULTITENANT left off this finds no tenants and exits cleanly.

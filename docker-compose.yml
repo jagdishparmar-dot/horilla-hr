@@ -4,6 +4,9 @@
 #
 # Dev secrets below are intentionally weak and for local use only.
 # Replaces the legacy docker-compose.yaml (Python 3.10 / runserver) stack.
+#
+# DATABASE_URL is the control database only. Web and scheduler share one
+# anchor below. Tenant connection strings are stored on Tenant rows, not here.
 
 services:
   web:
@@ -29,7 +32,7 @@ services:
       - SECRET_KEY=dev-secret-key-change-in-production
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
       - CSRF_TRUSTED_ORIGINS=http://localhost:8000
-      - DATABASE_URL=postgres://horilla_user:horilla_pass@db:5432/horilla_db
+      - &control_database_url DATABASE_URL=postgres://horilla_user:horilla_pass@db:5432/horilla_db
       - DB_INIT_PASSWORD=dev-init-password-change-in-production
       - REDIS_URL=redis://:horilla_pass@redis:6379/0
     depends_on:
@@ -73,7 +76,7 @@ services:
       - HORILLA_TRUSTED_PROXIES=nginx
       - SECRET_KEY=dev-secret-key-change-in-production
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
-      - DATABASE_URL=postgres://horilla_user:horilla_pass@db:5432/horilla_db
+      - *control_database_url
       - DB_INIT_PASSWORD=dev-init-password-change-in-production
       - REDIS_URL=redis://:horilla_pass@redis:6379/0
       # web owns migrate/collectstatic; racing them from here can deadlock on
@@ -83,6 +86,9 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      # Healthy web means control migrate and migrate_tenants have finished.
+      web:
         condition: service_healthy
     # The image's HEALTHCHECK curls localhost:8000/health/, which only the web
     # service serves. This container runs run_scheduler and binds no port, so
@@ -110,8 +116,10 @@ services:
       # (POSTGRES_USER) may CREATE DATABASE and CREATE ROLE. Tenant queries
       # connect as tenant_<slug>, never as this login.
       - ./docker/postgres/init-control.sql:/docker-entrypoint-initdb.d/10-control.sql:ro
+    # Probe the control database named by POSTGRES_DB. Tenant databases are
+    # not part of this check.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U horilla_user -d horilla_db"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -131,11 +139,18 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+    environment:
+      HORILLA_PLATFORM_DOMAIN: ${HORILLA_PLATFORM_DOMAIN:-localhost}
+    # Only that variable is substituted. nginx's own $host and $scheme stay.
+    command:
+      - /bin/sh
+      - -c
+      - "envsubst '$$HORILLA_PLATFORM_DOMAIN' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && exec nginx -g 'daemon off;'"
     volumes:
       # Static only — /media/ is proxied to Django (protected_media). Do not
       # mount the media volume here; an alias location would bypass auth.
       - staticfiles:/static:ro
-      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf.template:ro
     depends_on:
       web:
         condition: service_healthy

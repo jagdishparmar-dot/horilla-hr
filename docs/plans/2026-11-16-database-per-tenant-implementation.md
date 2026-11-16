@@ -27,10 +27,10 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 3. Provisioning engine | 8 | 8 |
 | 4. Operator dashboard | 8 | 7 |
 | 5. Runtime isolation | 7 | 7 |
-| 6. Deploy and hosts | 6 | 0 |
+| 6. Deploy and hosts | 6 | 5 |
 | 7. Isolation tests | 6 | 0 |
 | 8. Cutover | 5 | 0 |
-| **Total** | **57** | **39** |
+| **Total** | **57** | **44** |
 
 ### Progress log
 
@@ -43,6 +43,7 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 2026-11-16 | P3 | Provisioning jobs run in the single scheduler replica. Create, suspend, resume, retry, and delete are queued. Delete keeps the tenant row as `deleted` and refuses to drop a database until P5 supplies `pg_dump`. 11 phase-3 tests passed. |
 | 2026-11-16 | P4 | Operator dashboard is on the management host with cookie `control_sessionid`. Create, suspend, resume, backup, migrate, restore, and delete only enqueue jobs. Backup, migrate, and restore stay queued until phase 5. P4-07 stays open until custom-domain nginx exists. 7 phase-4 tests passed. |
 | 2026-11-16 | P5 | Cache, uploads, media downloads, scheduler, backups, restore, and JWT are tenant-scoped. Scheduler policy is log and continue. HR management commands require `--slug` when the flag is on. `pg_dump` is in the image only after the next rebuild; tests mock the binary. P4-07 stays open. |
+| 2026-11-16 | P6 | Web and scheduler share the control `DATABASE_URL`. Nginx accepts `manage.<domain>` and `*.<domain>` and forwards `Host`. The scheduler waits until web has migrated. P6-04 is blocked: no platform domain, so the wildcard certificate is not issued. P4-07 stays open. |
 
 ## Locked decisions
 
@@ -609,25 +610,25 @@ Inventory:
 
 ## Phase 6 — Deploy and hosts
 
-### [ ] P6-01 Compose uses a control `DATABASE_URL`
+### [x] P6-01 Compose uses a control `DATABASE_URL`
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Dev web and scheduler share one YAML anchor. Production compose and Django both refuse an empty `DATABASE_URL`.
 - **Depends on:** P3-01
-- **Files:** `docker-compose.yml`, `docker-compose.prod.yml`, `.env.docker`, `.env.coolify.example`, `.env.dist` if present
+- **Files:** `docker-compose.yml`, `docker-compose.prod.yml`, `docker-compose.coolify.yml`, `.env.docker`, `.env.coolify.example`, `horilla/settings/security.py`
 - **Done when:** web and scheduler share the control URL, tenant URLs are not in the environment, and production still refuses to start when `DATABASE_URL` is empty.
 
-### [ ] P6-02 Postgres `max_connections` note and healthcheck
+### [x] P6-02 Postgres `max_connections` note and healthcheck
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). The probe uses `POSTGRES_DB`, which is the control database.
 - **Depends on:** P0-04, P6-01
-- **Files:** `docker-compose.yml` (`db` service)
+- **Files:** `docker-compose.yml` (`db` service), `docker-compose.coolify.yml`
 - **Done when:** the `db` healthcheck still checks the control database, and a comment states the connection budget from P0-04.
 
-### [ ] P6-03 Nginx wildcard server name
+### [x] P6-03 Nginx wildcard server name
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). `HORILLA_PLATFORM_DOMAIN` defaults to `localhost`. The published prod port stays `127.0.0.1:8000`.
 - **Depends on:** P0-01
-- **Files:** nginx config mounted by `docker-compose.yml`
+- **Files:** `docker/nginx.conf`, `docker-compose.yml`, `docker-compose.prod.yml`
 - **Done when:**
   - `manage.<platform-domain>` and `*.<platform-domain>` reach `web`.
   - Django is still bound to `127.0.0.1:8000` in `docker-compose.prod.yml`.
@@ -635,19 +636,19 @@ Inventory:
 
 ### [ ] P6-04 TLS for the wildcard and for custom domains
 
-- **Status:** Not started
+- **Status:** Blocked. No platform domain is configured, so a certificate for `manage.<domain>` and `*.<domain>` cannot be issued. The names and the nginx example are in `docker/README.md` Step 4. Custom-domain certificates stay milestone 2, tied to P4-07.
 - **Depends on:** P6-03
 - **Done when:** milestone 1 has a certificate covering the dashboard host and `*.<platform-domain>`. Custom-domain certificates are documented as milestone 2, tied to P4-07.
 
-### [ ] P6-05 Production secrets checklist
+### [x] P6-05 Production secrets checklist
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Listed in `docker/README.md` section 13 and `.env.coolify.example`. `.env` stays gitignored. No real `TENANT_DB_FERNET_KEY` is in the repo.
 - **Depends on:** P0-03, P6-01
 - **Done when:** the deploy notes list `SECRET_KEY`, `DATABASE_URL` (control), Postgres superuser or control role password, `REDIS_PASSWORD`, and `TENANT_DB_FERNET_KEY`, and none of those values are committed.
 
-### [ ] P6-06 Single migrator on release
+### [x] P6-06 Single migrator on release
 
-- **Status:** Not started
+- **Status:** Done (2026-11-16). Scheduler `depends_on` web healthy. `HORILLA_SKIP_RELEASE_TASKS=1` still skips migrate there.
 - **Depends on:** P1-06
 - **Done when:** a release runs control migrate and `migrate_tenants` from one web container before the scheduler is considered healthy, matching the existing `HORILLA_SKIP_RELEASE_TASKS` split.
 
