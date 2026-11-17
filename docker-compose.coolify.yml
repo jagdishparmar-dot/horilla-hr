@@ -199,9 +199,11 @@ services:
       - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # New volumes: CREATEDB/CREATEROLE and revoke public CONNECT on the
-      # control database. Existing volumes are locked by lock_control_connect.
-      - ./docker/postgres/init-control.sql:/docker-entrypoint-initdb.d/10-control.sql:ro
+      # Do not bind-mount init-control.sql here. Coolify runs Compose inside
+      # a helper container, so the host daemon turns a missing source path
+      # into a directory at docker-entrypoint-initdb.d and the first boot
+      # exits. The control role is already a superuser. Web runs
+      # lock_control_connect after Postgres is healthy.
     shm_size: 256mb
     # Control database only (POSTGRES_DB). Tenant databases are not probed.
     healthcheck:
