@@ -70,6 +70,30 @@ class RouterTests(SimpleTestCase):
         self.assertFalse(router.allow_migrate("default", "employee"))
         self.assertTrue(router.allow_migrate("tenant_acme", "employee"))
         self.assertFalse(router.allow_migrate("tenant_acme", "control"))
+        self.assertTrue(router.allow_migrate("default", "auth"))
+        self.assertTrue(router.allow_migrate("tenant_acme", "auth"))
+        self.assertTrue(router.allow_migrate("tenant_acme", "contenttypes"))
+        self.assertTrue(router.allow_migrate("default", "sessions"))
+        self.assertFalse(router.allow_migrate("tenant_acme", "sessions"))
+
+    @override_settings(HORILLA_MULTITENANT=True)
+    def test_auth_follows_the_tenant_and_sessions_stay_on_control(self):
+        from django.contrib.auth.models import Group
+        from django.contrib.contenttypes.models import ContentType
+        from django.contrib.sessions.models import Session
+
+        router = TenantRouter()
+        clear_tenant_alias()
+        self.assertEqual(router.db_for_read(Group), "default")
+        self.assertEqual(router.db_for_read(ContentType), "default")
+        self.assertEqual(router.db_for_read(Session), "default")
+        token = activate_tenant_alias("tenant_acme")
+        try:
+            self.assertEqual(router.db_for_read(Group), "tenant_acme")
+            self.assertEqual(router.db_for_write(ContentType), "tenant_acme")
+            self.assertEqual(router.db_for_read(Session), "default")
+        finally:
+            clear_tenant_alias(token)
 
     @override_settings(HORILLA_MULTITENANT=False)
     def test_single_tenant_mode_keeps_the_current_database(self):

@@ -77,21 +77,34 @@ class DashboardTests(TestCase):
 
         home = self.client.get("/control/")
         self.assertEqual(home.status_code, 200)
-        self.assertContains(home, "Tenants")
+        self.assertContains(home, "tenant registry")
 
         logged_out = self.client.post("/control/logout/")
         self.assertEqual(logged_out.status_code, 302)
         self.assertEqual(logged_out.cookies["control_sessionid"].value, "")
         self.assertEqual(self.client.get("/control/").status_code, 302)
 
+    def test_fresh_tenant_rejects_the_shared_database_password(self):
+        from django.conf import settings
+
+        from control.setup_access import setup_password_matches
+
+        tenant = Tenant.objects.create(name="Gate", slug="gate")
+        tenant.set_setup_password("tenant-only-secret")
+        tenant.save(update_fields=["setup_password_encrypted"])
+        request = RequestFactory().post("/initialize-database/")
+        request.tenant = tenant
+        self.assertFalse(setup_password_matches(request, settings.DB_INIT_PASSWORD))
+        self.assertTrue(setup_password_matches(request, "tenant-only-secret"))
+        tenant.setup_password_encrypted = ""
+        tenant.save(update_fields=["setup_password_encrypted"])
+        self.assertFalse(setup_password_matches(request, "tenant-only-secret"))
+
     def test_create_queues_a_job_and_duplicate_slug_is_a_form_error(self):
         self._login()
         payload = {
             "name": "Acme",
             "slug": "Acme",
-            "admin_name": "Ada",
-            "admin_email": "ada@acme.test",
-            "admin_password": PASSWORD,
             "plan": "standard",
         }
         with mock.patch(
@@ -106,13 +119,18 @@ class DashboardTests(TestCase):
         job = tenant.jobs.get()
         self.assertEqual(job.status, ProvisionJob.Status.QUEUED)
         self.assertEqual(job.kind, ProvisionJob.Kind.CREATE)
-        self.assertNotIn(PASSWORD, json.dumps(job.payload))
-        self.assertNotIn(PASSWORD, created.url)
+        setup_password = tenant.setup_password()
+        self.assertTrue(setup_password)
+        self.assertNotIn(setup_password, json.dumps(job.payload))
+        self.assertNotIn(setup_password, created.url)
         audit = OperatorAudit.objects.get(slug="acme")
         self.assertEqual(audit.action, OperatorAudit.Action.CREATE)
         self.assertEqual(audit.operator, self.operator)
-        self.assertNotIn(PASSWORD, audit.detail)
-        self.assertNotIn(PASSWORD, str(audit))
+        self.assertNotIn(setup_password, audit.detail)
+        self.assertNotIn(setup_password, str(audit))
+        detail = self.client.get("/control/tenants/acme/")
+        self.assertContains(detail, setup_password)
+        self.assertContains(detail, "Initialize Database")
 
         again = self.client.post("/control/tenants/new/", payload)
         self.assertEqual(again.status_code, 200)
@@ -148,7 +166,7 @@ class DashboardTests(TestCase):
         self.assertContains(page, "Acme")
         self.assertContains(page, "acme")
         self.assertContains(page, "acme.localhost")
-        self.assertContains(page, "active")
+        self.assertContains(page, "ACTIVE")
         self.assertContains(page, "backup succeeded")
 
     def test_actions_enqueue_jobs_and_delete_requires_the_slug(self):

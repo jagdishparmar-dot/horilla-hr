@@ -3,12 +3,17 @@
 The dashboard uses ``control_sessionid``. Every other host keeps ``sessionid``.
 Both names use the same session store. A cookie set on a tenant host is not
 read on the dashboard, and the reverse is also true.
+
+The session also stores the tenant slug it was issued for. Replaying that
+cookie on another host does not authenticate, even when both databases have
+a user with the same primary key.
 """
 
 import time
 from importlib import import_module
 
 from django.conf import settings
+from django.contrib.auth import logout
 from django.contrib.sessions.backends.base import UpdateError
 from django.contrib.sessions.exceptions import SessionInterrupted
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -82,3 +87,32 @@ class SessionMiddleware(SessionMiddleware):
         if need_vary_cookie:
             patch_vary_headers(response, ("Cookie",))
         return response
+
+
+def stamp_tenant_session(sender, request, user, **kwargs):
+    """Remember which tenant issued this login. No-op off a tenant host."""
+    if request is None or not getattr(settings, "HORILLA_MULTITENANT", False):
+        return
+    tenant = getattr(request, "tenant", None)
+    if tenant is not None:
+        request.session["tenant_slug"] = tenant.slug
+
+
+class TenantSessionMiddleware:
+    """Drop a Django login that was issued for a different tenant host."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if getattr(settings, "HORILLA_MULTITENANT", False):
+            tenant = getattr(request, "tenant", None)
+            user = getattr(request, "user", None)
+            if (
+                tenant is not None
+                and user is not None
+                and user.is_authenticated
+                and request.session.get("tenant_slug") != tenant.slug
+            ):
+                logout(request)
+        return self.get_response(request)

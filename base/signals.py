@@ -219,6 +219,12 @@ def clean_work_records(sender, **kwargs):
 @receiver(post_migrate)
 def create_shift_days(sender, **kwargs):
     from base.models import EmployeeShiftDay
+    from control.context import hr_queries_allowed
+
+    # This signal runs for every migrated app. On the control database there
+    # is no tenant alias, and the shift rows belong in the tenant database.
+    if not hr_queries_allowed():
+        return
 
     if not EmployeeShiftDay.objects.exists():
         days = [

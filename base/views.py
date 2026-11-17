@@ -465,7 +465,11 @@ def load_demo_database(request):
 
     if initialize_database_condition():
         if request.method == "POST":
-            if request.POST.get("load_data_password") == settings.DB_INIT_PASSWORD:
+            from control.setup_access import setup_password_matches
+
+            if setup_password_matches(
+                request, request.POST.get("load_data_password") or ""
+            ):
                 import tempfile
 
                 from base.demo_data.fixtures import demo_fixture_files
@@ -574,8 +578,10 @@ def initialize_database(request):
     """
     if initialize_database_condition():
         if request.method == "POST":
-            password = request.POST.get("password")
-            if settings.DB_INIT_PASSWORD == password:
+            from control.setup_access import setup_password_matches
+
+            password = request.POST.get("password") or ""
+            if setup_password_matches(request, password):
                 request.session["db_init_verified"] = True
                 return redirect(initialize_database_user)
             else:
@@ -627,6 +633,9 @@ def initialize_database_user(request):
         employee.email = email
         employee.phone = phone
         employee.save()
+        from control.setup_access import clear_setup_password
+
+        clear_setup_password(request)
         request.session.pop("db_init_verified", None)
         user = authenticate(request, username=username, password=password)
         login(request, user)

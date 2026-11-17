@@ -8,19 +8,23 @@ from django.conf import settings
 
 from control.context import get_tenant_alias
 
-# Tables that belong in the control database once multitenant mode is on.
-# HorillaUser is ``horilla_auth`` and is intentionally absent: each tenant
-# database has its own users. ``django_apscheduler`` stays here because the
-# single scheduler records jobs in the control database.
+# Tables that belong only in the control database. HorillaUser is
+# ``horilla_auth`` and is intentionally absent: each tenant database has its
+# own users. ``django_apscheduler`` stays here because the single scheduler
+# records jobs in the control database. Sessions stay here too; the host-only
+# cookie is what keeps one tenant's session off another host.
 CONTROL_APP_LABELS = frozenset(
     {
         "control",
-        "contenttypes",
-        "auth",
         "sessions",
         "django_apscheduler",
     }
 )
+
+# These apps are created in the control database and in every tenant database.
+# HorillaUser's groups and permissions reference auth_group, so a tenant
+# migrate that only records the auth migrations leaves that table missing.
+TENANT_SCHEMA_APP_LABELS = frozenset({"auth", "contenttypes"})
 
 
 class TenantRoutingError(RuntimeError):
@@ -50,6 +54,8 @@ class TenantRouter:
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         if not _multitenant():
             return None
+        if app_label in TENANT_SCHEMA_APP_LABELS:
+            return db == "default" or _tenant_alias_name(db)
         if app_label in CONTROL_APP_LABELS:
             return db == "default"
         return _tenant_alias_name(db)
@@ -57,6 +63,8 @@ class TenantRouter:
     def _route(self, app_label: str):
         if not _multitenant():
             return None
+        if app_label in TENANT_SCHEMA_APP_LABELS:
+            return get_tenant_alias() or "default"
         if app_label in CONTROL_APP_LABELS:
             return "default"
         alias = get_tenant_alias()

@@ -6,7 +6,8 @@ single-database install keeps answering on localhost.
 
 from django.conf import settings
 from django.db import connections
-from django.http import HttpResponseForbidden, HttpResponseNotFound
+from django.http import HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
+from django.http.request import split_domain_port
 
 from control.context import activate_tenant_alias, clear_tenant_alias
 from control.db import ensure_tenant_connection
@@ -45,6 +46,16 @@ class TenantMiddleware:
         request.tenant = None
         request.control_plane = False
         host = request_hostname(request)
+        # The container healthcheck calls localhost. That name is not a tenant
+        # and not the dashboard host, so the probe would stay 404 with the
+        # flag on. Public hosts still go through the rules below.
+        if request.path in {"/health/", "/ready/"} and host in {"localhost", "127.0.0.1"}:
+            request.control_plane = True
+            request.urlconf = "control.urls"
+            return None, None, None
+        legacy = _legacy_redirect(request, host)
+        if legacy is not None:
+            return legacy, None, None
         dashboard = (settings.HORILLA_DASHBOARD_HOST or "").lower()
         if host == dashboard:
             request.control_plane = True
@@ -72,6 +83,25 @@ class TenantMiddleware:
         request.tenant = tenant
         request.urlconf = "horilla.urls"
         return None, token, alias
+
+
+def _legacy_redirect(request, host: str):
+    """Send the pre-cutover bare host to the customer host or the dashboard."""
+    target = (
+        getattr(settings, "HORILLA_LEGACY_HOST_REDIRECT", "") or ""
+    ).strip().lower().rstrip(".")
+    if not target or target == host:
+        return None
+    apex = {
+        (getattr(settings, "HORILLA_PLATFORM_DOMAIN", "") or "").lower(),
+        "127.0.0.1",
+    }
+    if host not in apex:
+        return None
+    scheme = "https" if request.is_secure() else "http"
+    _, port = split_domain_port(request.get_host())
+    netloc = target if not port else f"{target}:{port}"
+    return HttpResponseRedirect(f"{scheme}://{netloc}{request.get_full_path()}")
 
 
 def _close_alias(alias: str) -> None:

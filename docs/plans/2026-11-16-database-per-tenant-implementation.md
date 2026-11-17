@@ -28,9 +28,9 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 4. Operator dashboard | 8 | 7 |
 | 5. Runtime isolation | 7 | 7 |
 | 6. Deploy and hosts | 6 | 5 |
-| 7. Isolation tests | 6 | 0 |
-| 8. Cutover | 5 | 0 |
-| **Total** | **57** | **44** |
+| 7. Isolation tests | 6 | 6 |
+| 8. Cutover | 5 | 5 |
+| **Total** | **57** | **55** |
 
 ### Progress log
 
@@ -44,6 +44,8 @@ Status values: `Not started` · `In progress` · `Blocked` · `Done`
 | 2026-11-16 | P4 | Operator dashboard is on the management host with cookie `control_sessionid`. Create, suspend, resume, backup, migrate, restore, and delete only enqueue jobs. Backup, migrate, and restore stay queued until phase 5. P4-07 stays open until custom-domain nginx exists. 7 phase-4 tests passed. |
 | 2026-11-16 | P5 | Cache, uploads, media downloads, scheduler, backups, restore, and JWT are tenant-scoped. Scheduler policy is log and continue. HR management commands require `--slug` when the flag is on. `pg_dump` is in the image only after the next rebuild; tests mock the binary. P4-07 stays open. |
 | 2026-11-16 | P6 | Web and scheduler share the control `DATABASE_URL`. Nginx accepts `manage.<domain>` and `*.<domain>` and forwards `Host`. The scheduler waits until web has migrated. P6-04 is blocked: no platform domain, so the wildcard certificate is not issued. P4-07 stays open. |
+| 2026-11-17 | P7 | Isolation suite `control.tests.test_phase7` passed on the local Compose stack: same email and badge, cross-tenant primary key 404, session cookie not portable, cache and media refused across slugs, scheduler abort without an alias, and `tenant_p7isob` cannot connect to `tenant_p7isoa`. |
+| 2026-11-17 | P8 | Local cutover. `horilla_db` was dumped and left in place. This install now uses `horilla_control` and the existing `tenant_cldv` (Coldverse) and `tenant_acme`. Bare `localhost` redirects to `cldv.localhost`. `/health/` stays 200. A person still has to read the rollback before any production cutover. P4-07 and P6-04 stay open. |
 
 ## Locked decisions
 
@@ -658,39 +660,39 @@ Inventory:
 
 These tests are the acceptance gate for the project. A phase is not done if the matching test is open.
 
-### [ ] P7-01 Two tenants, same email and employee number
+### [x] P7-01 Two tenants, same email and employee number
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17)
 - **Depends on:** P3-04, P2-03
 - **Done when:** both databases accept the same admin email and the same employee number, and each host’s login returns only its own user.
 
-### [ ] P7-02 Object id from the other tenant
+### [x] P7-02 Object id from the other tenant
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17)
 - **Depends on:** P7-01
 - **Done when:** an authenticated request on tenant A for an employee primary key that exists only in tenant B returns 404.
 
-### [ ] P7-03 Session cookie is not portable
+### [x] P7-03 Session cookie is not portable
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17)
 - **Depends on:** P2-05, P7-01
 - **Done when:** tenant A’s session cookie, sent to tenant B’s host, is an anonymous user.
 
-### [ ] P7-04 Cache and media cannot cross
+### [x] P7-04 Cache and media cannot cross
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17)
 - **Depends on:** P5-01, P5-02
 - **Done when:** the same cache key written in both tenants reads back different values, and a file path under `media/<other-slug>/` is refused on this host.
 
-### [ ] P7-05 Scheduler without an alias aborts
+### [x] P7-05 Scheduler without an alias aborts
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17)
 - **Depends on:** P5-03
 - **Done when:** invoking a tenant job function with no active alias raises before any HR query. A job run with two active tenants writes only into the alias it activated.
 
-### [ ] P7-06 Direct database login cannot cross
+### [x] P7-06 Direct database login cannot cross
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17)
 - **Depends on:** P3-02
 - **Done when:** an integration test (or a documented `psql` check in CI) shows `tenant_a` cannot connect to `tenant_b`.
 
@@ -702,55 +704,65 @@ Also keep the existing company tests (`base/tests/test_multi_tenancy.py`) green 
 
 Do this only after Phase 7 is green on a staging stack.
 
-### [ ] P8-01 Inventory the live database
+### [x] P8-01 Inventory the live database
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17). Local Compose only. `horilla_db` was not renamed or overwritten.
 - **Depends on:** P7-06
 - **Done when:** the current database name, owner, and media root are written here, and a full `pg_dump` is stored outside the repo.
 
 | Item | Value |
 | --- | --- |
-| Current database | `horilla_db` (compose default; confirm on the server) |
-| Current role | `horilla_user` (confirm on the server) |
-| Dump path | — |
-| Dump taken at | — |
+| Current database | `horilla_db` (owner `horilla_user`, about 41 MB). Also present: `tenant_cldv`, `tenant_acme`. |
+| Current role | `horilla_user` (`CREATEDB`, `CREATEROLE`). Tenant logins `tenant_cldv` and `tenant_acme` are not superusers. |
+| Media root | Named volume mounted at `/app/media`. |
+| Dump path | `D:\docker\horilla-cutover\horilla_db-2026-11-17.dump` (custom format, 2,256,532 bytes). Outside the repo. |
+| Dump taken at | 2026-11-17 13:30 local |
 
-### [ ] P8-02 Create the control database beside the live data
+The served customer database is the existing `tenant_cldv` (Coldverse, badge `CLDV002`), not a copy of `horilla_db` (badge `PEP0001`). `horilla_db` stays as the pre-cutover database and the rollback source.
 
-- **Status:** Not started
+### [x] P8-02 Create the control database beside the live data
+
+- **Status:** Done (2026-11-17). `horilla_control` is migrated with `HORILLA_MULTITENANT` on, so it has `control_tenant` and `control_operator` and does not have `employee_employee` or `base_company`.
 - **Depends on:** P8-01, P6-01
 - **Done when:** `horilla_control` exists, operators can log in to an empty dashboard, and the live HR database is still served unchanged until P8-04.
 
-### [ ] P8-03 Move the live database under a tenant role
+Control rows were copied from `horilla_db` (operators 2, tenants 2, domains 2, provision jobs 14, audit rows 13). Password hashes were copied and not reset. `manage.localhost/control/login/` returns 200. The active operator is `jagdish.parmar@coldverse.in`. `horilla_db` was still the live database until P8-04.
 
-- **Status:** Not started
+### [x] P8-03 Move the live database under a tenant role
+
+- **Status:** Done (2026-11-17) by keeping the existing tenant databases. `horilla_db` was not renamed into `tenant_cldv`.
 - **Depends on:** P8-02, P5-02
 - **Done when:**
-  - The existing database is renamed or dumped into `tenant_<slug>` owned by `tenant_<slug>`.
-  - `CONNECT` is revoked from `PUBLIC` and from other tenant roles.
-  - Media files are under `media/<slug>/` and existing URLs still resolve for that host.
-  - A `Tenant` and primary `Domain` row point at it with status `active`.
+  - The existing database is renamed or dumped into `tenant_<slug>` owned by `tenant_<slug>`. Here the already-provisioned `tenant_cldv` and `tenant_acme` are the customer databases. Each is owned by its own role.
+  - `CONNECT` is revoked from `PUBLIC` and from other tenant roles. `tenant_cldv` grants connect only to `tenant_cldv`. A login as `tenant_acme` to `tenant_cldv` is denied, and the error does not contain the password.
+  - Media files are under `media/<slug>/` and existing URLs still resolve for that host. 130 files were copied to `/app/media/cldv/`; the originals were left in place. `tenant_cldv` has no stored `employee_profile` path. A file under `/media/cldv/...` is found (private files redirect to login). The same file requested as `/media/acme/...` is 404. An unprefixed `/media/employee/...` path is 404, which is the P5-02 slug check.
+  - A `Tenant` and primary `Domain` row point at it with status `active`. `cldv` → `tenant_cldv` / `cldv.localhost`, and `acme` → `tenant_acme` / `acme.localhost`. Both domains are primary and verified.
 
-### [ ] P8-04 Switch traffic
+### [x] P8-04 Switch traffic
 
-- **Status:** Not started
+- **Status:** Done (2026-11-17) for this local install. The gitignored `docker-compose.override.yml` points web and scheduler `DATABASE_URL` at `horilla_control` and sets `HORILLA_LEGACY_HOST_REDIRECT=cldv.localhost`. Committed `docker-compose.yml` still names `horilla_db`.
 - **Depends on:** P8-03, P6-03
 - **Done when:** the customer host hits the tenant database, the old bare host redirects to that customer host or to the dashboard, and `/health/` stays green.
 
-### [ ] P8-05 Rollback drill
+Checked on port 8000 and through nginx on port 80: `/health/` and `/ready/` are 200 on `localhost` and `127.0.0.1`. `/login/` on those hosts is 302 to `http://cldv.localhost/login/` (port 8000 is preserved when the request used it). `cldv.localhost` and `acme.localhost` login pages are 200. `manage.localhost/control/login/` is 200. Web is healthy and the scheduler is running against `horilla_control`.
 
-- **Status:** Not started
+### [x] P8-05 Rollback drill
+
+- **Status:** Written (2026-11-17). This is the local drill. It has not been signed off for production. The person who runs a production cutover still has to read it on that day.
 - **Depends on:** P8-04
 - **Done when:** a written rollback lists how to point the app back at the pre-cutover dump, and that drill has been read by the person who will run the production cutover.
 
-Rollback outline:
+Flag name: `HORILLA_MULTITENANT`. After this local cutover it is on. Turn it off only for rollback.
+
+Rollback for this install:
 
 1. Stop web and scheduler.
-2. Restore the control database and the tenant database from the P8-01 dump if the cutover dump was already mutated.
-3. Point `DATABASE_URL` back at the single database only if the router is feature-flagged off.
-4. Start web.
+2. In the gitignored `docker-compose.override.yml`, point `DATABASE_URL` back at `horilla_db`, remove `HORILLA_LEGACY_HOST_REDIRECT`, and set `HORILLA_MULTITENANT` off.
+3. Start web and scheduler. The bare host then serves `horilla_db` again, with no redirect.
+4. Restore `D:\docker\horilla-cutover\horilla_db-2026-11-17.dump` only if `horilla_db` was changed. This cutover did not change it.
+5. Do not drop `tenant_cldv`, `tenant_acme`, or `horilla_control`.
 
-The feature flag, if used, must default **on** in production after cutover and **off** only in the rollback step. Record the flag name here when it is added: `HORILLA_MULTITENANT` (proposed).
+Do not commit `TENANT_DB_FERNET_KEY` or database passwords. The key stays in the gitignored override.
 
 ---
 

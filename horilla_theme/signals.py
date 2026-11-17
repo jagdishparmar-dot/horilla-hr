@@ -19,6 +19,10 @@ def create_default_themes(sender, **kwargs):
     # Only run for the horilla_theme app
     if sender.name != "horilla_theme":
         return
+    from control.context import hr_queries_allowed
+
+    if not hr_queries_allowed():
+        return
 
     # Check if horilla_theme already exist
     try:

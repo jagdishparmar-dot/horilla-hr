@@ -1,37 +1,89 @@
 {% extends "control/base.html" %}
 {% block title %}Operators{% endblock %}
+{% block breadcrumb %}Operators{% endblock %}
 {% block content %}
-  <h1>Operators</h1>
-  <table>
-    <thead>
-      <tr><th>Email</th><th>Staff</th><th>Active</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for row in operators %}
-        <tr>
-          <td>{{ row.email }}</td>
-          <td>{% if row.is_staff %}yes{% else %}no{% endif %}</td>
-          <td>{% if row.is_active %}yes{% else %}no{% endif %}</td>
-          <td>
-            {% if row.is_active %}
-              <form method="post" action="{% url 'control-operator-deactivate' row.pk %}">
-                {% csrf_token %}
-                <button class="quiet" type="submit">Deactivate</button>
-              </form>
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="mb-6">
+    <p class="control-kicker">Access</p>
+    <h1 class="control-title">Operators</h1>
+    <p class="control-lede">People who can open this console. These accounts are not employees inside a tenant.</p>
+  </div>
 
-  <h2>New operator</h2>
-  {% if form.non_field_errors %}
-    <p class="error">{{ form.non_field_errors }}</p>
-  {% endif %}
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Create operator</button>
-  </form>
+  <section class="control-stat-grid mb-6" aria-label="Operator summary">
+    <div class="control-stat">
+      <p class="control-stat-value">{{ operator_count }}</p>
+      <p class="control-stat-label">Operators</p>
+    </div>
+    <div class="control-stat">
+      <p class="control-stat-value">{{ active_operator_count }}</p>
+      <p class="control-stat-label">Active</p>
+    </div>
+    <div class="control-stat">
+      <p class="control-stat-value">{{ staff_count }}</p>
+      <p class="control-stat-label">Can manage operators</p>
+    </div>
+    <div class="control-stat">
+      <p class="control-stat-value">{{ inactive_operator_count }}</p>
+      <p class="control-stat-label">Deactivated</p>
+    </div>
+  </section>
+
+  <div class="control-split control-split-2">
+    <section class="control-card overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-5 py-4">
+        <h2 class="control-section-title">Directory</h2>
+        <input id="operator-filter" class="control-input max-w-xs" type="search" placeholder="Filter by email" aria-label="Filter operators">
+      </div>
+      <div class="control-table-wrap">
+        <table class="control-table control-table-auto">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Access</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in operators %}
+              <tr data-operator="{{ row.email }}">
+                <td>
+                  <span class="font-semibold">{{ row.email }}</span>
+                  {% if row.pk == operator.pk %}<span class="control-pill control-pill-info ml-2">YOU</span>{% endif %}
+                </td>
+                <td>{% if row.is_staff %}Staff{% else %}Operator{% endif %}</td>
+                <td>
+                  {% if row.is_active %}
+                    <span class="control-pill control-pill-ok">ACTIVE</span>
+                  {% else %}
+                    <span class="control-pill control-pill-neutral">INACTIVE</span>
+                  {% endif %}
+                </td>
+                <td class="text-right">
+                  {% if row.is_active %}
+                    <form method="post" action="{% url 'control-operator-deactivate' row.pk %}" class="inline">
+                      {% csrf_token %}
+                      <button type="submit" class="control-btn-warn" data-confirm="Deactivate {{ row.email }}? They will not be able to sign in.">Deactivate</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="control-card control-card-pad">
+      <h2 class="control-section-title">Invite an operator</h2>
+      <p class="control-help">The last staff operator cannot deactivate themselves.</p>
+      {% if form.non_field_errors %}
+        <p class="control-alert-error mt-3" role="alert">{{ form.non_field_errors }}</p>
+      {% endif %}
+      <form method="post" class="mt-4">
+        {% csrf_token %}
+        {% include "control/partials/form_fields.html" %}
+        <button type="submit" class="control-btn-primary w-full">Create operator</button>
+      </form>
+    </section>
+  </div>
 {% endblock %}

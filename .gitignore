@@ -105,6 +105,8 @@ celerybeat.pid
 
 # Environments
 .env
+# Local multitenant test file. It holds TENANT_DB_FERNET_KEY.
+docker-compose.override.yml
 .venv
 env/
 venv/

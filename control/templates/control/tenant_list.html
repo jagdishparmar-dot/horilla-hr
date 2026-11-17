@@ -1,32 +1,128 @@
 {% extends "control/base.html" %}
+{% load control_ui %}
 {% block title %}Tenants{% endblock %}
+{% block breadcrumb %}Tenants{% endblock %}
 {% block content %}
-  <p><a class="button" href="{% url 'control-tenant-create' %}">New tenant</a></p>
-  <h1>Tenants</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Slug</th>
-        <th>Primary host</th>
-        <th>Status</th>
-        <th>Last job</th>
-        <th>Last backup</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
-        <tr>
-          <td><a href="{% url 'control-tenant-detail' row.tenant.slug %}">{{ row.tenant.name }}</a></td>
-          <td>{{ row.tenant.slug }}</td>
-          <td>{{ row.primary_host }}</td>
-          <td>{{ row.tenant.status }}</td>
-          <td>{{ row.last_job }}</td>
-          <td>{{ row.last_backup_at|default:"" }}</td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="6">No tenants yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="control-kicker">Platform</p>
+      <h1 class="control-title">Tenants</h1>
+      <p class="control-lede">The tenant registry lists every customer environment on this cluster. Opening a row does not connect to that database.</p>
+    </div>
+    <a href="{% url 'control-tenant-create' %}" class="control-btn-primary">New tenant</a>
+  </div>
+
+  <section class="control-stat-grid mb-6" aria-label="Tenant summary">
+    <a class="control-stat no-underline" href="{% url 'control-home' %}">
+      <p class="control-stat-value">{{ stats.total }}</p>
+      <p class="control-stat-label">Total</p>
+    </a>
+    <a class="control-stat no-underline" href="?status=active">
+      <p class="control-stat-value">{{ stats.active }}</p>
+      <p class="control-stat-label">Active</p>
+    </a>
+    <a class="control-stat no-underline" href="?status=provisioning">
+      <p class="control-stat-value">{{ stats.provisioning }}</p>
+      <p class="control-stat-label">Provisioning</p>
+    </a>
+    <a class="control-stat no-underline" href="?status=setup">
+      <p class="control-stat-value">{{ stats.needs_setup }}</p>
+      <p class="control-stat-label">Waiting for signup</p>
+    </a>
+  </section>
+
+  <div class="control-toolbar mb-4">
+    <div class="control-chips" aria-label="Filter tenants">
+      <a class="control-chip {% if not status_filter %}control-chip-active{% endif %}" href="{% url 'control-home' %}{% if query %}?q={{ query|urlencode }}{% endif %}">All {{ stats.total }}</a>
+      <a class="control-chip {% if status_filter == 'active' %}control-chip-active{% endif %}" href="?status=active{% if query %}&q={{ query|urlencode }}{% endif %}">Active {{ stats.active }}</a>
+      <a class="control-chip {% if status_filter == 'suspended' %}control-chip-active{% endif %}" href="?status=suspended{% if query %}&q={{ query|urlencode }}{% endif %}">Suspended {{ stats.suspended }}</a>
+      <a class="control-chip {% if status_filter == 'failed' %}control-chip-active{% endif %}" href="?status=failed{% if query %}&q={{ query|urlencode }}{% endif %}">Failed {{ stats.failed }}</a>
+      <a class="control-chip {% if status_filter == 'setup' %}control-chip-active{% endif %}" href="?status=setup{% if query %}&q={{ query|urlencode }}{% endif %}">Needs signup {{ stats.needs_setup }}</a>
+    </div>
+    <form class="control-search" method="get" action="{% url 'control-home' %}">
+      {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+      <input class="control-input" type="search" name="q" value="{{ query }}" placeholder="Search name, slug, or host" aria-label="Search tenants">
+      <button type="submit" class="control-btn-ghost">Search</button>
+    </form>
+  </div>
+
+  <div class="control-split control-split-main">
+    <section class="control-card overflow-hidden">
+      <div class="control-table-wrap">
+        <table class="control-table">
+          <thead>
+            <tr>
+              <th scope="col">Tenant</th>
+              <th scope="col">Host</th>
+              <th scope="col">Status</th>
+              <th scope="col">Last job</th>
+              <th scope="col">Last backup</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr data-href="{% url 'control-tenant-detail' row.tenant.slug %}">
+                <td>
+                  <div class="control-identity">
+                    <span class="control-avatar" style="--hue: {{ row.tenant.slug|avatar_hue }}">{{ row.tenant.name|initials }}</span>
+                    <span>
+                      <a href="{% url 'control-tenant-detail' row.tenant.slug %}" class="control-name">{{ row.tenant.name }}</a>
+                      <span class="mt-0.5 block control-mono control-muted">{{ row.tenant.slug }}{% if row.tenant.plan %} · {{ row.tenant.plan }}{% endif %}</span>
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  {% if row.primary_host %}
+                    <a href="http://{{ row.primary_host }}/" class="control-mono text-sm text-indigo-900 no-underline" target="_blank" rel="noopener">{{ row.primary_host }}</a>
+                  {% else %}
+                    <span class="control-muted">No host yet</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ row.tenant.status|tenant_status_badge }}
+                  {% if row.needs_setup %}<span class="control-pill control-pill-warn ml-1">SETUP</span>{% endif %}
+                </td>
+                <td class="control-mono control-muted">{{ row.last_job|default:"—" }}</td>
+                <td class="control-muted">
+                  {% if row.last_backup_at %}{{ row.last_backup_at|date:"M j, Y H:i" }}{% else %}No backup{% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5">
+                  <div class="control-empty">
+                    {% if query or status_filter %}
+                      <p>No tenants match this view.</p>
+                      <a href="{% url 'control-home' %}" class="mt-3 inline-block font-semibold text-indigo-900">Clear filters</a>
+                    {% else %}
+                      <p>No tenants yet.</p>
+                      <a href="{% url 'control-tenant-create' %}" class="control-btn-primary mt-4">Provision the first tenant</a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="control-card control-card-pad">
+      <h2 class="control-section-title">Recent jobs</h2>
+      <p class="control-help">Queued here, run by the scheduler.</p>
+      <ul class="mt-4 divide-y divide-stone-200">
+        {% for job in activity %}
+          <li class="py-3">
+            <a href="{% url 'control-tenant-detail' job.tenant.slug %}" class="control-name">{{ job.tenant.name }}</a>
+            <p class="mt-1 flex flex-wrap items-center gap-2">
+              <span class="control-mono control-muted">{{ job.kind }}</span>
+              {{ job.status|job_status_badge }}
+            </p>
+          </li>
+        {% empty %}
+          <li class="control-muted py-6 text-sm">Jobs will show up after the first provision.</li>
+        {% endfor %}
+      </ul>
+    </aside>
+  </div>
 {% endblock %}

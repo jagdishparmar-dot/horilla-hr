@@ -215,6 +215,9 @@ MIDDLEWARE = [
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # After the user is loaded. A session issued on another tenant host
+    # becomes anonymous before company or permission checks run.
+    "control.sessions.TenantSessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Horilla-specific middlewares
@@ -276,6 +279,10 @@ connection_created.connect(_configure_sqlite_connection)
 # Control-plane tables stay on ``default``. HR apps move to a tenant alias
 # only when HORILLA_MULTITENANT is on; until then the router is a no-op.
 DATABASE_ROUTERS = ["control.router.TenantRouter"]
+
+# Reuse test_horilla_db. The first run still applies every migration.
+# HORILLA_TEST_KEEPDB=0 drops it at the end of that run.
+TEST_RUNNER = "horilla.test_runner.PreservingDiscoverRunner"
 
 # ========================================
 # CACHE (optional Redis when REDIS_URL is set)
@@ -385,6 +392,7 @@ TEMPLATES = [
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.template.context_processors.csrf",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
@@ -742,6 +750,12 @@ HORILLA_PLATFORM_DOMAIN = (
 )
 _dashboard_host = env("HORILLA_DASHBOARD_HOST", default="").strip().lower().rstrip(".")
 HORILLA_DASHBOARD_HOST = _dashboard_host or f"manage.{HORILLA_PLATFORM_DOMAIN}"
+# Apex host (localhost, or the platform domain) after cutover. Empty leaves
+# that host as "unknown" except /health/ and /ready/. A value sends every
+# other path to the customer host or the dashboard.
+HORILLA_LEGACY_HOST_REDIRECT = (
+    env("HORILLA_LEGACY_HOST_REDIRECT", default="").strip().lower().rstrip(".")
+)
 # Off until the control database and tenant routing exist. When this is on,
 # TENANT_DB_FERNET_KEY must be set. The key is not stored in Django settings.
 HORILLA_MULTITENANT = env.bool("HORILLA_MULTITENANT", default=False)

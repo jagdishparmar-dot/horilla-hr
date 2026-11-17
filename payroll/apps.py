@@ -43,6 +43,11 @@ def seed_system_components(sender, **kwargs):
     """Create any standard pay item that does not exist yet."""
     import logging
 
+    from control.context import hr_queries_allowed
+
+    if not hr_queries_allowed():
+        return
+
     from payroll.system_components import seed
 
     try:

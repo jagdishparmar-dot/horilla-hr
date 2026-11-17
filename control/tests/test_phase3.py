@@ -79,16 +79,11 @@ class ProvisionQueueTests(TestCase):
 
     def test_create_reaches_active_only_after_migrate_and_seed(self):
         calls = self._patch_sql()
-        job = enqueue_create(
-            name="Acme",
-            slug="acme",
-            admin_name="Ada",
-            admin_email="ada@acme.test",
-            admin_password="temporary-secret",
-            plan="standard",
-        )
-        self.assertNotIn("temporary-secret", str(job))
-        self.assertNotIn("temporary-secret", str(job.payload))
+        job = enqueue_create(name="Acme", slug="acme", plan="standard")
+        setup_password = job.tenant.setup_password()
+        self.assertTrue(setup_password)
+        self.assertNotIn(setup_password, str(job))
+        self.assertNotIn(setup_password, str(job.payload))
         process_available_jobs()
         job.refresh_from_db()
         job.tenant.refresh_from_db()
@@ -125,20 +120,14 @@ class ProvisionQueueTests(TestCase):
             "control.provisioning._step_migrate",
             side_effect=ProvisionError("migrate failed"),
         ):
-            job = enqueue_create(
-                name="Beta",
-                slug="beta",
-                admin_name="Bea",
-                admin_email="bea@beta.test",
-                admin_password="temporary-secret",
-            )
+            job = enqueue_create(name="Beta", slug="beta")
             process_available_jobs()
         job.refresh_from_db()
         self.assertEqual(job.status, ProvisionJob.Status.FAILED)
         self.assertEqual(job.step, "migrate")
         self.assertEqual(job.tenant.status, Tenant.Status.FAILED)
         self.assertFalse(Domain.objects.filter(tenant=job.tenant).exists())
-        self.assertNotIn("temporary-secret", job.error)
+        self.assertNotIn(job.tenant.setup_password(), job.error)
 
     def test_retry_skips_a_finished_create_database_step(self):
         calls = self._patch_sql()
@@ -146,13 +135,7 @@ class ProvisionQueueTests(TestCase):
             "control.provisioning._step_migrate",
             side_effect=ProvisionError("migrate failed"),
         ):
-            job = enqueue_create(
-                name="Acme",
-                slug="acme",
-                admin_name="Ada",
-                admin_email="ada@acme.test",
-                admin_password="temporary-secret",
-            )
+            job = enqueue_create(name="Acme", slug="acme")
             process_available_jobs()
         self.assertIn("_step_create_database", calls)
         calls.clear()
@@ -318,29 +301,15 @@ class ProvisionQueueTests(TestCase):
         tenant.refresh_from_db()
         self.assertEqual(tenant.status, Tenant.Status.SUSPENDED)
 
-    def test_seed_creates_one_admin_and_one_company(self):
+    def test_seed_does_not_create_an_admin(self):
         tenant = Tenant.objects.create(name="Acme", slug="acme", status=Tenant.Status.PROVISIONING)
-        tenant.set_db_password("db-secret")
-        tenant.save()
-        from control.crypto import encrypt_tenant_password
-
-        payload = {
-            "admin_name": "Ada",
-            "admin_email": "ada@acme.test",
-            "admin_password_encrypted": encrypt_tenant_password("temporary-secret"),
-        }
-        with override_settings(HORILLA_MULTITENANT=False), mock.patch(
-            "control.provisioning.ensure_tenant_connection", return_value="tenant_acme"
-        ), mock.patch(
-            "control.provisioning.activate_tenant_alias", return_value=None
-        ):
-            seed_tenant(tenant, payload)
-            seed_tenant(tenant, payload)
-        self.assertEqual(
-            get_user_model().objects.filter(username="ada@acme.test").count(),
-            1,
-        )
-        self.assertEqual(Company.objects.filter(company="Acme").count(), 1)
+        with override_settings(HORILLA_MULTITENANT=False):
+            before_users = get_user_model().objects.count()
+            before_companies = Company.objects.count()
+            seed_tenant(tenant, {"plan": "standard"})
+            seed_tenant(tenant, {"plan": "standard"})
+            self.assertEqual(get_user_model().objects.count(), before_users)
+            self.assertEqual(Company.objects.count(), before_companies)
 
     def test_dump_is_required_before_a_real_delete(self):
         tenant = Tenant.objects.create(

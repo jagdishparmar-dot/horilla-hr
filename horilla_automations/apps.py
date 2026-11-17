@@ -66,9 +66,12 @@ class HorillaAutomationConfig(AppConfig):
 
             MODEL_CHOICES = list(set(MODEL_CHOICES))
             try:
+                from control.context import hr_queries_allowed
                 from horilla_automations.signals import start_automation
 
-                start_automation()
+                # No tenant is selected at process startup.
+                if hr_queries_allowed():
+                    start_automation()
             except DatabaseError as error:
                 # Tables are not present yet on a fresh database; the
                 # post_migrate hook re-runs this once they are.

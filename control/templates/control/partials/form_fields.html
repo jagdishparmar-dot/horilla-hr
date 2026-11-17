@@ -1,0 +1,22 @@
+{% for field in form %}
+  <div class="mb-4">
+    {% if field.field.widget.input_type == "checkbox" %}
+      <div class="flex items-start gap-3">
+        {{ field }}
+        <div>
+          <label for="{{ field.id_for_label }}" class="control-label mb-0">{{ field.label }}</label>
+          {% if field.help_text %}<p class="control-help">{{ field.help_text }}</p>{% endif %}
+        </div>
+      </div>
+    {% else %}
+      <label for="{{ field.id_for_label }}" class="control-label">
+        {{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}
+      </label>
+      {{ field }}
+      {% if field.help_text %}<p class="control-help">{{ field.help_text }}</p>{% endif %}
+    {% endif %}
+    {% if field.errors %}
+      <p class="control-error">{{ field.errors|join:", " }}</p>
+    {% endif %}
+  </div>
+{% endfor %}

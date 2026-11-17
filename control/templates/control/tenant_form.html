@@ -1,14 +1,40 @@
 {% extends "control/base.html" %}
 {% block title %}New tenant{% endblock %}
+{% block breadcrumb %}
+  <a href="{% url 'control-home' %}">Tenants</a>
+  <span aria-hidden="true"> / </span>
+  New
+{% endblock %}
 {% block content %}
-  <h1>New tenant</h1>
-  <p class="note">This queues a job. The database is created by the scheduler, not by this request.</p>
-  {% if form.non_field_errors %}
-    <p class="error">{{ form.non_field_errors }}</p>
-  {% endif %}
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Queue tenant</button>
-  </form>
+  <div class="mb-6">
+    <p class="control-kicker">Provision</p>
+    <h1 class="control-title">New tenant</h1>
+    <p class="control-lede">This queues a create job. No admin account is created here. After the tenant is active, its page shows a one-time setup password for Initialize Database.</p>
+  </div>
+
+  <div class="control-split control-split-2">
+    <section class="control-card control-card-pad">
+      {% if form.non_field_errors %}
+        <p class="control-alert-error mb-4" role="alert">{{ form.non_field_errors }}</p>
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        {% include "control/partials/form_fields.html" %}
+        <p class="control-help mb-4">Host preview: <strong class="control-mono" id="host-preview" data-domain="{{ platform_domain }}">your-slug.{{ platform_domain }}</strong></p>
+        <div class="flex flex-wrap gap-3">
+          <button type="submit" class="control-btn-primary">Queue tenant</button>
+          <a href="{% url 'control-home' %}" class="control-btn-ghost no-underline">Cancel</a>
+        </div>
+      </form>
+    </section>
+    <aside class="control-card control-card-pad">
+      <h2 class="control-section-title">What happens next</h2>
+      <ol class="mt-4 space-y-4 text-sm">
+        <li><strong>1. Queue.</strong> The tenant appears immediately as provisioning.</li>
+        <li><strong>2. Build.</strong> The scheduler creates the database, role, and schema.</li>
+        <li><strong>3. Hand off.</strong> Copy the setup password from the tenant page.</li>
+        <li><strong>4. Sign up.</strong> The customer opens the host and creates the first admin and company.</li>
+      </ol>
+    </aside>
+  </div>
 {% endblock %}

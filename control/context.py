@@ -25,3 +25,16 @@ def clear_tenant_alias(token: Token | None = None) -> None:
         _alias.set(None)
         return
     _alias.reset(token)
+
+
+def hr_queries_allowed() -> bool:
+    """False on the control database while multi-tenant mode is on.
+
+    Startup migrate and post_migrate handlers run there with no tenant
+    selected. They must not touch HR tables until a tenant alias is active.
+    """
+    from django.conf import settings
+
+    if not getattr(settings, "HORILLA_MULTITENANT", False):
+        return True
+    return bool(get_tenant_alias())

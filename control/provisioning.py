@@ -9,11 +9,11 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import connections, transaction
+from django.db import DatabaseError, connections, transaction
 from django.utils import timezone
 
 from control.context import activate_tenant_alias, clear_tenant_alias
-from control.crypto import decrypt_tenant_password, encrypt_tenant_password
+from control.crypto import redact_job_error
 from control.db import ensure_tenant_connection
 from control.models import Domain, ProvisionJob, Tenant
 from control.naming import tenant_database_name, tenant_role_name, validate_tenant_slug
@@ -39,24 +39,26 @@ class ProvisionError(Exception):
     """A provisioning step failed. The message must not contain a password."""
 
 
-def enqueue_create(*, name, slug, admin_name, admin_email, admin_password, plan=""):
+def enqueue_create(*, name, slug, plan=""):
+    """Queue a tenant. The admin is created later on the tenant host.
+
+    A setup password is stored encrypted on the tenant. The operator dashboard
+    shows it, and Initialize Database accepts it. No Horilla user is created here.
+    """
     slug = validate_tenant_slug(slug)
-    if not admin_email or not admin_password:
-        raise ProvisionError("An admin email and temporary password are required.")
-    tenant = Tenant.objects.create(
+    tenant = Tenant(
         name=name,
         slug=slug,
         status=Tenant.Status.PROVISIONING,
         plan=plan or "",
     )
+    tenant.set_setup_password(secrets.token_urlsafe(18))
+    tenant.save()
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.CREATE,
         status=ProvisionJob.Status.QUEUED,
         payload={
-            "admin_name": admin_name,
-            "admin_email": admin_email,
-            "admin_password_encrypted": encrypt_tenant_password(admin_password),
             "plan": plan or "",
             "completed_steps": [],
         },
@@ -270,34 +272,12 @@ def migrate_tenant(tenant):
 
 
 def seed_tenant(tenant, payload):
-    """Create the first admin and one headquarters company inside the tenant database."""
-    from django.contrib.auth import get_user_model
+    """Leave the tenant database without a login.
 
-    from base.models import Company
-
-    email = payload.get("admin_email") or ""
-    password = decrypt_tenant_password(payload.get("admin_password_encrypted") or "")
-    admin_name = (payload.get("admin_name") or "Admin")[:150]
-    company_name = (tenant.name or tenant.slug)[:50]
-    alias = ensure_tenant_connection(tenant)
-    token = activate_tenant_alias(alias)
-    try:
-        User = get_user_model()
-        username = email[:150]
-        if not User.objects.filter(username=username).exists():
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-            )
-            user.first_name = admin_name
-            user.is_staff = True
-            user.is_superuser = True
-            user.save()
-        if not Company.objects.filter(company=company_name).exists():
-            Company.objects.create(company=company_name, hq=True, address="")
-    finally:
-        clear_tenant_alias(token)
+    The first admin and company are created from the tenant's Initialize
+    Database screen, after the setup password is entered.
+    """
+    return None
 
 
 def _claim_next_job():
@@ -363,6 +343,8 @@ def _fail(job, exc):
     job.status = ProvisionJob.Status.FAILED
     if isinstance(exc, ProvisionError):
         job.set_error(str(exc))
+    elif isinstance(exc, DatabaseError):
+        job.set_error(redact_job_error(str(exc)))
     else:
         job.set_error(type(exc).__name__)
     job.finished_at = timezone.now()

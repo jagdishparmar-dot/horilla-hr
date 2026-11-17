@@ -1,8 +1,7 @@
-from leave.models import EmployeePastLeaveRestrict
+"""Leave migrations.
 
-try:
-    enabled_restriction = EmployeePastLeaveRestrict.objects.first()
-    if not enabled_restriction:
-        enabled_restriction = EmployeePastLeaveRestrict.objects.create(enabled=True)
-except:
-    pass
+Django imports this package before the leave tables exist. Querying here
+raises ProgrammingError on an empty tenant database and aborts the
+PostgreSQL transaction that migrate is using. The leave views create the
+default EmployeePastLeaveRestrict row when an operator opens that screen.
+"""

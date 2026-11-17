@@ -17,6 +17,10 @@ class HorillaAuditConfig(AppConfig):
         registry.apply_audit_configuration()
 
         def _reapply_after_migrate(sender, **kwargs):
+            from control.context import hr_queries_allowed
+
+            if not hr_queries_allowed():
+                return
             registry.apply_audit_configuration()
 
             from horilla_audit.models import HistoryTrackingFields

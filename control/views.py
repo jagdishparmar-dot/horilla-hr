@@ -1,5 +1,7 @@
 """Operator dashboard. These views write jobs. They do not open tenant databases."""
 
+from django.conf import settings
+from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.http import HttpResponseForbidden
@@ -22,6 +24,7 @@ from control.forms import (
     RestoreForm,
     TenantCreateForm,
 )
+from control.crypto import TenantPasswordError
 from control.models import Domain, Operator, OperatorAudit, ProvisionJob, Tenant
 from control.naming import TenantSlugError
 from control.provisioning import (
@@ -125,18 +128,70 @@ def _tenant_rows():
                 "primary_host": primary,
                 "last_job": last_job_label,
                 "last_backup_at": tenant.last_backup_at,
+                "needs_setup": bool(tenant.setup_password_encrypted),
             }
         )
     return rows
 
 
+def _summarize(rows):
+    summary = {
+        "total": len(rows),
+        "active": 0,
+        "provisioning": 0,
+        "suspended": 0,
+        "failed": 0,
+        "deleting": 0,
+        "deleted": 0,
+        "needs_setup": 0,
+    }
+    for row in rows:
+        status = row["tenant"].status
+        if status in summary:
+            summary[status] += 1
+        if row["needs_setup"]:
+            summary["needs_setup"] += 1
+    return summary
+
+
+def _visible_rows(rows, query, status):
+    visible = rows
+    if status == "setup":
+        visible = [row for row in visible if row["needs_setup"]]
+    elif status:
+        visible = [row for row in visible if row["tenant"].status == status]
+    if query:
+        needle = query.lower()
+        visible = [
+            row
+            for row in visible
+            if needle in row["tenant"].name.lower()
+            or needle in row["tenant"].slug.lower()
+            or needle in (row["primary_host"] or "").lower()
+            or needle in (row["tenant"].plan or "").lower()
+        ]
+    return visible
+
+
 @operator_required
 @require_http_methods(["GET"])
 def tenant_list(request):
+    rows = _tenant_rows()
+    query = (request.GET.get("q") or "").strip()
+    status = (request.GET.get("status") or "").strip()
+    allowed = {choice.value for choice in Tenant.Status} | {"setup"}
+    if status not in allowed:
+        status = ""
     return render_control(
         request,
         "control/tenant_list.html",
-        {"rows": _tenant_rows()},
+        {
+            "rows": _visible_rows(rows, query, status),
+            "stats": _summarize(rows),
+            "query": query,
+            "status_filter": status,
+            "activity": ProvisionJob.objects.select_related("tenant").order_by("-pk")[:8],
+        },
     )
 
 
@@ -150,9 +205,6 @@ def tenant_create(request):
                 job = enqueue_create(
                     name=form.cleaned_data["name"],
                     slug=form.cleaned_data["slug"],
-                    admin_name=form.cleaned_data["admin_name"],
-                    admin_email=form.cleaned_data["admin_email"],
-                    admin_password=form.cleaned_data["admin_password"],
                     plan=form.cleaned_data["plan"],
                 )
                 record_operator_action(
@@ -166,19 +218,59 @@ def tenant_create(request):
         except (ProvisionError, TenantSlugError) as exc:
             form.add_error(None, str(exc))
         else:
+            messages.success(request, f"Queued provisioning for {job.tenant.slug}.")
             return redirect("control-tenant-detail", slug=job.tenant.slug)
-    return render_control(request, "control/tenant_form.html", {"form": form})
+    return render_control(
+        request,
+        "control/tenant_form.html",
+        {"form": form, "platform_domain": settings.HORILLA_PLATFORM_DOMAIN},
+    )
+
+
+def _job_steps(job):
+    raw = job.payload.get("completed_steps") if isinstance(job.payload, dict) else None
+    if not isinstance(raw, list):
+        return []
+    return [str(step) for step in raw if step]
 
 
 def _detail_context(tenant, delete_error="", restore_error=""):
+    domains = list(tenant.domains.order_by("-is_primary", "host"))
+    setup_password = ""
+    signup_url = ""
+    if tenant.setup_password_encrypted:
+        try:
+            setup_password = tenant.setup_password()
+        except TenantPasswordError:
+            setup_password = ""
+    if setup_password:
+        host = next((domain.host for domain in domains if domain.is_primary), "")
+        if not host:
+            host = f"{tenant.slug}.{settings.HORILLA_PLATFORM_DOMAIN}"
+        signup_url = f"http://{host}/login/"
+    job_rows = []
+    watch_jobs = tenant.status == Tenant.Status.PROVISIONING
+    for job in tenant.jobs.order_by("-pk"):
+        if job.status in {ProvisionJob.Status.QUEUED, ProvisionJob.Status.RUNNING}:
+            watch_jobs = True
+        job_rows.append({"job": job, "steps": _job_steps(job)})
     return {
         "tenant": tenant,
-        "domains": tenant.domains.order_by("-is_primary", "host"),
-        "jobs": tenant.jobs.order_by("-pk"),
+        "domains": domains,
+        "jobs": job_rows,
+        "audits": list(
+            OperatorAudit.objects.filter(slug=tenant.slug)
+            .select_related("operator")
+            .order_by("-created_at")[:12]
+        ),
         "delete_form": DeleteConfirmForm(),
         "restore_form": RestoreForm(),
         "delete_error": delete_error,
         "restore_error": restore_error,
+        "setup_password": setup_password,
+        "signup_url": signup_url,
+        "watch_jobs": watch_jobs,
+        "primary_host": next((domain.host for domain in domains if domain.is_primary), ""),
     }
 
 
@@ -200,6 +292,7 @@ def _queue(request, tenant, action, job):
         slug=tenant.slug,
         detail=f"Queued {job.kind}.",
     )
+    messages.success(request, f"Queued {job.kind} job for {tenant.slug}.")
     return redirect("control-tenant-detail", slug=tenant.slug)
 
 
@@ -260,6 +353,7 @@ def tenant_restore(request, slug):
         slug=tenant.slug,
         detail=f"Queued restore of {form.cleaned_data['dump_name']}.",
     )
+    messages.success(request, "Restore job queued.")
     return redirect("control-tenant-detail", slug=tenant.slug)
 
 
@@ -291,6 +385,7 @@ def tenant_delete(request, slug):
         slug=tenant.slug,
         detail=f"Queued {job.kind}.",
     )
+    messages.success(request, "Delete job queued.")
     return redirect("control-tenant-detail", slug=tenant.slug)
 
 
@@ -315,13 +410,19 @@ def operators(request):
                 action=OperatorAudit.Action.OPERATOR_CREATE,
                 detail=f"Created {operator.email}.",
             )
+            messages.success(request, f"Created operator {operator.email}.")
             return redirect("control-operators")
+    operator_rows = list(Operator.objects.order_by("email"))
     return render_control(
         request,
         "control/operators.html",
         {
             "form": form,
-            "operators": Operator.objects.order_by("email"),
+            "operators": operator_rows,
+            "operator_count": len(operator_rows),
+            "active_operator_count": sum(1 for row in operator_rows if row.is_active),
+            "inactive_operator_count": sum(1 for row in operator_rows if not row.is_active),
+            "staff_count": sum(1 for row in operator_rows if row.is_active and row.is_staff),
         },
     )
 
@@ -343,4 +444,5 @@ def operator_deactivate(request, pk):
         action=OperatorAudit.Action.OPERATOR_DEACTIVATE,
         detail=f"Deactivated {target.email}.",
     )
+    messages.success(request, f"Deactivated {target.email}.")
     return redirect("control-operators")

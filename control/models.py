@@ -54,6 +54,9 @@ class Tenant(models.Model):
     db_host = models.CharField(max_length=255, default="db")
     db_port = models.PositiveIntegerField(default=5432)
     db_password_encrypted = models.TextField(blank=True)
+    # One-time password for the tenant's Initialize Database screen.
+    # Cleared after the first admin is created. Never put this on __str__.
+    setup_password_encrypted = models.TextField(blank=True)
     plan = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     activated_at = models.DateTimeField(null=True, blank=True)
@@ -81,6 +84,12 @@ class Tenant(models.Model):
 
     def db_password(self) -> str:
         return decrypt_tenant_password(self.db_password_encrypted)
+
+    def set_setup_password(self, plain: str) -> None:
+        self.setup_password_encrypted = encrypt_tenant_password(plain)
+
+    def setup_password(self) -> str:
+        return decrypt_tenant_password(self.setup_password_encrypted)
 
     def __str__(self) -> str:
         return f"{self.name} ({self.slug})"

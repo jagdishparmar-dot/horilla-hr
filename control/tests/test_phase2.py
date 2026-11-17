@@ -91,6 +91,24 @@ class TenantRoutingTests(TestCase):
         self.assertEqual(seen, ["tenant_acme", "tenant_beta"])
         self.assertIsNone(get_tenant_alias())
 
+    def test_bare_host_redirects_and_health_stays(self):
+        middleware = TenantMiddleware(lambda request: HttpResponse("ok"))
+        with override_settings(HORILLA_LEGACY_HOST_REDIRECT="cldv.localhost"):
+            response = middleware(
+                self.factory.get("/login/?next=/", HTTP_HOST="localhost:8000")
+            )
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(
+                response["Location"], "http://cldv.localhost:8000/login/?next=/"
+            )
+            health = middleware(self.factory.get("/health/", HTTP_HOST="localhost:8000"))
+            self.assertEqual(health.status_code, 200)
+            self.assertEqual(health.content, b"ok")
+            dashboard = middleware(
+                self.factory.get("/login/", HTTP_HOST="manage.localhost")
+            )
+        self.assertEqual(dashboard.status_code, 200)
+
     def test_unknown_host_reads_neither_operators_nor_employees(self):
         client = Client()
         with CaptureQueriesContext(connection) as captured:
