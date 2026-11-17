@@ -71,7 +71,7 @@ services:
   # superuser, which already has CREATEDB and CREATEROLE.
   db:
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-horilla_db}
+      POSTGRES_DB: ${POSTGRES_DB:-horilla_control}
       POSTGRES_USER: ${POSTGRES_USER:-horilla_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
 

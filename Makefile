@@ -18,6 +18,7 @@ prod: ## Start production overlay (no source bind-mount; requires .env)
 coolify-check: ## Validate docker-compose.coolify.yml with dummy Coolify variables
 	SERVICE_FQDN_WEB=hr.example.com SERVICE_PASSWORD_64_DJANGOKEY=x SERVICE_PASSWORD_64_DBINIT=x \
 	SERVICE_PASSWORD_POSTGRES=x SERVICE_PASSWORD_REDIS=x \
+	HORILLA_PLATFORM_DOMAIN=example.com TENANT_DB_FERNET_KEY=ci-fernet-key \
 	$(COMPOSE) --env-file /dev/null -f docker-compose.coolify.yml config --quiet && echo "docker-compose.coolify.yml OK"
 
 build: ## Build images

@@ -188,7 +188,7 @@ class MigrateTenantsTests(TestCase):
         bad = ProvisionJob.objects.get(tenant=active_bad, kind=ProvisionJob.Kind.MIGRATE)
         good = ProvisionJob.objects.get(tenant=active_ok, kind=ProvisionJob.Kind.MIGRATE)
         self.assertEqual(bad.status, ProvisionJob.Status.FAILED)
-        self.assertNotIn("s3cret-db", bad.error)
+        self.assertEqual(bad.error, "RuntimeError")
         self.assertEqual(good.status, ProvisionJob.Status.SUCCEEDED)
         self.assertIsNone(get_tenant_alias())
 

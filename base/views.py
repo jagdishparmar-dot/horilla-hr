@@ -48,10 +48,6 @@ from django.utils.translation import gettext_noop
 from django.views import View
 from django.views.decorators.http import require_http_methods
 from django.views.generic import RedirectView, TemplateView
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework_simplejwt.tokens import UntypedToken
-
 from accessibility.accessibility import ACCESSBILITY_FEATURE
 from accessibility.models import DefaultAccessibility
 from base.backends import ConfiguredEmailBackend
@@ -8869,20 +8865,6 @@ def _jwt_user(request):
     if not result:
         return None
     return result[0]
-
-
-def is_jwt_token_valid(auth_header):
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return None  # No token
-
-    token = auth_header.split("Bearer ")[1].strip()
-    try:
-        UntypedToken(token)  # Will raise if invalid
-        validated_token = JWTAuthentication().get_validated_token(token)
-        user = JWTAuthentication().get_user(validated_token)
-        return user
-    except (InvalidToken, TokenError):
-        return None
 
 
 def protected_media(request, path):

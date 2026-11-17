@@ -26,8 +26,10 @@ from control.provisioning import (
     enqueue_resume,
     enqueue_retry,
     enqueue_suspend,
+    lock_control_connect,
     maintenance_cursor,
     process_available_jobs,
+    quote_catalog_ident,
     quote_ident,
     reclaim_stale_jobs,
     seed_tenant,
@@ -396,3 +398,36 @@ class TenantDatabaseIsolationTests(TestCase):
         message = str(caught.exception).lower()
         self.assertIn("permission denied", message)
         self.assertNotIn(second.db_password(), str(caught.exception))
+
+    def test_tenant_role_cannot_connect_to_the_control_database(self):
+        from django.conf import settings
+        from django.db.backends.postgresql.base import Database as PgDatabase
+
+        tenant = self._tenant("p3isob")
+        job = ProvisionJob(tenant=tenant)
+        _step_create_role(job)
+        tenant.refresh_from_db()
+        default = settings.DATABASES["default"]
+        control_name = default["NAME"]
+        quoted = quote_ident("tenant_p3isob")
+        try:
+            lock_control_connect()
+            with self.assertRaises(PgDatabase.OperationalError) as caught:
+                PgDatabase.connect(
+                    host=default.get("HOST") or "db",
+                    port=int(default.get("PORT") or 5432),
+                    dbname=control_name,
+                    user="tenant_p3isob",
+                    password=tenant.db_password(),
+                    connect_timeout=5,
+                )
+            message = str(caught.exception).lower()
+            self.assertIn("permission denied", message)
+            self.assertNotIn(tenant.db_password(), str(caught.exception))
+        finally:
+            with maintenance_cursor() as cursor:
+                cursor.execute(
+                    "GRANT CONNECT ON DATABASE "
+                    f"{quote_catalog_ident(control_name)} TO PUBLIC"
+                )
+                cursor.execute(f"DROP ROLE IF EXISTS {quoted}")

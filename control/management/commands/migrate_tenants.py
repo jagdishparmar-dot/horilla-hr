@@ -5,7 +5,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from control.context import activate_tenant_alias, clear_tenant_alias
-from control.crypto import redact_job_error
 from control.db import ensure_tenant_connection
 from control.models import ProvisionJob, Tenant
 
@@ -54,10 +53,11 @@ class Command(BaseCommand):
             call_command("migrate", database=alias, interactive=False, verbosity=1)
         except Exception as exc:
             job.status = ProvisionJob.Status.FAILED
-            job.set_error(f"{type(exc).__name__}: {exc}")
+            # The exception text can contain a database URL. Store the type only.
+            job.set_error(type(exc).__name__)
             job.finished_at = timezone.now()
             job.save(update_fields=["status", "error", "finished_at"])
-            self.stderr.write(f"{tenant.slug}: {redact_job_error(str(exc))}")
+            self.stderr.write(f"{tenant.slug}: {type(exc).__name__}")
             return False
         else:
             job.status = ProvisionJob.Status.SUCCEEDED

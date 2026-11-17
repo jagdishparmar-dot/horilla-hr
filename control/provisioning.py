@@ -20,6 +20,7 @@ from control.naming import tenant_database_name, tenant_role_name, validate_tena
 
 PROVISION_STALE_AFTER = timedelta(minutes=30)
 IDENT_RE = re.compile(r"^tenant_[a-z][a-z0-9_]{2,30}$")
+CATALOG_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 
 CREATE_STEPS = (
     "validate",
@@ -177,6 +178,40 @@ def quote_ident(name: str) -> str:
     if not IDENT_RE.fullmatch(name or ""):
         raise ProvisionError("Unsafe database identifier.")
     return '"' + name + '"'
+
+
+def quote_catalog_ident(name: str) -> str:
+    if not CATALOG_IDENT_RE.fullmatch(name or ""):
+        raise ProvisionError("Unsafe database identifier.")
+    return '"' + name + '"'
+
+
+def lock_control_connect():
+    """Stop tenant logins from opening the control database.
+
+    PostgreSQL grants CONNECT to PUBLIC. A tenant role is a member of PUBLIC,
+    so it can open the control database until that grant is removed. The
+    control login keeps CONNECT. Runs only while multi-tenant mode is on, and
+    uses an autocommit cursor so the revoke is visible to the next connection.
+    """
+    if not getattr(settings, "HORILLA_MULTITENANT", False):
+        return
+    db = settings.DATABASES["default"]
+    quoted_db = quote_catalog_ident(db["NAME"])
+    quoted_user = quote_catalog_ident(db["USER"])
+    with maintenance_cursor() as cursor:
+        cursor.execute(f"REVOKE CONNECT ON DATABASE {quoted_db} FROM PUBLIC")
+        cursor.execute(f"GRANT CONNECT ON DATABASE {quoted_db} TO {quoted_user}")
+        cursor.execute(
+            "SELECT rolname FROM pg_roles WHERE rolname LIKE %s ESCAPE %s",
+            [r"tenant\_%", "\\"],
+        )
+        for (role,) in cursor.fetchall():
+            if not CATALOG_IDENT_RE.fullmatch(role):
+                continue
+            cursor.execute(
+                f"REVOKE CONNECT ON DATABASE {quoted_db} FROM {quote_catalog_ident(role)}"
+            )
 
 
 def run_create(job):

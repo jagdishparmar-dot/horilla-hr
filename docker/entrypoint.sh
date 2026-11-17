@@ -73,6 +73,9 @@ fi
 
 # Control database first (DATABASE_URL). The scheduler does not start until
 # this container is healthy, so it never migrates and never races this step.
+# With the flag off this command does nothing. With it on, tenant roles lose
+# CONNECT on the control database before any request is served.
+python manage.py lock_control_connect
 python manage.py migrate --noinput
 # Tenant databases are migrated one at a time after the control database.
 # With HORILLA_MULTITENANT left off this finds no tenants and exits cleanly.

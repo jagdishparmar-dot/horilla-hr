@@ -34,7 +34,9 @@ jobs:
                  SERVICE_PASSWORD_64_DJANGOKEY=ci-django-key \
                  SERVICE_PASSWORD_64_DBINIT=ci-db-init \
                  SERVICE_PASSWORD_POSTGRES=ci-postgres \
-                 SERVICE_PASSWORD_REDIS=ci-redis
+                 SERVICE_PASSWORD_REDIS=ci-redis \
+                 HORILLA_PLATFORM_DOMAIN=example.com \
+                 TENANT_DB_FERNET_KEY=ci-fernet-key
           docker compose -f docker-compose.coolify.yml config --quiet
           # Nothing may be published on the host: Traefik is the only entry.
           if docker compose -f docker-compose.coolify.yml config | grep -qE '^\s+published:'; then

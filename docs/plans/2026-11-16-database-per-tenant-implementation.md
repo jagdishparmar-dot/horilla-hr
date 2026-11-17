@@ -398,24 +398,24 @@ Sequence, each step recorded on `ProvisionJob.step`:
 
 ### [x] P3-03 Migrate and seed inside the new database
 
-- **Status:** Done (2026-11-16)
+- **Status:** Done (2026-11-16). Updated 2026-11-17: provisioning does not create the first admin. That happens on the tenant's Initialize Database screen.
 - **Depends on:** P3-02, P1-05
-- **Files:** `control/provisioning.py`
+- **Files:** `control/provisioning.py`, `control/setup_access.py`
 - **Done when:**
   - `migrate` runs on the new alias before status becomes `active`.
-  - The first `HorillaUser` is created from the job payload (admin name, email, temporary password).
-  - The minimum `Company` row your current install expects is created in that same database.
+  - The new database is left without a login. The first `HorillaUser` and company are created later, on that tenant's Initialize Database screen, after the operator enters the one-time setup password.
+  - The setup password is encrypted on `Tenant`. It is not written into `ProvisionJob.payload` or `OperatorAudit`.
   - Failure sets `Tenant.status = failed` and does not insert a usable primary `Domain`.
 
 ### [x] P3-04 Activate the hostname
 
-- **Status:** Done (2026-11-16)
+- **Status:** Done (2026-11-16). Updated 2026-11-17: the host serves Horilla login before any company exists. The company appears after Initialize Database.
 - **Depends on:** P3-03
-- **Files:** `control/provisioning.py`
+- **Files:** `control/provisioning.py`, `control/setup_access.py`
 - **Done when:**
   - Primary `Domain` is `<slug>.<platform-domain>`, `is_primary=True`, `verified=True`.
-  - `Tenant.status` becomes `active` only after migrate and seed succeed.
-  - A request to that host reaches Horilla login and sees only the seeded company.
+  - `Tenant.status` becomes `active` only after migrate and the empty seed step succeed.
+  - A request to that host reaches Horilla login. The first company is the one created on Initialize Database, not a row inserted by the provisioner.
 
 ### [x] P3-05 Provisioner loop
 

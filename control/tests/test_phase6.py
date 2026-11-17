@@ -30,8 +30,14 @@ class DeployHostTests(SimpleTestCase):
         self.assertIn("$$POSTGRES_DB", compose)
         self.assertIn("condition: service_healthy", compose)
         self.assertIn("127.0.0.1:8000:8000", prod)
+        self.assertIn("POSTGRES_DB: ${POSTGRES_DB:-horilla_control}", prod)
         self.assertNotIn("TENANT_DATABASE_URL", compose)
         self.assertNotIn("TENANT_DATABASE_URL", prod)
+        init_sql = (ROOT / "docker" / "postgres" / "init-control.sql").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("REVOKE CONNECT ON DATABASE", init_sql)
+        self.assertIn("FROM PUBLIC", init_sql)
 
     def test_nginx_names_the_platform_hosts_and_keeps_the_host_header(self):
         nginx = (ROOT / "docker" / "nginx.conf").read_text(encoding="utf-8")
@@ -43,10 +49,12 @@ class DeployHostTests(SimpleTestCase):
 
     def test_release_migrates_control_then_tenants_from_web_only(self):
         entry = (ROOT / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
+        lock_at = entry.index("python manage.py lock_control_connect")
         migrate_at = entry.index("python manage.py migrate --noinput")
         tenants_at = entry.index("python manage.py migrate_tenants")
         skip_at = entry.index('HORILLA_SKIP_RELEASE_TASKS:-0}" = "1"')
-        self.assertLess(skip_at, migrate_at)
+        self.assertLess(skip_at, lock_at)
+        self.assertLess(lock_at, migrate_at)
         self.assertLess(migrate_at, tenants_at)
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn("HORILLA_SKIP_RELEASE_TASKS=1", compose)
