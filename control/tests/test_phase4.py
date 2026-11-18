@@ -105,7 +105,9 @@ class DashboardTests(TestCase):
         payload = {
             "name": "Acme",
             "slug": "Acme",
-            "plan": "standard",
+            "plan": "starter",
+            "cadence": "monthly",
+            "seats": "10",
         }
         with mock.patch(
             "control.provisioning.maintenance_cursor",
@@ -119,6 +121,10 @@ class DashboardTests(TestCase):
         job = tenant.jobs.get()
         self.assertEqual(job.status, ProvisionJob.Status.QUEUED)
         self.assertEqual(job.kind, ProvisionJob.Kind.CREATE)
+        self.assertEqual(tenant.plan_fk.code, "starter")
+        self.assertEqual(tenant.cadence, "monthly")
+        self.assertEqual(job.payload["plan"], "starter")
+        self.assertEqual(job.payload["seats"], 10)
         setup_password = tenant.setup_password()
         self.assertTrue(setup_password)
         self.assertNotIn(setup_password, json.dumps(job.payload))
@@ -129,7 +135,8 @@ class DashboardTests(TestCase):
         self.assertNotIn(setup_password, audit.detail)
         self.assertNotIn(setup_password, str(audit))
         detail = self.client.get("/control/tenants/acme/")
-        self.assertContains(detail, setup_password)
+        self.assertNotContains(detail, setup_password)
+        self.assertContains(detail, "Pending")
         self.assertContains(detail, "Initialize Database")
 
         again = self.client.post("/control/tenants/new/", payload)
@@ -166,7 +173,7 @@ class DashboardTests(TestCase):
         self.assertContains(page, "Acme")
         self.assertContains(page, "acme")
         self.assertContains(page, "acme.localhost")
-        self.assertContains(page, "ACTIVE")
+        self.assertContains(page, "Active")
         self.assertContains(page, "backup succeeded")
 
     def test_actions_enqueue_jobs_and_delete_requires_the_slug(self):
@@ -188,7 +195,10 @@ class DashboardTests(TestCase):
             "control.provisioning.maintenance_cursor",
             side_effect=AssertionError("sql from the dashboard"),
         ):
-            suspended = self.client.post("/control/tenants/acme/suspend/")
+            suspended = self.client.post(
+                "/control/tenants/acme/suspend/",
+                {"reason": "Billing review"},
+            )
             backed_up = self.client.post("/control/tenants/acme/backup/")
             migrated = self.client.post("/control/tenants/acme/migrate/")
             restored = self.client.post(

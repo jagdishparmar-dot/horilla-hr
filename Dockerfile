@@ -147,6 +147,9 @@ RUN apt-get install -y --no-install-recommends \
     && rm -f /tmp/wkhtmltox.deb \
     && test -x /usr/local/bin/wkhtmltopdf \
     && wkhtmltopdf --version \
+    && pg_dump --version \
+    && pg_major="$(pg_dump --version | sed -n 's/.* \([0-9][0-9]*\)\..*/\1/p')" \
+    && [ "${pg_major:-0}" -ge 16 ] \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

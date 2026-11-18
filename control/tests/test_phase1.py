@@ -117,7 +117,7 @@ class ModelTests(TestCase):
 
     def test_tenant_string_hides_ciphertext_and_slug_cannot_change(self):
         with _use_fernet_key():
-            tenant = Tenant(name="Acme", slug="acme", plan="standard")
+            tenant = Tenant(name="Acme", slug="acme")
             tenant.set_db_password("s3cret-db")
             tenant.save()
             self.assertEqual(tenant.db_name, "tenant_acme")

@@ -26,6 +26,21 @@ from horilla.scheduling import get_registered_jobs
 
 logger = logging.getLogger(__name__)
 
+# Stored by an older build that ran provisioning inside this process.
+# run_provisioner owns that queue now. Leaving the row would fire it here too.
+RETIRED_JOB_IDS = ("control.scheduler.provision_queued_tenants",)
+
+
+def _drop_retired_jobs():
+    from django_apscheduler.models import DjangoJob
+
+    retired = DjangoJob.objects.filter(id__in=RETIRED_JOB_IDS)
+    ids = list(retired.values_list("id", flat=True))
+    if not ids:
+        return
+    retired.delete()
+    logger.info("Removed retired scheduler job(s): %s", ", ".join(ids))
+
 
 def log_job_error(event):
     """
@@ -113,6 +128,7 @@ class Command(BaseCommand):
         scheduler.add_listener(_on_job_missed, EVENT_JOB_MISSED)
 
         self.stdout.write(self.style.SUCCESS(f"Running {len(jobs)} scheduled job(s)."))
+        _drop_retired_jobs()
 
         # BlockingScheduler ignores SIGTERM by default, so a container stop
         # would kill it mid-job instead of letting it shut down cleanly.

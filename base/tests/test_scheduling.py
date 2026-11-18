@@ -169,11 +169,14 @@ class DeploymentWiringTests(SimpleTestCase):
         text = (Path(settings.BASE_DIR) / name).read_text(encoding="utf-8")
         return yaml.load(text, Loader=ComposeLoader)
 
-    def _scheduler_env(self, compose):
-        env = compose["services"]["scheduler"]["environment"]
+    def _service_env(self, compose, service):
+        env = compose["services"][service]["environment"]
         if isinstance(env, list):
             env = dict(item.split("=", 1) for item in env)
         return env
+
+    def _scheduler_env(self, compose):
+        return self._service_env(compose, "scheduler")
 
     def test_compose_files_launch_a_single_scheduler_that_skips_release_tasks(self):
         dev = self._compose("docker-compose.yml")
@@ -196,6 +199,15 @@ class DeploymentWiringTests(SimpleTestCase):
 
         # Two schedulers reintroduce the duplicate-run problem.
         self.assertEqual(prod["services"]["scheduler"]["deploy"]["replicas"], 1)
+
+        self.assertIn("run_provisioner", str(dev["services"]["provisioner"]["command"]))
+        self.assertEqual(prod["services"]["provisioner"]["deploy"]["replicas"], 1)
+        for name, compose in (("dev", dev), ("prod", prod)):
+            with self.subTest(compose=name, service="provisioner"):
+                self.assertEqual(
+                    str(self._service_env(compose, "provisioner")["HORILLA_SKIP_RELEASE_TASKS"]),
+                    "1",
+                )
 
     def test_production_publishes_web_on_localhost_only(self):
         # On every interface, Django's port bypasses nginx: its login rate
@@ -227,6 +239,7 @@ class DeploymentWiringTests(SimpleTestCase):
             patch(f"{target}.BlockingScheduler") as scheduler_cls,
             patch(f"{target}.DjangoJobStore"),
             patch(f"{target}.signal.signal"),
+            patch(f"{target}._drop_retired_jobs"),
         ):
             call_command("run_scheduler", stdout=StringIO())
 

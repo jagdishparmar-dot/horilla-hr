@@ -1,0 +1,58 @@
+{% extends "control/base.html" %}
+{% block title %}Audit{% endblock %}
+{% block breadcrumb %}Audit &amp; Settings{% endblock %}
+{% block content %}
+  <div class="mb-6">
+    <h1 class="control-title">Audit Log &amp; Workspace Settings</h1>
+    <p class="control-lede">Newest operator actions across every tenant. Filter by category. A slug links to the tenant while that row still exists.</p>
+  </div>
+
+  <section class="control-card overflow-hidden">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
+      <h2 class="control-section-title">Audit log</h2>
+      <div class="control-tabs" role="tablist" aria-label="Filter audit by category">
+        {% for tab in audit_tabs %}
+          <a
+            role="tab"
+            class="control-tab {% if audit_category == tab.id %}control-tab-active{% endif %}"
+            href="{% if tab.id %}?category={{ tab.id }}{% else %}{% url 'control-audit' %}{% endif %}"
+          >{{ tab.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="control-table-wrap">
+      <table class="control-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Operator</th>
+            <th>Category</th>
+            <th>Action</th>
+            <th>Tenant</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in audits %}
+            <tr>
+              <td class="whitespace-nowrap control-muted">{{ row.created_at|date:"M j, Y H:i" }}</td>
+              <td>{{ row.operator.email }}</td>
+              <td>{{ row.get_category_display }}</td>
+              <td class="control-mono">{{ row.action }}</td>
+              <td>
+                {% if row.tenant_exists %}
+                  <a href="{% url 'control-tenant-detail' row.slug %}">{{ row.slug }}</a>
+                {% else %}
+                  <span class="control-muted">{{ row.slug|default:"—" }}</span>
+                {% endif %}
+              </td>
+              <td class="control-muted">{{ row.detail }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6"><div class="control-empty">No operator actions in this category.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

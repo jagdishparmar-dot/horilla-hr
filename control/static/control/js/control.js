@@ -74,6 +74,34 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const sectionTab = event.target.closest("[data-section-tab]");
+  if (sectionTab && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+    const selected = sectionTab.getAttribute("data-section-tab") || "all";
+    const panels = document.querySelectorAll("[data-detail-section]");
+    if (panels.length) {
+      event.preventDefault();
+      panels.forEach((panel) => {
+        const name = panel.getAttribute("data-detail-section");
+        panel.hidden = selected !== "all" && name !== selected;
+      });
+      document.querySelectorAll("[data-section-tab]").forEach((tab) => {
+        const active = tab.getAttribute("data-section-tab") === selected;
+        tab.classList.toggle("control-section-tab-active", active);
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      if (window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        if (selected === "all") {
+          url.searchParams.delete("section");
+        } else {
+          url.searchParams.set("section", selected);
+        }
+        window.history.replaceState({}, "", url.toString());
+      }
+      return;
+    }
+  }
+
   const row = event.target.closest("[data-href]");
   if (row && !event.target.closest("a, button, input, label, form")) {
     window.location.href = row.getAttribute("data-href");
@@ -99,6 +127,17 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     slug.addEventListener("input", render);
     render();
+  }
+
+  const planSelect = document.querySelector("[data-plan-select]");
+  const seatInput = document.querySelector("[data-seat-input]");
+  if (planSelect && seatInput) {
+    planSelect.addEventListener("change", () => {
+      const option = planSelect.selectedOptions[0];
+      if (option && option.dataset.seats) {
+        seatInput.value = option.dataset.seats;
+      }
+    });
   }
 
   const filter = document.getElementById("operator-filter");

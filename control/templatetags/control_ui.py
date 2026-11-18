@@ -1,15 +1,19 @@
 from django import template
 from django.utils.html import format_html
 
+from control.catalog import format_inr
+
 register = template.Library()
 
 _TENANT_LABELS = {
-    "provisioning": "PROVISIONING",
-    "active": "ACTIVE",
-    "suspended": "SUSPENDED",
-    "failed": "FAILED",
-    "deleting": "DELETING",
-    "deleted": "DELETED",
+    "provisioning": "Provisioning",
+    "active": "Active",
+    "trialing": "Trialing",
+    "past_due": "Past due",
+    "suspended": "Suspended",
+    "failed": "Failed",
+    "deleting": "Deleting",
+    "deleted": "Deleted",
 }
 
 _JOB_LABELS = {
@@ -23,6 +27,8 @@ _JOB_LABELS = {
 _PILL_TONES = {
     "provisioning": "warn",
     "active": "ok",
+    "trialing": "warn",
+    "past_due": "danger",
     "suspended": "neutral",
     "failed": "danger",
     "deleting": "warn",
@@ -41,10 +47,24 @@ def _pill(label: str, tone: str) -> str:
     )
 
 
+_STATUS_CLASS = {
+    "ok": "control-status control-status-ok",
+    "warn": "control-status control-status-warn",
+    "danger": "control-status control-status-danger",
+    "info": "control-status control-status-info",
+    "neutral": "control-status control-status-neutral",
+}
+
+
 @register.filter
 def tenant_status_badge(status: str):
-    label = _TENANT_LABELS.get(status, (status or "").upper())
-    return _pill(label, _PILL_TONES.get(status, "neutral"))
+    label = _TENANT_LABELS.get(status, (status or "").replace("_", " ").title())
+    tone = _PILL_TONES.get(status, "neutral")
+    return format_html(
+        '<span class="{}">{}</span>',
+        _STATUS_CLASS.get(tone, _STATUS_CLASS["neutral"]),
+        label,
+    )
 
 
 @register.filter
@@ -58,6 +78,11 @@ def yesno_badge(value: bool):
     if value:
         return _pill("YES", "ok")
     return _pill("NO", "neutral")
+
+
+@register.filter
+def inr(value) -> str:
+    return format_inr(value)
 
 
 @register.filter
@@ -85,6 +110,15 @@ def control_nav_active(request, section: str) -> str:
     idle = "control-nav-link"
     if section == "tenants":
         if name == "control-home" or name.startswith("control-tenant"):
+            return active
+    elif section == "plans":
+        if name == "control-plans" or name.startswith("control-plan"):
+            return active
+    elif section == "billing":
+        if name == "control-billing" or name.startswith("control-billing"):
+            return active
+    elif section == "audit":
+        if name == "control-audit" or name.startswith("control-audit"):
             return active
     elif section == "operators":
         if name == "control-operators" or name.startswith("control-operator"):

@@ -1,0 +1,23 @@
+{% extends "control/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block breadcrumb %}Plans &amp; Add-ons{% endblock %}
+{% block content %}
+  <div class="mb-6">
+    <h1 class="control-title">{{ title }}</h1>
+    <p class="control-lede">Prices are whole rupees for one billing cycle, per seat. Saving here does not change tenants that already locked a price.</p>
+  </div>
+  <section class="control-card control-card-pad max-w-2xl">
+    <form method="post">
+      {% csrf_token %}
+      {% include "control/partials/form_fields.html" %}
+      <button type="submit" class="control-btn-primary">Save plan</button>
+      <a href="{% url 'control-plans' %}" class="control-btn-ghost no-underline">Back</a>
+    </form>
+    {% if request.resolver_match.url_name == "control-plan-edit" %}
+      <form method="post" action="{% url 'control-plan-delete' request.resolver_match.kwargs.code %}" class="mt-6">
+        {% csrf_token %}
+        <button type="submit" class="control-btn-danger" data-confirm="Archive this plan if tenants use it, or delete it if none do?">Archive or delete</button>
+      </form>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -81,7 +81,7 @@ class ProvisionQueueTests(TestCase):
 
     def test_create_reaches_active_only_after_migrate_and_seed(self):
         calls = self._patch_sql()
-        job = enqueue_create(name="Acme", slug="acme", plan="standard")
+        job = enqueue_create(name="Acme", slug="acme", plan="starter")
         setup_password = job.tenant.setup_password()
         self.assertTrue(setup_password)
         self.assertNotIn(setup_password, str(job))
@@ -271,11 +271,11 @@ class ProvisionQueueTests(TestCase):
         enqueue_suspend(second)
         queued_while_running = []
 
-        def spy(tenant):
+        def spy(tenant, reason=""):
             queued_while_running.append(
                 ProvisionJob.objects.filter(status=ProvisionJob.Status.QUEUED).count()
             )
-            real_suspend(tenant)
+            real_suspend(tenant, reason)
 
         with mock.patch("control.provisioning.suspend_tenant", side_effect=spy):
             processed = process_available_jobs()
@@ -290,18 +290,65 @@ class ProvisionQueueTests(TestCase):
 
         from horilla.scheduling import _REGISTRY
 
-        job = _REGISTRY["control.scheduler.provision_queued_tenants"]
-        self.assertEqual(job.kwargs.get("minutes"), 1)
-        self.assertIs(job.func, control.scheduler.provision_queued_tenants)
+        self.assertNotIn("control.scheduler.provision_queued_tenants", _REGISTRY)
+        self.assertFalse(hasattr(control.scheduler, "provision_queued_tenants"))
         tenant = Tenant.objects.create(
             name="Acme", slug="acme", status=Tenant.Status.ACTIVE
         )
         enqueue_suspend(tenant)
         out = StringIO()
-        call_command("run_provisioner", stdout=out)
+        call_command("run_provisioner", "--once", stdout=out)
         self.assertIn("reclaimed=0 processed=1", out.getvalue())
         tenant.refresh_from_db()
         self.assertEqual(tenant.status, Tenant.Status.SUSPENDED)
+
+    def test_restart_requeues_a_running_create_and_finishes_after_migrate(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        calls = self._patch_sql()
+        tenant = Tenant.objects.create(
+            name="Cold",
+            slug="cold",
+            status=Tenant.Status.PROVISIONING,
+        )
+        job = ProvisionJob.objects.create(
+            tenant=tenant,
+            kind=ProvisionJob.Kind.CREATE,
+            status=ProvisionJob.Status.RUNNING,
+            started_at=timezone.now(),
+            step="migrate",
+            payload={
+                "completed_steps": [
+                    "validate",
+                    "create_role",
+                    "create_database",
+                    "revoke_public",
+                    "grant_connect",
+                    "revoke_other_roles",
+                    "store_connection",
+                ]
+            },
+        )
+        seen = []
+
+        def watch_migrate(running):
+            running.tenant.refresh_from_db()
+            seen.append(running.tenant.status)
+
+        with mock.patch("control.provisioning._step_migrate", side_effect=watch_migrate):
+            out = StringIO()
+            call_command("run_provisioner", "--once", stdout=out)
+        self.assertIn("requeued=1", out.getvalue())
+        self.assertEqual(seen, [Tenant.Status.PROVISIONING])
+        self.assertNotIn("_step_create_database", calls)
+        self.assertIn("_step_seed", calls)
+        job.refresh_from_db()
+        tenant.refresh_from_db()
+        self.assertEqual(job.status, ProvisionJob.Status.SUCCEEDED)
+        self.assertEqual(tenant.status, Tenant.Status.ACTIVE)
+        self.assertTrue(Domain.objects.filter(tenant=tenant, is_primary=True).exists())
 
     def test_seed_does_not_create_an_admin(self):
         tenant = Tenant.objects.create(name="Acme", slug="acme", status=Tenant.Status.PROVISIONING)

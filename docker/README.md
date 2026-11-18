@@ -145,12 +145,13 @@ make logs
 | Service | Image | Purpose |
 |---------|-------|---------|
 | **web** | Custom (Dockerfile) | Django application with Gunicorn WSGI server |
-| **scheduler** | Custom (Dockerfile) | Single process running `manage.py run_scheduler`. Payroll, leave resets, backups and report subscriptions do **not** run inside gunicorn workers. |
+| **scheduler** | Custom (Dockerfile) | Single process running `manage.py run_scheduler`. Payroll, leave resets, and report subscriptions do **not** run inside gunicorn workers. |
+| **provisioner** | Custom (Dockerfile) | Single process running `manage.py run_provisioner`. Tenant create, migrate, backup, restore, suspend, resume, and delete. On startup it continues a job left running. |
 | **db** | `postgres:16-alpine` | Primary database for all application data |
 | **redis** | `redis:7-alpine` | Caching, session storage (password-protected, AOF persistence) |
 | **nginx** | `nginx:alpine` | Reverse proxy and static file serving (production only). Does **not** serve `/media/` directly — that path is proxied to Django so `protected_media()` can enforce auth and content-type gates. |
 
-> **Upgrade:** if you deploy without this Compose file, start **exactly one** `python manage.py run_scheduler` process. Missing it is silent — those jobs simply never fire. `GET /ready/` includes `"scheduler": "ok"|"missing"`. Set `HORILLA_REQUIRE_SCHEDULER=1` to make `/ready/` return 503 while jobs are unregistered — only where a failing readiness probe will not pull web out of the load balancer, since a stopped scheduler delays background jobs but does not stop the app serving requests.
+> **Upgrade:** if you deploy without this Compose file, start **exactly one** `python manage.py run_scheduler` process and **exactly one** `python manage.py run_provisioner` process. Missing the scheduler is silent — those jobs simply never fire. `GET /ready/` includes `"scheduler": "ok"|"missing"`. Set `HORILLA_REQUIRE_SCHEDULER=1` to make `/ready/` return 503 while jobs are unregistered — only where a failing readiness probe will not pull web out of the load balancer, since a stopped scheduler delays background jobs but does not stop the app serving requests. A second provisioner can create the same tenant database twice.
 
 ### Volumes
 
@@ -403,14 +404,14 @@ What the stack does for production:
 | TLS / hosts | Traefik terminates TLS. Milestone 1 needs a certificate for `manage.<domain>` and `*.<domain>`. A custom hostname is a separate certificate (milestone 2). |
 | Client IP | `HORILLA_TRUSTED_PROXIES` trusts the private Docker ranges, so lockouts see the real visitor. Add Cloudflare's ranges if you use it. |
 | Static / media | WhiteNoise serves `/static/`. `/media/` goes through Django so the authenticated `protected_media` check still applies. |
-| Startup order | `web` waits for healthy Postgres and Redis; `scheduler` waits for `web`, which owns the migrations. |
+| Startup order | `web` waits for healthy Postgres and Redis; `scheduler` and `provisioner` wait for `web`, which owns the migrations. |
 | Backups | The `db-backup` sidecar writes daily gzip dumps (7 daily, 4 weekly, 6 monthly) to the `db_backups` volume. Copy that volume off the host. |
 | Hardening | Non-root user, `cap_drop: ALL`, `no-new-privileges`, memory limits, log rotation, `init: true`, 40s graceful stop. |
 | Keep-alive | Gunicorn keep-alive is 95s, above Traefik's 90s idle timeout, which avoids intermittent 502s. |
 
 Rules to keep:
 
-- Keep `scheduler` at exactly one replica.
+- Keep `scheduler` and `provisioner` at exactly one replica each.
 - Scale `web` only after moving media to S3 (`AWS_*` variables).
 - After HTTPS works, set `SECURE_SSL_REDIRECT=true` to add the redirect and HSTS.
 - To restore, run `gunzip -c <file>.sql.gz | psql -h db -U <user> <db>`.

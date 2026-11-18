@@ -4,25 +4,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in · Horilla Control</title>
+  <title>Sign in · ClockMe Control</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'control/css/control.css' %}">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'control/css/control.css' %}?v=20261118a">
 </head>
 <body>
   <div class="control-login">
     <section class="control-login-panel">
       <div>
-        <span class="control-mark" aria-hidden="true">H</span>
+        <p class="font-display text-base font-bold tracking-tight text-white">ClockMe Control</p>
         <h1 class="control-title mt-8 max-w-md text-white">One console for every customer environment.</h1>
-        <p class="mt-4 max-w-md text-stone-300">Provision a database, hand over the setup password, and watch jobs finish without opening a tenant session.</p>
+        <p class="mt-4 max-w-md text-sm text-slate-300">Provision a database, hand over the setup password, and watch jobs finish without opening a tenant session.</p>
       </div>
-      <p class="control-mono text-xs text-stone-400">Operator access only. This is not a tenant login.</p>
+      <p class="control-mono text-xs text-slate-400">Operator access only. This is not a tenant login.</p>
     </section>
     <section class="flex items-center justify-center px-4 py-12">
       <div class="w-full max-w-md">
-        <p class="control-kicker">Horilla Control</p>
+        <p class="control-kicker">ClockMe Control</p>
         <h2 class="control-title">Sign in</h2>
         <p class="control-lede">Use the operator account for this cluster.</p>
         <div class="control-card control-card-pad mt-8">

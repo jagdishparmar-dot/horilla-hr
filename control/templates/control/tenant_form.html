@@ -1,14 +1,9 @@
 {% extends "control/base.html" %}
 {% block title %}New tenant{% endblock %}
-{% block breadcrumb %}
-  <a href="{% url 'control-home' %}">Tenants</a>
-  <span aria-hidden="true"> / </span>
-  New
-{% endblock %}
+{% block breadcrumb %}New tenant{% endblock %}
 {% block content %}
   <div class="mb-6">
-    <p class="control-kicker">Provision</p>
-    <h1 class="control-title">New tenant</h1>
+    <h1 class="control-title">Provision Tenant</h1>
     <p class="control-lede">This queues a create job. No admin account is created here. After the tenant is active, its page shows a one-time setup password for Initialize Database.</p>
   </div>
 
@@ -19,8 +14,50 @@
       {% endif %}
       <form method="post">
         {% csrf_token %}
-        {% include "control/partials/form_fields.html" %}
-        <p class="control-help mb-4">Host preview: <strong class="control-mono" id="host-preview" data-domain="{{ platform_domain }}">your-slug.{{ platform_domain }}</strong></p>
+        <fieldset class="mb-6">
+          <legend class="control-section-title mb-3">Organization</legend>
+          {% for field in form %}
+            {% if field.name == "name" or field.name == "industry" or field.name == "admin_name" or field.name == "admin_email" or field.name == "slug" %}
+              <div class="mb-4">
+                <label for="{{ field.id_for_label }}" class="control-label">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="control-help">{{ field.help_text }}</p>{% endif %}
+                {% if field.errors %}<p class="control-error">{{ field.errors|join:", " }}</p>{% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+          <p class="control-help">Host preview: <strong class="control-mono" id="host-preview" data-domain="{{ platform_domain }}">your-slug.{{ platform_domain }}</strong></p>
+        </fieldset>
+        <fieldset class="mb-6">
+          <legend class="control-section-title mb-3">Subscription</legend>
+          {% for field in form %}
+            {% if field.name == "plan" or field.name == "cadence" or field.name == "seats" %}
+              <div class="mb-4">
+                <label for="{{ field.id_for_label }}" class="control-label">{{ field.label }} <span aria-hidden="true">*</span></label>
+                {{ field }}
+                {% if field.help_text %}<p class="control-help">{{ field.help_text }}</p>{% endif %}
+                {% if field.errors %}<p class="control-error">{{ field.errors|join:", " }}</p>{% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+          <label class="mt-2 flex items-center gap-2 text-sm">
+            {{ form.start_as_trial }}
+            <span>{{ form.start_as_trial.label }}</span>
+          </label>
+          {% if form.start_as_trial.help_text %}<p class="control-help">{{ form.start_as_trial.help_text }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="mb-6">
+          <legend class="control-section-title mb-3">Modules</legend>
+          <p class="control-help mb-3">Stored on the tenant. Turning one off does not uninstall a Horilla app.</p>
+          {% for field in form %}
+            {% if field.name == "module_employee_records" or field.name == "module_payroll_engine" or field.name == "module_performance_reviews" %}
+              <label class="mb-2 flex items-center gap-2 text-sm">
+                {{ field }}
+                <span>{{ field.label }}</span>
+              </label>
+            {% endif %}
+          {% endfor %}
+        </fieldset>
         <div class="flex flex-wrap gap-3">
           <button type="submit" class="control-btn-primary">Queue tenant</button>
           <a href="{% url 'control-home' %}" class="control-btn-ghost no-underline">Cancel</a>

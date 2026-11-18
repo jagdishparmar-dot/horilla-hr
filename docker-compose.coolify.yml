@@ -189,6 +189,62 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  # Tenant provisioning. Exactly one replica. A second copy can claim the
+  # same create. Startup requeues a job left running and continues it.
+  provisioner:
+    image: horilla-hr:coolify
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+        VCS_REF: ${SOURCE_COMMIT:-unknown}
+    command: python manage.py run_provisioner
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 120s
+    environment:
+      - HORILLA_ENV=production
+      - DEBUG=0
+      - DJANGO_SETTINGS_MODULE=horilla.settings
+      - HORILLA_SKIP_RELEASE_TASKS=1
+      - SECRET_KEY=${SERVICE_PASSWORD_64_DJANGOKEY}
+      - DB_INIT_PASSWORD=${SERVICE_PASSWORD_64_DBINIT}
+      - ALLOWED_HOSTS=${SERVICE_FQDN_WEB},localhost,${EXTRA_ALLOWED_HOSTS:-127.0.0.1}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DATABASE_URL=postgres://${POSTGRES_USER:-horilla}:${SERVICE_PASSWORD_POSTGRES}@db:5432/${POSTGRES_DB:-horilla_control}
+      - HORILLA_MULTITENANT=${HORILLA_MULTITENANT:-true}
+      - HORILLA_PLATFORM_DOMAIN=${HORILLA_PLATFORM_DOMAIN:?Set HORILLA_PLATFORM_DOMAIN}
+      - HORILLA_DASHBOARD_HOST=${HORILLA_DASHBOARD_HOST:-}
+      - HORILLA_LEGACY_HOST_REDIRECT=${HORILLA_LEGACY_HOST_REDIRECT:-}
+      - TENANT_DB_FERNET_KEY=${TENANT_DB_FERNET_KEY:?Set TENANT_DB_FERNET_KEY}
+      - REDIS_URL=redis://:${SERVICE_PASSWORD_REDIS}@redis:6379/0
+      - TIME_ZONE=${TIME_ZONE:-Asia/Kolkata}
+      - HORILLA_SCHEDULER_HISTORY_DAYS=${HORILLA_SCHEDULER_HISTORY_DAYS:-7}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    volumes:
+      - media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    mem_limit: ${PROVISIONER_MEM_LIMIT:-1g}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped

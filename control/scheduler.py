@@ -1,18 +1,6 @@
-"""Queue worker for tenant provisioning. Loaded only by run_scheduler."""
+"""Provisioning no longer runs inside run_scheduler.
 
-from horilla.scheduling import register_job
-
-
-def provision_queued_tenants():
-    from control.provisioning import process_available_jobs, reclaim_stale_jobs
-
-    reclaim_stale_jobs()
-    process_available_jobs()
-
-
-register_job(
-    provision_queued_tenants,
-    "interval",
-    minutes=1,
-    per_tenant=False,
-)
+Create, migrate, backup, restore, suspend, resume, and delete run in the
+single ``run_provisioner`` process. This module stays so app loading still
+finds a scheduler module and does not register a second worker.
+"""

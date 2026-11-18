@@ -115,7 +115,9 @@ def run_registered_job(job_id: str):
     from control.models import Tenant
     from control.router import TenantRoutingError
 
-    tenants = list(Tenant.objects.filter(status=Tenant.Status.ACTIVE).order_by("pk"))
+    tenants = list(
+        Tenant.objects.filter(status__in=Tenant.ROUTABLE_STATUSES).order_by("pk")
+    )
     for tenant in tenants:
         alias = ensure_tenant_connection(tenant)
         token = activate_tenant_alias(alias)

@@ -71,7 +71,7 @@ class TenantMiddleware:
             return HttpResponseNotFound("Unknown host."), None, None
 
         tenant = domain.tenant
-        if tenant.status != Tenant.Status.ACTIVE:
+        if tenant.status not in Tenant.ROUTABLE_STATUSES:
             return (
                 HttpResponseForbidden("This workspace is not available."),
                 None,

@@ -15,7 +15,8 @@ from django.utils import timezone
 from control.context import activate_tenant_alias, clear_tenant_alias
 from control.crypto import redact_job_error
 from control.db import ensure_tenant_connection
-from control.models import Domain, ProvisionJob, Tenant
+from control.catalog import UNASSIGNED
+from control.models import Domain, Plan, ProvisionJob, Tenant
 from control.naming import tenant_database_name, tenant_role_name, validate_tenant_slug
 
 PROVISION_STALE_AFTER = timedelta(minutes=30)
@@ -40,27 +41,90 @@ class ProvisionError(Exception):
     """A provisioning step failed. The message must not contain a password."""
 
 
-def enqueue_create(*, name, slug, plan=""):
+def _resolve_plan(plan):
+    if isinstance(plan, Plan):
+        return plan
+    code = (plan or "").strip().lower()
+    if not code:
+        code = UNASSIGNED
+    found = Plan.objects.filter(code=code).first()
+    if found is None:
+        raise ProvisionError(f"Unknown plan '{code}'.")
+    return found
+
+
+TRIAL_DAYS = 14
+
+
+def enqueue_create(
+    *,
+    name,
+    slug,
+    plan="",
+    cadence=Tenant.Cadence.MONTHLY,
+    seats=None,
+    addons=None,
+    modules=None,
+    industry="",
+    admin_name="",
+    admin_email="",
+    start_as_trial=False,
+):
     """Queue a tenant. The admin is created later on the tenant host.
 
     A setup password is stored encrypted on the tenant. The operator dashboard
     shows it, and Initialize Database accepts it. No Horilla user is created here.
+    ``seat_limit`` is copied from ``seats``. Storage is that count times the plan's GB per seat.
+    Module flags are stored only. They do not install or remove Horilla apps.
     """
     slug = validate_tenant_slug(slug)
+    chosen = _resolve_plan(plan)
+    if cadence not in {
+        Tenant.Cadence.MONTHLY,
+        Tenant.Cadence.SEMIANNUAL,
+        Tenant.Cadence.ANNUAL,
+    }:
+        raise ProvisionError("Unknown billing cadence.")
+    seat_count = int(seats) if seats is not None else (chosen.seat_cap or 25)
+    if seat_count < 1:
+        raise ProvisionError("Seat count must be at least 1.")
+    if chosen.seat_cap is not None and seat_count > chosen.seat_cap:
+        raise ProvisionError(f"{chosen.name} allows up to {chosen.seat_cap} seats.")
+    per_seat = chosen.storage_gb_per_seat or 0
+    selected = list(addons or [])
+    flags = modules or {}
     tenant = Tenant(
         name=name,
         slug=slug,
         status=Tenant.Status.PROVISIONING,
-        plan=plan or "",
+        plan_fk=chosen,
+        cadence=cadence,
+        seat_limit=seat_count,
+        storage_limit_gb=seat_count * per_seat,
+        module_employee_records=bool(flags.get("employee_records", True)),
+        module_payroll_engine=bool(flags.get("payroll_engine", True)),
+        module_performance_reviews=bool(flags.get("performance_reviews", True)),
+        industry=(industry or "").strip(),
+        admin_name=(admin_name or "").strip(),
+        admin_email=(admin_email or "").strip().lower(),
     )
     tenant.set_setup_password(secrets.token_urlsafe(18))
     tenant.save()
+    if selected:
+        tenant.addons.set(selected)
+    from control.pricing import lock_subscription
+
+    lock_subscription(tenant)
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.CREATE,
         status=ProvisionJob.Status.QUEUED,
         payload={
-            "plan": plan or "",
+            "plan": chosen.code,
+            "cadence": cadence,
+            "seats": seat_count,
+            "addon_codes": [addon.code for addon in selected],
+            "start_as_trial": bool(start_as_trial),
             "completed_steps": [],
         },
     )
@@ -78,11 +142,12 @@ def enqueue_retry(tenant):
     )
 
 
-def enqueue_suspend(tenant):
+def enqueue_suspend(tenant, reason=""):
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.SUSPEND,
         status=ProvisionJob.Status.QUEUED,
+        payload={"suspension_reason": (reason or "").strip()},
     )
 
 
@@ -132,6 +197,19 @@ def enqueue_delete(tenant, confirm_slug):
         kind=ProvisionJob.Kind.DELETE,
         status=ProvisionJob.Status.QUEUED,
         payload={"confirm_slug": confirm_slug},
+    )
+
+
+def requeue_interrupted_jobs():
+    """Put jobs left running by a dead provisioner back on the queue.
+
+    A restart is not a failure. The tenant stays provisioning or deleting.
+    Steps already listed in ``completed_steps`` are skipped, and migrate
+    continues from the tenant's ``django_migrations`` table.
+    """
+    return ProvisionJob.objects.filter(status=ProvisionJob.Status.RUNNING).update(
+        status=ProvisionJob.Status.QUEUED,
+        started_at=None,
     )
 
 
@@ -242,16 +320,21 @@ def run_create(job):
     _succeed(job)
 
 
-def suspend_tenant(tenant):
+def suspend_tenant(tenant, reason=""):
     tenant.status = Tenant.Status.SUSPENDED
-    tenant.save(update_fields=["status"])
+    tenant.suspension_reason = (reason or "").strip()[:200]
+    tenant.save(update_fields=["status", "suspension_reason"])
 
 
 def resume_tenant(tenant):
     if not _database_exists(tenant.db_name):
         raise ProvisionError("Tenant database is missing.")
-    tenant.status = Tenant.Status.ACTIVE
-    tenant.save(update_fields=["status"])
+    if tenant.trial_ends_at:
+        tenant.status = Tenant.Status.TRIALING
+    else:
+        tenant.status = Tenant.Status.ACTIVE
+    tenant.suspension_reason = ""
+    tenant.save(update_fields=["status", "suspension_reason"])
 
 
 def dump_tenant(tenant) -> str:
@@ -337,7 +420,7 @@ def _run_claimed(job):
             run_create(job)
         elif job.kind == ProvisionJob.Kind.SUSPEND:
             job.step = "suspend"
-            suspend_tenant(job.tenant)
+            suspend_tenant(job.tenant, (job.payload or {}).get("suspension_reason") or "")
             _succeed(job)
         elif job.kind == ProvisionJob.Kind.RESUME:
             job.step = "resume"
@@ -476,9 +559,19 @@ def _step_activate(job):
         host=host,
         defaults={"tenant": tenant, "is_primary": True, "verified": True},
     )
-    tenant.status = Tenant.Status.ACTIVE
-    tenant.activated_at = timezone.now()
-    tenant.save(update_fields=["status", "activated_at"])
+    moment = timezone.now()
+    tenant.activated_at = moment
+    if (job.payload or {}).get("start_as_trial"):
+        tenant.status = Tenant.Status.TRIALING
+        days = TRIAL_DAYS
+        if tenant.plan_fk_id and tenant.plan_fk.trial_days:
+            days = tenant.plan_fk.trial_days
+        tenant.trial_ends_at = moment + timedelta(days=days)
+        tenant.save(update_fields=["status", "activated_at", "trial_ends_at"])
+    else:
+        tenant.status = Tenant.Status.ACTIVE
+        tenant.trial_ends_at = None
+        tenant.save(update_fields=["status", "activated_at", "trial_ends_at"])
 
 
 def _database_exists(name: str) -> bool:

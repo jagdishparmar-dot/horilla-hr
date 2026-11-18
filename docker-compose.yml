@@ -56,8 +56,7 @@ services:
   # migrate and migrate_tenants run only from the web entrypoint. A second
   # container that also runs those release tasks will deadlock on DDL.
   # Extra web replicas must set HORILLA_SKIP_RELEASE_TASKS=1.
-  # Tenant provisioning (run_provisioner / control.scheduler) also lives only
-  # in this one replica. A second provisioner could create the same database twice.
+  # Tenant provisioning runs in the provisioner service below, not here.
   scheduler:
     image: horilla-hr:local
     build:
@@ -95,6 +94,42 @@ services:
     # the inherited check can never pass -- it reported "unhealthy" forever,
     # and orchestrators that gate on health would restart-loop it. The prod
     # overlay builds on this file, so disabling it here covers both stacks.
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  # Tenant create, migrate, backup, restore, suspend, resume, and delete.
+  # Exactly one replica. A second copy can claim the same create. On startup
+  # a job left running is queued again and continues from completed_steps.
+  provisioner:
+    image: horilla-hr:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+    command: python manage.py run_provisioner
+    stop_grace_period: 120s
+    volumes:
+      - .:/app
+      - media:/app/media
+    environment:
+      - DEBUG=1
+      - DB_HOST=db
+      - HORILLA_TRUSTED_PROXIES=nginx
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+      - *control_database_url
+      - DB_INIT_PASSWORD=dev-init-password-change-in-production
+      - REDIS_URL=redis://:horilla_pass@redis:6379/0
+      - HORILLA_SKIP_RELEASE_TASKS=1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
     healthcheck:
       disable: true
     restart: unless-stopped

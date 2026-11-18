@@ -1,0 +1,137 @@
+{% extends "control/base.html" %}
+{% load control_ui %}
+{% block title %}Billing{% endblock %}
+{% block breadcrumb %}Billing &amp; Ledger{% endblock %}
+{% block content %}
+  <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="control-title">Billing &amp; Subscription Ledger</h1>
+      <p class="control-lede">Recurring revenue distribution, trial conversion queue, and tenant invoices. Amounts are whole rupees, exclusive of GST.</p>
+    </div>
+    <a href="{% url 'control-billing-export' %}{% if invoice_status %}?status={{ invoice_status }}{% endif %}" class="control-btn-ghost no-underline">Export CSV</a>
+  </div>
+
+  {% if billing_error %}
+    <p class="control-error mb-4">{{ billing_error }}</p>
+  {% endif %}
+
+  <div class="control-split control-split-2 mb-6">
+    <section class="control-card control-card-pad">
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="control-section-title">Quote by plan</h2>
+        <span class="control-mono">{{ total_monthly|inr }}/mo</span>
+      </div>
+      <p class="control-help">Active and past-due tenants. The figure is the monthly quote, including the annual discount.</p>
+      <div class="mt-4 space-y-4">
+        {% for row in tiers %}
+          <div>
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span>{{ row.plan.name }} · {{ row.count }} · {{ row.seats }} seats</span>
+              <span class="control-mono">{{ row.monthly|inr }}/mo ({{ row.share }}%)</span>
+            </div>
+            <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div class="h-full rounded-full bg-indigo-600" style="width: {{ row.share }}%"></div>
+            </div>
+          </div>
+        {% empty %}
+          <p class="control-muted">No sellable plans are loaded.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="control-card control-card-pad">
+      <h2 class="control-section-title">Trials</h2>
+      <p class="control-help">Convert a trial to record the first open invoice.</p>
+      {% if trials %}
+        <div class="mt-4 divide-y divide-slate-200 border-t border-slate-200">
+          {% for row in trials %}
+            <div class="flex items-center justify-between gap-3 py-3">
+              <div>
+                <a href="{% url 'control-tenant-detail' row.tenant.slug %}" class="font-medium">{{ row.tenant.name }}</a>
+                <p class="control-mono text-xs">{{ row.monthly|inr }}/mo{% if row.tenant.trial_ends_at %} · ends {{ row.tenant.trial_ends_at|date:"M j, Y" }}{% endif %}</p>
+              </div>
+              <form method="post" action="{% url 'control-tenant-convert' row.tenant.slug %}">
+                {% csrf_token %}
+                <button type="submit" class="control-btn-primary">Convert to active</button>
+              </form>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="control-muted mt-4">No trials are waiting.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="control-card overflow-hidden">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
+      <h2 class="control-section-title">Invoices</h2>
+      <div class="control-tabs" role="tablist" aria-label="Filter invoices by status">
+        {% for tab in invoice_tabs %}
+          <a
+            role="tab"
+            class="control-tab {% if invoice_status == tab.id %}control-tab-active{% endif %}"
+            href="{% if tab.id %}?status={{ tab.id }}{% else %}{% url 'control-billing' %}{% endif %}"
+          >{{ tab.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% if invoices %}
+      <div class="control-table-wrap">
+        <table class="control-table">
+          <thead>
+            <tr>
+              <th scope="col">Invoice</th>
+              <th scope="col">Tenant</th>
+              <th scope="col">Period</th>
+              <th scope="col">Issued / due</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="text-right">Amount</th>
+              <th scope="col" class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for invoice in invoices %}
+              <tr>
+                <td class="control-mono">{{ invoice.pk }}</td>
+                <td>
+                  <a href="{% url 'control-tenant-detail' invoice.tenant.slug %}">{{ invoice.tenant.name }}</a>
+                  <p class="control-help">{{ invoice.plan_code }} · {{ invoice.seat_count }} seats</p>
+                </td>
+                <td>{{ invoice.period_label }}</td>
+                <td class="control-mono">{{ invoice.issued_on|date:"Y-m-d" }} / {{ invoice.due_on|date:"Y-m-d" }}</td>
+                <td>{{ invoice.get_status_display }}</td>
+                <td class="control-mono text-right" data-amount-rupees="{{ invoice.amount_rupees }}">{{ invoice.amount_rupees }}</td>
+                <td class="text-right">
+                  {% if invoice.status == "open" or invoice.status == "past_due" %}
+                    <form method="post" action="{% url 'control-invoice-paid' invoice.pk %}" class="inline">
+                      {% csrf_token %}
+                      {% if invoice_status %}<input type="hidden" name="status" value="{{ invoice_status }}">{% endif %}
+                      <button type="submit" class="control-btn-ghost">Mark paid</button>
+                    </form>
+                    {% if invoice.status == "open" %}
+                      <form method="post" action="{% url 'control-invoice-past-due' invoice.pk %}" class="inline">
+                        {% csrf_token %}
+                        {% if invoice_status %}<input type="hidden" name="status" value="{{ invoice_status }}">{% endif %}
+                        <button type="submit" class="control-btn-ghost">Past due</button>
+                      </form>
+                    {% endif %}
+                    <form method="post" action="{% url 'control-invoice-void' invoice.pk %}" class="inline">
+                      {% csrf_token %}
+                      {% if invoice_status %}<input type="hidden" name="status" value="{{ invoice_status }}">{% endif %}
+                      <button type="submit" class="control-btn-ghost">Void</button>
+                    </form>
+                  {% else %}
+                    <span class="control-muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="control-muted px-5 py-8">No invoices match this filter.</p>
+    {% endif %}
+  </section>
+{% endblock %}
