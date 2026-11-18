@@ -24,6 +24,7 @@ from control.provisioning import (
     enqueue_backup,
     enqueue_create,
     enqueue_delete,
+    enqueue_purge,
     enqueue_migrate,
     enqueue_restore,
     enqueue_resume,
@@ -483,6 +484,41 @@ class ProvisionQueueTests(TestCase):
         tenant.save(update_fields=["status"])
         with self.assertRaises(ProvisionError):
             enqueue_delete(tenant, "acme")
+
+    def test_purge_drops_without_a_dump_and_frees_the_slug(self):
+        tenant = Tenant.objects.create(
+            name="Acme",
+            slug="acme",
+            status=Tenant.Status.FAILED,
+            db_name="tenant_acme",
+            db_user="tenant_acme",
+        )
+        Domain.objects.create(
+            tenant=tenant,
+            host="acme.localhost",
+            is_primary=True,
+            verified=True,
+        )
+        with self.assertRaises(ProvisionError):
+            enqueue_purge(tenant, "other")
+        with mock.patch("control.provisioning.dump_tenant") as dump, mock.patch(
+            "control.provisioning._drop_database_and_role"
+        ) as drop:
+            enqueue_purge(tenant, "acme")
+            self.assertEqual(process_available_jobs(), 1)
+        dump.assert_not_called()
+        drop.assert_called_once()
+        self.assertFalse(Tenant.objects.filter(slug="acme").exists())
+        self.assertFalse(Domain.objects.filter(host="acme.localhost").exists())
+        self.assertFalse(ProvisionJob.objects.filter(tenant__slug="acme").exists())
+
+    def test_purge_refuses_an_active_tenant(self):
+        tenant = Tenant.objects.create(
+            name="Acme", slug="acme", status=Tenant.Status.ACTIVE
+        )
+        with self.assertRaises(ProvisionError):
+            enqueue_purge(tenant, "acme")
+        self.assertTrue(Tenant.objects.filter(slug="acme").exists())
 
     def test_resume_missing_database_stays_suspended(self):
         tenant = Tenant.objects.create(

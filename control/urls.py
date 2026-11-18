@@ -65,6 +65,7 @@ urlpatterns = [
     path("control/tenants/<slug:slug>/migrate/", views.tenant_migrate, name="control-tenant-migrate"),
     path("control/tenants/<slug:slug>/restore/", views.tenant_restore, name="control-tenant-restore"),
     path("control/tenants/<slug:slug>/delete/", views.tenant_delete, name="control-tenant-delete"),
+    path("control/tenants/<slug:slug>/remove/", views.tenant_purge, name="control-tenant-purge"),
     path(
         "control/tenants/<slug:slug>/setup-password/",
         views.tenant_setup_password,

@@ -154,10 +154,14 @@ def _reject_if_create_or_delete_blocked(tenant):
     if tenant.status == Tenant.Status.DELETING:
         raise ProvisionError("Tenant is already being deleted.")
     if tenant.jobs.filter(
-        kind__in=(ProvisionJob.Kind.CREATE, ProvisionJob.Kind.DELETE),
+        kind__in=(
+            ProvisionJob.Kind.CREATE,
+            ProvisionJob.Kind.DELETE,
+            ProvisionJob.Kind.PURGE,
+        ),
         status__in=(ProvisionJob.Status.QUEUED, ProvisionJob.Status.RUNNING),
     ).exists():
-        raise ProvisionError("A create or delete job is already queued for this tenant.")
+        raise ProvisionError("A create, delete, or removal job is already queued for this tenant.")
 
 
 def enqueue_suspend(tenant, reason=""):
@@ -226,6 +230,42 @@ def enqueue_delete(tenant, confirm_slug):
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.DELETE,
+        status=ProvisionJob.Status.QUEUED,
+        payload={"confirm_slug": confirm_slug},
+    )
+
+
+# A live workspace still uses the dump-then-drop delete. Removal is for a
+# tenant whose database login cannot be used.
+PURGEABLE_STATUSES = (
+    Tenant.Status.FAILED,
+    Tenant.Status.PROVISIONING,
+    Tenant.Status.DELETING,
+    Tenant.Status.DELETED,
+)
+
+
+def enqueue_purge(tenant, confirm_slug):
+    """Queue a removal that does not dump. The maintenance login drops the database and role."""
+    if confirm_slug != tenant.slug:
+        raise ProvisionError("Slug confirmation does not match.")
+    tenant.refresh_from_db()
+    if tenant.status not in PURGEABLE_STATUSES:
+        raise ProvisionError(
+            "Only a failed or unfinished tenant can be removed without a backup."
+        )
+    if tenant.jobs.filter(
+        kind__in=(
+            ProvisionJob.Kind.CREATE,
+            ProvisionJob.Kind.DELETE,
+            ProvisionJob.Kind.PURGE,
+        ),
+        status__in=(ProvisionJob.Status.QUEUED, ProvisionJob.Status.RUNNING),
+    ).exists():
+        raise ProvisionError("A create, delete, or removal job is already queued for this tenant.")
+    return ProvisionJob.objects.create(
+        tenant=tenant,
+        kind=ProvisionJob.Kind.PURGE,
         status=ProvisionJob.Status.QUEUED,
         payload={"confirm_slug": confirm_slug},
     )
@@ -441,6 +481,32 @@ def delete_tenant(job, dump=None):
     tenant.save(update_fields=["status", "deleted_at"])
 
 
+def purge_tenant(job):
+    """Drop the database and login, then delete the registry row.
+
+    No dump is taken. The maintenance connection owns the drop, so a tenant
+    login with the wrong password does not block removal. Deleting the row
+    frees the slug. The job row goes with it.
+    """
+    tenant = job.tenant
+    confirm = (job.payload or {}).get("confirm_slug")
+    if confirm != tenant.slug:
+        raise ProvisionError("Slug confirmation does not match.")
+    tenant.refresh_from_db()
+    if tenant.status not in PURGEABLE_STATUSES:
+        raise ProvisionError(
+            "Only a failed or unfinished tenant can be removed without a backup."
+        )
+    if tenant.status != Tenant.Status.DELETED:
+        tenant.status = Tenant.Status.DELETING
+        tenant.save(update_fields=["status"])
+    job.step = "drop"
+    job.save(update_fields=["step"])
+    _drop_database_and_role(tenant)
+    tenant.domains.all().delete()
+    tenant.delete()
+
+
 def migrate_tenant(tenant):
     from django.core.management import call_command
 
@@ -492,6 +558,10 @@ def _run_claimed(job):
         elif job.kind == ProvisionJob.Kind.DELETE:
             delete_tenant(job)
             _succeed(job)
+        elif job.kind == ProvisionJob.Kind.PURGE:
+            purge_tenant(job)
+            if ProvisionJob.objects.filter(pk=job.pk).exists():
+                _succeed(job)
         elif job.kind == ProvisionJob.Kind.BACKUP:
             job.step = "dump"
             job.save(update_fields=["step"])
@@ -548,12 +618,14 @@ def _step_create_role(job):
         tenant.save(update_fields=["db_password_encrypted"])
     role = tenant_role_name(tenant.slug)
     with maintenance_cursor() as cursor:
-        if _exists(cursor, "SELECT 1 FROM pg_roles WHERE rolname = %s", [role]):
-            return
         password = tenant.db_password()
-        cursor.execute(
-            f"CREATE ROLE {quote_ident(role)} LOGIN PASSWORD '{_quote_literal(password)}'"
-        )
+        quoted = quote_ident(role)
+        literal = _quote_literal(password)
+        if _exists(cursor, "SELECT 1 FROM pg_roles WHERE rolname = %s", [role]):
+            # A previous tenant left this login behind. The stored password is new.
+            cursor.execute(f"ALTER ROLE {quoted} WITH LOGIN PASSWORD '{literal}'")
+            return
+        cursor.execute(f"CREATE ROLE {quoted} LOGIN PASSWORD '{literal}'")
 
 
 def _step_create_database(job):

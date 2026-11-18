@@ -64,6 +64,7 @@ from control.provisioning import (
     enqueue_create,
     enqueue_delete,
     enqueue_migrate,
+    enqueue_purge,
     enqueue_restore,
     enqueue_resume,
     enqueue_suspend,
@@ -738,7 +739,7 @@ def _job_steps(job):
     return [str(step) for step in raw if step]
 
 
-def _detail_context(tenant, delete_error="", restore_error="", active_section="all"):
+def _detail_context(tenant, delete_error="", restore_error="", remove_error="", active_section="all"):
     domains = list(tenant.domains.order_by("-is_primary", "host"))
     state = invite_state(tenant)
     primary_host = next((domain.host for domain in domains if domain.is_primary), "")
@@ -753,7 +754,7 @@ def _detail_context(tenant, delete_error="", restore_error="", active_section="a
             watch_jobs = True
         job_rows.append({"job": job, "steps": _job_steps(job)})
     section = active_section if active_section in DETAIL_SECTIONS else "all"
-    if delete_error or restore_error:
+    if delete_error or restore_error or remove_error:
         section = "operations"
     return {
         "tenant": tenant,
@@ -764,6 +765,9 @@ def _detail_context(tenant, delete_error="", restore_error="", active_section="a
         "restore_form": RestoreForm(),
         "delete_error": delete_error,
         "restore_error": restore_error,
+        "remove_error": remove_error,
+        "can_purge": tenant.status
+        in ("failed", "provisioning", "deleting", "deleted"),
         "invite_state": state,
         "revealed_setup_password": "",
         "signup_url": signup_url,
@@ -1093,6 +1097,45 @@ def tenant_delete(request, slug):
         detail=f"Queued {job.kind}.",
     )
     messages.success(request, "Delete job queued.")
+    return redirect("control-tenant-detail", slug=tenant.slug)
+
+
+@operator_required
+@require_POST
+def tenant_purge(request, slug):
+    """Remove a tenant that cannot be provisioned. No dump is taken."""
+    tenant = get_object_or_404(Tenant, slug=slug)
+    form = DeleteConfirmForm(request.POST)
+    typed = form.cleaned_data.get("confirm_slug", "") if form.is_valid() else ""
+    if typed != tenant.slug:
+        return render_control(
+            request,
+            "control/tenant_detail.html",
+            _detail_context(
+                tenant,
+                remove_error="Type the tenant slug to confirm removal.",
+            ),
+            status=400,
+        )
+    try:
+        job = enqueue_purge(tenant, typed)
+    except ProvisionError as exc:
+        return render_control(
+            request,
+            "control/tenant_detail.html",
+            _detail_context(tenant, remove_error=str(exc)),
+            status=400,
+        )
+    record_operator_action(
+        operator=request.operator,
+        action=OperatorAudit.Action.DELETE,
+        slug=tenant.slug,
+        detail=f"Queued removal without a dump ({job.pk}).",
+    )
+    messages.success(
+        request,
+        f"Removal queued for {tenant.slug}. The record disappears when the job finishes.",
+    )
     return redirect("control-tenant-detail", slug=tenant.slug)
 
 

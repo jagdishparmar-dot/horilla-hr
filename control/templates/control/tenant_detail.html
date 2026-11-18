@@ -419,6 +419,21 @@
       </div>
     </div>
 
+    {% if can_purge %}
+    <div class="control-card control-danger-zone control-card-pad mb-6">
+      <h3 class="control-section-title">Remove tenant</h3>
+      <p class="control-help">No backup is taken. The database, the login, and this record are removed so the slug can be created again. Use this when provisioning failed or the tenant login cannot connect.</p>
+      {% if remove_error %}
+        <p class="control-alert-error mt-3" role="alert">{{ remove_error }}</p>
+      {% endif %}
+      <form method="post" action="{% url 'control-tenant-purge' tenant.slug %}" class="mt-4">
+        {% csrf_token %}
+        {% include "control/partials/form_fields.html" with form=delete_form %}
+        <button type="submit" class="control-btn-danger" data-confirm="Remove {{ tenant.name }} without a backup? This cannot be undone.">Remove tenant</button>
+      </form>
+    </div>
+    {% endif %}
+
     {% if tenant.status != "deleted" and tenant.status != "deleting" %}
     <details class="control-card control-danger-zone" {% if restore_error or delete_error %}open{% endif %}>
       <summary>Danger zone — restore or delete</summary>

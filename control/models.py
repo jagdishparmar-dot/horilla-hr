@@ -311,6 +311,7 @@ class ProvisionJob(models.Model):
         SUSPEND = "suspend", "Suspend"
         RESUME = "resume", "Resume"
         DELETE = "delete", "Delete"
+        PURGE = "purge", "Remove"
 
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"
