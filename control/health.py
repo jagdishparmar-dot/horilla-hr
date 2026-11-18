@@ -58,9 +58,14 @@ def _probe_connection(tenant) -> None:
 
 def _backup_line(tenant, now) -> HealthLine:
     newest = (
-        tenant.jobs.filter(kind=ProvisionJob.Kind.BACKUP).order_by("-pk").first()
+        tenant.jobs.filter(
+            kind=ProvisionJob.Kind.BACKUP,
+            status=ProvisionJob.Status.SUCCEEDED,
+        )
+        .order_by("-finished_at", "-pk")
+        .first()
     )
-    if newest is None or newest.status != ProvisionJob.Status.SUCCEEDED:
+    if newest is None:
         return _line("backup", "failed", "No successful backup.")
     if not _dump_file_present(tenant, newest):
         return _line("backup", "failed", "Dump file is missing.")
@@ -83,13 +88,23 @@ def _dump_file_present(tenant, job) -> bool:
 
 
 def _migrate_line(tenant) -> HealthLine:
+    """Control-database jobs only. Do not open the tenant database."""
     migrates = tenant.jobs.filter(kind=ProvisionJob.Kind.MIGRATE)
     newest = migrates.order_by("-pk").first()
     if newest is not None and newest.status == ProvisionJob.Status.SUCCEEDED:
         return _line("migrate", "healthy", "Newest migrate succeeded.")
-    failed = migrates.filter(status=ProvisionJob.Status.FAILED).exists()
-    if tenant.status == Tenant.Status.ACTIVE and not failed:
+    if migrates.filter(status=ProvisionJob.Status.FAILED).exists():
+        return _line("migrate", "failed", "Migrate has not succeeded.")
+    if tenant.status == Tenant.Status.ACTIVE:
         return _line("migrate", "healthy", "Active and no failed migrate.")
+    if tenant.status in (Tenant.Status.TRIALING, Tenant.Status.PAST_DUE):
+        return _line("migrate", "healthy", "No failed migrate.")
+    created = tenant.jobs.filter(
+        kind=ProvisionJob.Kind.CREATE,
+        status=ProvisionJob.Status.SUCCEEDED,
+    ).exists()
+    if created:
+        return _line("migrate", "healthy", "Create succeeded.")
     return _line("migrate", "failed", "Migrate has not succeeded.")
 
 

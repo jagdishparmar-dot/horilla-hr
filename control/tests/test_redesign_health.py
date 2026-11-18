@@ -117,6 +117,75 @@ class TenantHealthTests(TestCase):
         with mock.patch("control.health._probe_connection"):
             self.assertEqual(_by_name(tenant_health(tenant))["backup"].status, "failed")
 
+    def test_newer_failed_backup_keeps_succeeded_dump(self):
+        tenant = _tenant("keepco")
+        folder = backup_dir(tenant.slug)
+        folder.mkdir(parents=True, exist_ok=True)
+        dump = folder / "kept.dump"
+        dump.write_bytes(b"dump")
+        self.addCleanup(dump.unlink, missing_ok=True)
+        now = timezone.now()
+        ProvisionJob.objects.create(
+            tenant=tenant,
+            kind=ProvisionJob.Kind.BACKUP,
+            status=ProvisionJob.Status.SUCCEEDED,
+            payload={"dump_path": str(dump)},
+            finished_at=now,
+        )
+        ProvisionJob.objects.create(
+            tenant=tenant,
+            kind=ProvisionJob.Kind.BACKUP,
+            status=ProvisionJob.Status.FAILED,
+            finished_at=now + timedelta(minutes=1),
+        )
+        with mock.patch("control.health._probe_connection"):
+            backup = _by_name(tenant_health(tenant))["backup"]
+        self.assertEqual(backup.status, "healthy")
+        self.assertEqual(backup.detail, "Newest backup is present.")
+
+    def test_trialing_migrate_is_healthy_until_newest_failure(self):
+        trialing = _tenant("trialco", status=Tenant.Status.TRIALING)
+        with mock.patch("control.health._probe_connection"):
+            migrate = _by_name(tenant_health(trialing))["migrate"]
+        self.assertEqual(migrate.status, "healthy")
+        self.assertEqual(migrate.detail, "No failed migrate.")
+
+        past_due = _tenant("dueco", status=Tenant.Status.PAST_DUE)
+        with mock.patch("control.health._probe_connection"):
+            due = _by_name(tenant_health(past_due))["migrate"]
+        self.assertEqual(due.status, "healthy")
+        self.assertEqual(due.detail, "No failed migrate.")
+
+        provisioning = _tenant("newco", status=Tenant.Status.PROVISIONING)
+        ProvisionJob.objects.create(
+            tenant=provisioning,
+            kind=ProvisionJob.Kind.CREATE,
+            status=ProvisionJob.Status.SUCCEEDED,
+        )
+        with mock.patch("control.health._probe_connection"):
+            created = _by_name(tenant_health(provisioning))["migrate"]
+        self.assertEqual(created.status, "healthy")
+        self.assertEqual(created.detail, "Create succeeded.")
+
+        tenant = _tenant("flipco")
+        now = timezone.now()
+        ProvisionJob.objects.create(
+            tenant=tenant,
+            kind=ProvisionJob.Kind.MIGRATE,
+            status=ProvisionJob.Status.SUCCEEDED,
+            finished_at=now,
+        )
+        ProvisionJob.objects.create(
+            tenant=tenant,
+            kind=ProvisionJob.Kind.MIGRATE,
+            status=ProvisionJob.Status.FAILED,
+            finished_at=now - timedelta(days=3),
+        )
+        with mock.patch("control.health._probe_connection"):
+            failed = _by_name(tenant_health(tenant))["migrate"]
+        self.assertEqual(failed.status, "failed")
+        self.assertEqual(failed.detail, "Migrate has not succeeded.")
+
     def test_button_runs_checks_for_that_slug(self):
         tenant = _tenant("buttonco")
         self.client.post(

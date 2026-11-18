@@ -43,28 +43,36 @@ def period_label(cadence, issued) -> str:
 
 
 def issue_invoice(tenant, operator):
-    """Insert one open invoice due in 14 days. No plan means no invoice."""
+    """Insert one open invoice due in 14 days. No plan means no invoice.
+
+    The tenant row is locked before the setup fee is decided, so two callers
+    cannot both observe an empty invoice list and both add the fee.
+    """
     if tenant.plan_fk_id is None:
         return None
-    issued = timezone.localdate()
-    amount = invoice_amount(tenant)
-    invoice = Invoice.objects.create(
-        tenant=tenant,
-        plan_code=tenant.plan_fk.code,
-        cadence=tenant.cadence,
-        seat_count=tenant.seat_limit,
-        amount_rupees=amount,
-        status=Invoice.Status.OPEN,
-        period_label=period_label(tenant.cadence, issued),
-        issued_on=issued,
-        due_on=issued + timedelta(days=INVOICE_DUE_DAYS),
-    )
-    record_operator_action(
-        operator=operator,
-        action=OperatorAudit.Action.INVOICE_ISSUE,
-        slug=tenant.slug,
-        detail=f"invoice {invoice.pk} {amount} rupees",
-    )
+    with transaction.atomic():
+        tenant = Tenant.objects.select_for_update().get(pk=tenant.pk)
+        if tenant.plan_fk_id is None:
+            return None
+        issued = timezone.localdate()
+        amount = invoice_amount(tenant)
+        invoice = Invoice.objects.create(
+            tenant=tenant,
+            plan_code=tenant.plan_fk.code,
+            cadence=tenant.cadence,
+            seat_count=tenant.seat_limit,
+            amount_rupees=amount,
+            status=Invoice.Status.OPEN,
+            period_label=period_label(tenant.cadence, issued),
+            issued_on=issued,
+            due_on=issued + timedelta(days=INVOICE_DUE_DAYS),
+        )
+        record_operator_action(
+            operator=operator,
+            action=OperatorAudit.Action.INVOICE_ISSUE,
+            slug=tenant.slug,
+            detail=f"invoice {invoice.pk} {amount} rupees",
+        )
     return invoice
 
 
@@ -78,49 +86,57 @@ def subscription_changed(tenant, plan, cadence, addon_codes) -> bool:
 
 
 def mark_past_due(invoice):
-    if invoice.status != Invoice.Status.OPEN:
-        raise BillingError("Only an open invoice can be marked past due.")
     with transaction.atomic():
-        invoice.status = Invoice.Status.PAST_DUE
-        invoice.save(update_fields=["status"])
-        tenant = invoice.tenant
+        locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        if locked.status != Invoice.Status.OPEN:
+            raise BillingError("Only an open invoice can be marked past due.")
+        locked.status = Invoice.Status.PAST_DUE
+        locked.save(update_fields=["status"])
+        tenant = Tenant.objects.select_for_update().get(pk=locked.tenant_id)
         if tenant.status == Tenant.Status.ACTIVE:
             tenant.status = Tenant.Status.PAST_DUE
             tenant.save(update_fields=["status"])
+    invoice.status = locked.status
     return invoice
 
 
 def mark_paid(invoice):
-    if invoice.status not in (Invoice.Status.OPEN, Invoice.Status.PAST_DUE):
-        raise BillingError("Only an open or past-due invoice can be marked paid.")
     with transaction.atomic():
-        invoice.status = Invoice.Status.PAID
-        invoice.paid_on = timezone.localdate()
-        invoice.save(update_fields=["status", "paid_on"])
-        _release_past_due(invoice.tenant)
+        locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        if locked.status not in (Invoice.Status.OPEN, Invoice.Status.PAST_DUE):
+            raise BillingError("Only an open or past-due invoice can be marked paid.")
+        locked.status = Invoice.Status.PAID
+        locked.paid_on = timezone.localdate()
+        locked.save(update_fields=["status", "paid_on"])
+        _release_past_due(locked.tenant)
+    invoice.status = locked.status
+    invoice.paid_on = locked.paid_on
     return invoice
 
 
 def void_invoice(invoice, operator):
-    if invoice.status not in (Invoice.Status.OPEN, Invoice.Status.PAST_DUE):
-        raise BillingError("A paid invoice cannot be voided.")
     with transaction.atomic():
-        invoice.status = Invoice.Status.VOID
-        invoice.voided_on = timezone.localdate()
-        invoice.save(update_fields=["status", "voided_on"])
-        _release_past_due(invoice.tenant)
+        locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        if locked.status not in (Invoice.Status.OPEN, Invoice.Status.PAST_DUE):
+            raise BillingError("A paid invoice cannot be voided.")
+        locked.status = Invoice.Status.VOID
+        locked.voided_on = timezone.localdate()
+        locked.save(update_fields=["status", "voided_on"])
+        _release_past_due(locked.tenant)
         record_operator_action(
             operator=operator,
             action=OperatorAudit.Action.INVOICE_VOID,
-            slug=invoice.tenant.slug,
-            detail=f"invoice {invoice.pk} voided",
+            slug=locked.tenant.slug,
+            detail=f"invoice {locked.pk} voided",
         )
+    invoice.status = locked.status
+    invoice.voided_on = locked.voided_on
     return invoice
 
 
 def _release_past_due(tenant):
     """Return a past-due tenant to active when no open or past-due bill remains."""
-    tenant.refresh_from_db()
+    tenant = Tenant.objects.select_for_update().get(pk=tenant.pk)
     if tenant.status != Tenant.Status.PAST_DUE:
         return
     still_due = tenant.invoices.filter(

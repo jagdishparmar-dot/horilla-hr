@@ -13,7 +13,8 @@ from django.utils import timezone
 from control.context import clear_tenant_alias
 from control.middleware import TenantMiddleware
 from control.catalog import plan_code_for_label
-from control.models import Domain, Operator, Plan, ProvisionJob, Tenant
+from control.models import Domain, Invoice, Operator, OperatorAudit, Plan, ProvisionJob, Tenant
+from control.provisioning import ProvisionError
 
 MULTI = override_settings(
     HORILLA_MULTITENANT=True,
@@ -190,6 +191,36 @@ class RedesignShellTests(TestCase):
         self.assertEqual(bigger_page.status_code, 200)
         self.assertEqual(len(expanded_queries), len(baseline_queries))
 
+    def test_search_miss_keeps_platform_kpis_and_clears_the_table(self):
+        self._create_tenant("alpha", status=Tenant.Status.ACTIVE)
+        self._create_tenant("bravo", status=Tenant.Status.TRIALING)
+        self._create_tenant("paused", status=Tenant.Status.SUSPENDED)
+        self._login()
+
+        page = self.client.get("/control/?q=does-not-match")
+        self.assertEqual(page.status_code, 200)
+        stats = page.context["stats"]
+        self.assertEqual(stats["total"], 3)
+        self.assertEqual(stats["active"], 1)
+        self.assertEqual(stats["trialing"], 1)
+        self.assertEqual(stats["suspended"], 1)
+        self.assertEqual(page.context["nav_tenant_count"], 3)
+        self.assertEqual(page.context["nav_trial_count"], 1)
+        self.assertEqual(page.context["rows"], [])
+        self.assertTrue(all(tab["count"] == 0 for tab in page.context["status_tabs"]))
+        self.assertContains(page, "No tenants match the active filters")
+        self.assertContains(page, '<span class="control-nav-count">3</span>', html=True)
+
+        narrowed = self.client.get("/control/?q=alpha")
+        self.assertEqual(narrowed.context["stats"]["total"], 3)
+        self.assertEqual(narrowed.context["nav_tenant_count"], 3)
+        self.assertEqual(
+            [row["tenant"].slug for row in narrowed.context["rows"]],
+            ["alpha"],
+        )
+        all_tab = next(tab for tab in narrowed.context["status_tabs"] if tab["id"] == "")
+        self.assertEqual(all_tab["count"], 1)
+
     def test_status_tabs_filter_counts_and_empty_state(self):
         self._create_tenant("alpha", name="Alpha Corp", status=Tenant.Status.ACTIVE)
         self._create_tenant("bravo", name="Bravo Org", status=Tenant.Status.PROVISIONING)
@@ -271,3 +302,83 @@ class RedesignShellTests(TestCase):
                 ProvisionJob.Kind.RESUME,
             },
         )
+
+    def test_rejected_job_enqueue_renders_an_operations_error(self):
+        self._create_tenant("north")
+        self._login()
+        cases = (
+            ("control.views.enqueue_backup", "/control/tenants/north/backup/", {}),
+            ("control.views.enqueue_migrate", "/control/tenants/north/migrate/", {}),
+            (
+                "control.views.enqueue_suspend",
+                "/control/tenants/north/suspend/",
+                {"reason": "Billing review"},
+            ),
+            ("control.views.enqueue_resume", "/control/tenants/north/resume/", {}),
+        )
+        for target, path, data in cases:
+            with mock.patch(target, side_effect=ProvisionError("queue refused")):
+                response = self.client.post(path, data)
+            self.assertEqual(response.status_code, 400, path)
+            self.assertEqual(response.context["active_section"], "operations")
+            self.assertEqual(response.context["action_error"], "queue refused")
+            self.assertContains(response, "queue refused", status_code=400)
+        self.assertFalse(ProvisionJob.objects.filter(tenant__slug="north").exists())
+
+    def test_danger_zone_stays_available_until_delete_starts(self):
+        tenant = self._create_tenant("north")
+        self._login()
+        visible = (
+            Tenant.Status.SUSPENDED,
+            Tenant.Status.ACTIVE,
+            Tenant.Status.TRIALING,
+            Tenant.Status.PAST_DUE,
+            Tenant.Status.FAILED,
+            Tenant.Status.PROVISIONING,
+        )
+        for status in visible:
+            tenant.status = status
+            tenant.save(update_fields=["status"])
+            page = self.client.get("/control/tenants/north/?section=operations")
+            self.assertContains(page, "Queue restore")
+            self.assertContains(page, "Queue delete")
+        for status in (Tenant.Status.DELETED, Tenant.Status.DELETING):
+            tenant.status = status
+            tenant.save(update_fields=["status"])
+            page = self.client.get("/control/tenants/north/?section=operations")
+            self.assertNotContains(page, "Queue restore")
+            self.assertNotContains(page, "Queue delete")
+
+    def test_lapsed_trial_past_due_can_convert(self):
+        lapsed = self._create_tenant("lapse", status=Tenant.Status.PAST_DUE, plan="starter")
+        lapsed.trial_ends_at = timezone.now() - timedelta(days=1)
+        lapsed.save(update_fields=["trial_ends_at"])
+        overdue = self._create_tenant("overdue", status=Tenant.Status.PAST_DUE)
+        self._login()
+
+        form = self.client.get("/control/tenants/lapse/")
+        self.assertContains(form, "Convert to active")
+        billed = self.client.get("/control/tenants/overdue/")
+        self.assertNotContains(billed, "Convert to active")
+
+        rejected = self.client.post("/control/tenants/overdue/convert/")
+        self.assertEqual(rejected.status_code, 400)
+        overdue.refresh_from_db()
+        self.assertEqual(overdue.status, Tenant.Status.PAST_DUE)
+        self.assertFalse(
+            OperatorAudit.objects.filter(
+                slug="overdue", action=OperatorAudit.Action.TRIAL_CONVERT
+            ).exists()
+        )
+
+        converted = self.client.post("/control/tenants/lapse/convert/")
+        self.assertEqual(converted.status_code, 302)
+        lapsed.refresh_from_db()
+        self.assertEqual(lapsed.status, Tenant.Status.ACTIVE)
+        self.assertIsNone(lapsed.trial_ends_at)
+        self.assertTrue(
+            OperatorAudit.objects.filter(
+                slug="lapse", action=OperatorAudit.Action.TRIAL_CONVERT
+            ).exists()
+        )
+        self.assertEqual(Invoice.objects.filter(tenant=lapsed).count(), 1)

@@ -7,7 +7,7 @@ from django.db import connections
 from django.test import Client, TestCase, override_settings
 
 from control.forms import TenantQuotaForm
-from control.models import Operator, OperatorAudit, Plan, ProvisionJob, Tenant
+from control.models import Invoice, Operator, OperatorAudit, Plan, ProvisionJob, Tenant
 from control.provisioning import enqueue_create
 from control.usage import snapshot_usage
 
@@ -153,6 +153,61 @@ class QuotaTests(TestCase):
         self.assertIn("payroll_engine True -> False", module.detail)
         reloaded = self.client.get("/control/tenants/editco/")
         self.assertContains(reloaded, "40")
+
+    def test_seat_limit_change_issues_one_invoice(self):
+        tenant = self._tenant(
+            "seatco",
+            seat_limit=10,
+            storage_limit_gb=20,
+            active_seats=1,
+        )
+        modules = {
+            "module_employee_records": "on",
+            "module_payroll_engine": "on",
+            "module_performance_reviews": "on",
+        }
+        raised = self.client.post(
+            "/control/tenants/seatco/quota/",
+            {"seat_limit": "20", "storage_limit_gb": "20", **modules},
+        )
+        self.assertEqual(raised.status_code, 302)
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.seat_limit, 20)
+        invoice = Invoice.objects.get(tenant=tenant)
+        self.assertEqual(invoice.seat_count, 20)
+        self.assertTrue(
+            OperatorAudit.objects.filter(
+                slug="seatco", action=OperatorAudit.Action.QUOTA_UPDATE
+            ).exists()
+        )
+        self.assertEqual(ProvisionJob.objects.filter(tenant=tenant).count(), 0)
+
+        same = self.client.post(
+            "/control/tenants/seatco/quota/",
+            {"seat_limit": "20", "storage_limit_gb": "20", **modules},
+        )
+        self.assertEqual(same.status_code, 302)
+        self.assertEqual(Invoice.objects.filter(tenant=tenant).count(), 1)
+
+        storage_only = self.client.post(
+            "/control/tenants/seatco/quota/",
+            {"seat_limit": "20", "storage_limit_gb": "30", **modules},
+        )
+        self.assertEqual(storage_only.status_code, 302)
+        self.assertEqual(Invoice.objects.filter(tenant=tenant).count(), 1)
+
+        trial = self._tenant(
+            "trialseat",
+            status=Tenant.Status.TRIALING,
+            seat_limit=10,
+            storage_limit_gb=20,
+        )
+        trial_save = self.client.post(
+            "/control/tenants/trialseat/quota/",
+            {"seat_limit": "15", "storage_limit_gb": "20", **modules},
+        )
+        self.assertEqual(trial_save.status_code, 302)
+        self.assertEqual(Invoice.objects.filter(tenant=trial).count(), 0)
 
     def test_directory_does_not_open_a_tenant_database(self):
         self._tenant("listed")

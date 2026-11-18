@@ -69,6 +69,20 @@ class InvoiceModelTests(TestCase):
         self.assertEqual(invoice.seat_count, 10)
         self.assertFalse(hasattr(invoice, "card"))
 
+    def test_only_the_first_invoice_includes_the_setup_fee(self):
+        tenant = _tenant("setupco")
+        plan = tenant.plan_fk
+        plan.setup_fee_rupees = 5000
+        plan.save(update_fields=["setup_fee_rupees"])
+        priced = quote(plan.code, tenant.cadence, tenant.seat_limit, [])
+        operator = Operator(email="setup@example.com", is_active=True)
+        operator.set_password("correct-horse")
+        operator.save()
+        first = issue_invoice(tenant, operator)
+        second = issue_invoice(tenant, operator)
+        self.assertEqual(first.amount_rupees, priced.term + plan.setup_fee_rupees)
+        self.assertEqual(second.amount_rupees, priced.term)
+
 
 @MULTI
 class IssueInvoiceTests(TestCase):
@@ -208,6 +222,19 @@ class PastDueTests(TestCase):
                 slug="voidco", action=OperatorAudit.Action.INVOICE_VOID
             ).exists()
         )
+
+    def test_mark_past_due_on_a_paid_invoice_does_not_change_the_tenant(self):
+        invoice, tenant = self._open("staleco")
+        mark_paid(invoice)
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.status, Tenant.Status.ACTIVE)
+        invoice.status = Invoice.Status.OPEN
+        with self.assertRaises(BillingError):
+            mark_past_due(invoice)
+        invoice.refresh_from_db()
+        tenant.refresh_from_db()
+        self.assertEqual(invoice.status, Invoice.Status.PAID)
+        self.assertEqual(tenant.status, Tenant.Status.ACTIVE)
 
     def test_a_paid_invoice_cannot_be_voided(self):
         invoice, tenant = self._open("paidco")

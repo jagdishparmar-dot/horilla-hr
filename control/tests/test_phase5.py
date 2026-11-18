@@ -1,5 +1,7 @@
 import os
 import stat
+import subprocess
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -11,13 +13,14 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.http import Http404
 from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from base.views import protected_media
-from control.backup import dump_tenant_database, resolve_dump
+from control.backup import backup_dir, dump_tenant_database, resolve_dump, restore_tenant_database
 from control.context import activate_tenant_alias, clear_tenant_alias, get_tenant_alias
-from control.models import Tenant
+from control.models import Invoice, ProvisionJob, Tenant
 from control.provisioning import ProvisionError, _run_restore
 from horilla.cache import CacheNamespaceError
 from horilla.isolation import activate_cache_scope, clear_cache_scope
@@ -153,6 +156,7 @@ class RuntimeIsolationTests(TestCase):
         def fake_run(command, **kwargs):
             captured["command"] = command
             captured["env"] = kwargs.get("env") or {}
+            captured["timeout"] = kwargs.get("timeout")
             path = command[command.index("-f") + 1]
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "wb") as handle:
@@ -173,6 +177,7 @@ class RuntimeIsolationTests(TestCase):
         command = captured["command"]
         self.assertIn("tenant_acme", command)
         self.assertNotIn("db-secret", command)
+        self.assertEqual(captured["timeout"], 1800)
         self.assertEqual(captured["env"].get("PGPASSWORD"), "db-secret")
         self.assertNotIn(self._default_name(), command)
         self.assertIn("backups/acme/", path.replace("\\", "/"))
@@ -212,6 +217,171 @@ class RuntimeIsolationTests(TestCase):
         slugs = {call.args[0].slug for call in enqueue.call_args_list}
         self.assertIn(tenant.slug, slugs)
         self.assertIn(other.slug, slugs)
+
+    def test_failed_restore_holds_the_workspace_and_success_returns_the_old_status(self):
+        past_due = Tenant.objects.create(
+            name="Due",
+            slug="dueco",
+            status=Tenant.Status.PAST_DUE,
+            db_name="tenant_dueco",
+            db_user="tenant_dueco",
+        )
+        job = ProvisionJob.objects.create(
+            tenant=past_due,
+            kind=ProvisionJob.Kind.RESTORE,
+            status=ProvisionJob.Status.RUNNING,
+            payload={"dump_name": "ok.dump"},
+        )
+        with mock.patch(
+            "control.backup.restore_tenant_database",
+            side_effect=ProvisionError("Tenant restore failed."),
+        ):
+            with self.assertRaises(ProvisionError):
+                _run_restore(job)
+        past_due.refresh_from_db()
+        job.refresh_from_db()
+        self.assertEqual(past_due.status, Tenant.Status.SUSPENDED)
+        self.assertEqual(
+            past_due.suspension_reason, "Restore failed; workspace held offline."
+        )
+        self.assertEqual(job.payload["status_before"], Tenant.Status.PAST_DUE)
+
+        with mock.patch("control.backup.restore_tenant_database", return_value=None):
+            _run_restore(job)
+        past_due.refresh_from_db()
+        self.assertEqual(past_due.status, Tenant.Status.PAST_DUE)
+        self.assertEqual(past_due.suspension_reason, "")
+
+        trial = Tenant.objects.create(
+            name="Trial",
+            slug="trialco",
+            status=Tenant.Status.TRIALING,
+            trial_ends_at=timezone.now() + timedelta(days=3),
+            db_name="tenant_trialco",
+        )
+        trial_job = ProvisionJob.objects.create(
+            tenant=trial,
+            kind=ProvisionJob.Kind.RESTORE,
+            status=ProvisionJob.Status.RUNNING,
+            payload={"dump_name": "ok.dump"},
+        )
+        with mock.patch("control.backup.restore_tenant_database", return_value=None):
+            _run_restore(trial_job)
+        trial.refresh_from_db()
+        self.assertEqual(trial.status, Tenant.Status.TRIALING)
+        self.assertEqual(trial.suspension_reason, "")
+
+        held = Tenant.objects.create(
+            name="Held",
+            slug="heldco",
+            status=Tenant.Status.SUSPENDED,
+            suspension_reason="pause",
+            db_name="tenant_heldco",
+        )
+        today = timezone.localdate()
+        Invoice.objects.create(
+            tenant=held,
+            plan_code="starter",
+            cadence=Tenant.Cadence.MONTHLY,
+            seat_count=1,
+            amount_rupees=100,
+            status=Invoice.Status.PAST_DUE,
+            period_label="November 2026",
+            issued_on=today,
+            due_on=today,
+        )
+        held_job = ProvisionJob.objects.create(
+            tenant=held,
+            kind=ProvisionJob.Kind.RESTORE,
+            status=ProvisionJob.Status.RUNNING,
+            payload={"dump_name": "ok.dump"},
+        )
+        with mock.patch("control.backup.restore_tenant_database", return_value=None):
+            _run_restore(held_job)
+        held.refresh_from_db()
+        self.assertEqual(held.status, Tenant.Status.PAST_DUE)
+        self.assertEqual(held.suspension_reason, "")
+
+    def test_dump_and_restore_errors_keep_stderr_and_drop_the_password(self):
+        tenant = Tenant.objects.create(
+            name="Acme",
+            slug="acme",
+            status=Tenant.Status.ACTIVE,
+            db_name="tenant_acme",
+            db_user="tenant_acme",
+            db_host="db",
+            db_port=5432,
+        )
+        tenant.set_db_password("db-secret")
+        tenant.save()
+
+        with mock.patch("shutil.which", return_value="/usr/bin/pg_dump"), mock.patch(
+            "control.backup.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(["pg_dump"], 1800),
+        ):
+            with self.assertRaises(ProvisionError) as raised:
+                dump_tenant_database(tenant)
+        self.assertEqual(str(raised.exception), "Tenant dump timed out.")
+        self.assertNotIn("db-secret", str(raised.exception))
+
+        failed = subprocess.CalledProcessError(1, ["pg_dump"])
+        failed.stderr = "warning\npassword=db-secret\n"
+        with mock.patch("shutil.which", return_value="/usr/bin/pg_dump"), mock.patch(
+            "control.backup.subprocess.run", side_effect=failed
+        ):
+            with self.assertRaises(ProvisionError) as raised:
+                dump_tenant_database(tenant)
+        self.assertEqual(str(raised.exception), "Tenant dump failed: password=[redacted]")
+        self.assertNotIn("db-secret", str(raised.exception))
+
+        empty = subprocess.CalledProcessError(1, ["pg_dump"])
+        empty.stderr = "\n"
+        with mock.patch("shutil.which", return_value="/usr/bin/pg_dump"), mock.patch(
+            "control.backup.subprocess.run", side_effect=empty
+        ):
+            with self.assertRaises(ProvisionError) as raised:
+                dump_tenant_database(tenant)
+        self.assertEqual(str(raised.exception), "Tenant dump failed.")
+
+        bare = subprocess.CalledProcessError(1, ["pg_dump"])
+        bare.stderr = "db-secret"
+        with mock.patch("shutil.which", return_value="/usr/bin/pg_dump"), mock.patch(
+            "control.backup.subprocess.run", side_effect=bare
+        ):
+            with self.assertRaises(ProvisionError) as raised:
+                dump_tenant_database(tenant)
+        self.assertNotIn("db-secret", str(raised.exception))
+        self.assertIn("[redacted]", str(raised.exception))
+
+        folder = backup_dir(tenant.slug)
+        folder.mkdir(parents=True, exist_ok=True)
+        dump = folder / "sample.dump"
+        dump.write_bytes(b"dump")
+        try:
+            with mock.patch("shutil.which", return_value="/usr/bin/pg_restore"), mock.patch(
+                "control.backup.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(["pg_restore"], 1800),
+            ):
+                with self.assertRaises(ProvisionError) as raised:
+                    restore_tenant_database(tenant, "sample.dump")
+            self.assertEqual(str(raised.exception), "Tenant restore timed out.")
+            self.assertNotIn("db-secret", str(raised.exception))
+
+            restore_failed = subprocess.CalledProcessError(1, ["pg_restore"])
+            restore_failed.stderr = "pg_restore: error: db-secret\n"
+            with mock.patch("shutil.which", return_value="/usr/bin/pg_restore"), mock.patch(
+                "control.backup.subprocess.run", side_effect=restore_failed
+            ):
+                with self.assertRaises(ProvisionError) as raised:
+                    restore_tenant_database(tenant, "sample.dump")
+            self.assertEqual(
+                str(raised.exception),
+                "Tenant restore failed: pg_restore: error: [redacted]",
+            )
+            self.assertNotIn("db-secret", str(raised.exception))
+        finally:
+            if dump.exists():
+                dump.unlink()
 
     def test_token_for_one_tenant_is_rejected_on_another(self):
         with override_settings(HORILLA_MULTITENANT=False):

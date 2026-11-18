@@ -8,7 +8,7 @@ from django.test import Client, RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
 from control.middleware import TenantMiddleware
-from control.models import Operator, OperatorAudit, Plan, ProvisionJob, Tenant
+from control.models import Invoice, Operator, OperatorAudit, Plan, ProvisionJob, Tenant
 from control.provisioning import (
     TRIAL_DAYS,
     enqueue_create,
@@ -202,6 +202,31 @@ class DirectoryTrialTests(TestCase):
         trial.refresh_from_db()
         self.assertEqual(trial.status, Tenant.Status.TRIALING)
         self.assertEqual(trial.suspension_reason, "")
+
+        overdue = Tenant.objects.create(
+            name="Due",
+            slug="dueco",
+            status=Tenant.Status.SUSPENDED,
+            suspension_reason="collections",
+        )
+        today = timezone.localdate()
+        Invoice.objects.create(
+            tenant=overdue,
+            plan_code="starter",
+            cadence=Tenant.Cadence.MONTHLY,
+            seat_count=1,
+            amount_rupees=100,
+            status=Invoice.Status.PAST_DUE,
+            period_label="November 2026",
+            issued_on=today,
+            due_on=today,
+        )
+        with mock.patch("control.provisioning._database_exists", return_value=True):
+            enqueue_resume(overdue)
+            process_available_jobs()
+        overdue.refresh_from_db()
+        self.assertEqual(overdue.status, Tenant.Status.PAST_DUE)
+        self.assertEqual(overdue.suspension_reason, "")
 
     def test_profile_round_trips_without_creating_a_login(self):
         with mock.patch("horilla_auth.models.HorillaUser.objects.create") as create_user:

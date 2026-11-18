@@ -246,43 +246,18 @@
                 </form>
                 {% if initialize_database %}
                     <div>
-                        <div class="d-flex gap-2">
-                            <a
-                                href="{% url 'initialize-database' %}"
-                                class="oh-btn oh-onboarding-card__button mt-4 oh-btn--shadow w-full mb-4"
-                                role="button"
-                                style="background-color: rgba(229, 79, 56, 0.1); color: hsl(8, 77%, 56%)"
-                            >
-                                {% trans "Initialize Database" %}
-                                <ion-icon
-                                    class="ms-2"
-                                    name="arrow-forward-outline"
-                                ></ion-icon>
-                            </a>
-                            <a
-                                onclick="$('#dataLoadAuthentication').toggleClass('oh-modal--show')"
-                                class="oh-btn oh-onboarding-card__button mt-4 oh-btn--shadow w-full mb-4"
-                                style="background-color: #31b46e1f; color: #1fad61"
-                                role="button"
-                            >
-                                {% trans "Load Demo Data" %}
-                                <ion-icon
-                                    class="ms-2"
-                                    name="arrow-forward-outline"
-                                ></ion-icon>
-                            </a>
-                        </div>
-                    </div>
-                    <div
-                        class="oh-modal"
-                        id="dataLoadAuthentication"
-                        role="dialog"
-                        aria-labelledby="dataLoadAuthenticationLabel"
-                        style="backdrop-filter: blur(8px)"
-                    >
-                        <div class="oh-modal__dialog">
-                            {% include "demo_database/auth_load_data.html" %}
-                        </div>
+                        <a
+                            href="{% url 'initialize-database' %}"
+                            class="oh-btn oh-onboarding-card__button mt-4 oh-btn--shadow w-full mb-4"
+                            role="button"
+                            style="background-color: rgba(229, 79, 56, 0.1); color: hsl(8, 77%, 56%)"
+                        >
+                            {% trans "Initialize Database" %}
+                            <ion-icon
+                                class="ms-2"
+                                name="arrow-forward-outline"
+                            ></ion-icon>
+                        </a>
                     </div>
                 {% endif %}
             </div>

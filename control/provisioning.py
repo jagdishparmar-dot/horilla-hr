@@ -16,7 +16,7 @@ from control.context import activate_tenant_alias, clear_tenant_alias
 from control.crypto import redact_job_error
 from control.db import ensure_tenant_connection
 from control.catalog import UNASSIGNED
-from control.models import Domain, Plan, ProvisionJob, Tenant
+from control.models import Domain, Invoice, Plan, ProvisionJob, Tenant
 from control.naming import tenant_database_name, tenant_role_name, validate_tenant_slug
 
 PROVISION_STALE_AFTER = timedelta(minutes=30)
@@ -142,7 +142,31 @@ def enqueue_retry(tenant):
     )
 
 
+def _reject_if_create_or_delete_blocked(tenant):
+    """Block work that would race a create or delete, or touch a removed tenant.
+
+    A queued suspend, backup, or migrate does not block the others.
+    Status is read from the database, not from a stale in-memory copy.
+    """
+    tenant.refresh_from_db()
+    if tenant.status == Tenant.Status.DELETED:
+        raise ProvisionError("Tenant is already deleted.")
+    if tenant.status == Tenant.Status.DELETING:
+        raise ProvisionError("Tenant is already being deleted.")
+    if tenant.jobs.filter(
+        kind__in=(ProvisionJob.Kind.CREATE, ProvisionJob.Kind.DELETE),
+        status__in=(ProvisionJob.Status.QUEUED, ProvisionJob.Status.RUNNING),
+    ).exists():
+        raise ProvisionError("A create or delete job is already queued for this tenant.")
+
+
 def enqueue_suspend(tenant, reason=""):
+    tenant.refresh_from_db()
+    if tenant.status == Tenant.Status.SUSPENDED:
+        raise ProvisionError("Tenant is already suspended.")
+    if tenant.status == Tenant.Status.PROVISIONING:
+        raise ProvisionError("Tenant is still provisioning.")
+    _reject_if_create_or_delete_blocked(tenant)
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.SUSPEND,
@@ -152,6 +176,9 @@ def enqueue_suspend(tenant, reason=""):
 
 
 def enqueue_resume(tenant):
+    _reject_if_create_or_delete_blocked(tenant)
+    if tenant.status != Tenant.Status.SUSPENDED:
+        raise ProvisionError("Only a suspended tenant can be resumed.")
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.RESUME,
@@ -161,6 +188,7 @@ def enqueue_resume(tenant):
 
 def enqueue_backup(tenant):
     """Queue a backup. Phase 5 runs pg_dump; this does not open the database."""
+    _reject_if_create_or_delete_blocked(tenant)
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.BACKUP,
@@ -170,6 +198,7 @@ def enqueue_backup(tenant):
 
 def enqueue_migrate(tenant):
     """Queue a migrate. The worker does not run it until tenant migrate jobs are enabled."""
+    _reject_if_create_or_delete_blocked(tenant)
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.MIGRATE,
@@ -179,6 +208,7 @@ def enqueue_migrate(tenant):
 
 def enqueue_restore(tenant, dump_name):
     """Queue a restore. The dump name is a file name, not a path or a password."""
+    _reject_if_create_or_delete_blocked(tenant)
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,200}", dump_name or ""):
         raise ProvisionError("Dump name is not valid.")
     return ProvisionJob.objects.create(
@@ -192,6 +222,7 @@ def enqueue_restore(tenant, dump_name):
 def enqueue_delete(tenant, confirm_slug):
     if confirm_slug != tenant.slug:
         raise ProvisionError("Slug confirmation does not match.")
+    _reject_if_create_or_delete_blocked(tenant)
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.DELETE,
@@ -326,13 +357,19 @@ def suspend_tenant(tenant, reason=""):
     tenant.save(update_fields=["status", "suspension_reason"])
 
 
+def _status_after_resume(tenant):
+    """Status a suspended tenant returns to. A live trial wins, then an overdue bill."""
+    if tenant.trial_ends_at and tenant.trial_ends_at > timezone.now():
+        return Tenant.Status.TRIALING
+    if tenant.invoices.filter(status=Invoice.Status.PAST_DUE).exists():
+        return Tenant.Status.PAST_DUE
+    return Tenant.Status.ACTIVE
+
+
 def resume_tenant(tenant):
     if not _database_exists(tenant.db_name):
         raise ProvisionError("Tenant database is missing.")
-    if tenant.trial_ends_at:
-        tenant.status = Tenant.Status.TRIALING
-    else:
-        tenant.status = Tenant.Status.ACTIVE
+    tenant.status = _status_after_resume(tenant)
     tenant.suspension_reason = ""
     tenant.save(update_fields=["status", "suspension_reason"])
 
@@ -344,18 +381,40 @@ def dump_tenant(tenant) -> str:
     return dump_tenant_database(tenant)
 
 
+def _status_after_restore(tenant, status_before):
+    if status_before in (
+        Tenant.Status.ACTIVE,
+        Tenant.Status.TRIALING,
+        Tenant.Status.PAST_DUE,
+    ):
+        return status_before
+    return _status_after_resume(tenant)
+
+
 def _run_restore(job):
-    """Suspend, load the dump from this tenant's folder, then mark active."""
+    """Hold the workspace offline, load the dump, then restore the prior status."""
     from control.backup import restore_tenant_database
 
     tenant = job.tenant
+    payload = dict(job.payload or {})
+    if "status_before" not in payload:
+        payload["status_before"] = tenant.status
+        job.payload = payload
+        job.save(update_fields=["payload"])
     tenant.status = Tenant.Status.SUSPENDED
     tenant.save(update_fields=["status"])
     job.step = "restore"
     job.save(update_fields=["step"])
-    restore_tenant_database(tenant, (job.payload or {}).get("dump_name") or "")
-    tenant.status = Tenant.Status.ACTIVE
-    tenant.save(update_fields=["status"])
+    try:
+        restore_tenant_database(tenant, payload.get("dump_name") or "")
+    except Exception:
+        tenant.status = Tenant.Status.SUSPENDED
+        tenant.suspension_reason = "Restore failed; workspace held offline."[:200]
+        tenant.save(update_fields=["status", "suspension_reason"])
+        raise
+    tenant.status = _status_after_restore(tenant, payload.get("status_before"))
+    tenant.suspension_reason = ""
+    tenant.save(update_fields=["status", "suspension_reason"])
 
 
 def delete_tenant(job, dump=None):
@@ -363,12 +422,16 @@ def delete_tenant(job, dump=None):
     confirm = (job.payload or {}).get("confirm_slug")
     if confirm != tenant.slug:
         raise ProvisionError("Slug confirmation does not match.")
+    tenant.refresh_from_db()
+    if tenant.status == Tenant.Status.DELETED:
+        return
     tenant.status = Tenant.Status.DELETING
     tenant.save(update_fields=["status"])
-    job.step = "dump"
-    job.save(update_fields=["step"])
     dumper = dump if dump is not None else dump_tenant
-    dumper(tenant)
+    if _database_exists(tenant.db_name):
+        job.step = "dump"
+        job.save(update_fields=["step"])
+        dumper(tenant)
     job.step = "drop"
     job.save(update_fields=["step"])
     _drop_database_and_role(tenant)

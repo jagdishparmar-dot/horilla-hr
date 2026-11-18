@@ -13,6 +13,9 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
+from control.crypto import redact_job_error
+
+
 def backup_dir(slug: str) -> Path:
     return Path(settings.BASE_DIR) / "backups" / slug
 
@@ -46,6 +49,51 @@ def _chmod_private(path: Path) -> None:
     path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
 
 
+def _stderr_text(stderr) -> str:
+    if stderr is None:
+        return ""
+    if isinstance(stderr, bytes):
+        return stderr.decode("utf-8", errors="replace")
+    return str(stderr)
+
+
+def _stderr_tail(stderr) -> str:
+    for line in reversed(_stderr_text(stderr).splitlines()):
+        text = line.strip()
+        if text:
+            return text
+    return ""
+
+
+def _scrub_password(text: str, password: str) -> str:
+    if not text or not password:
+        return text
+    return text.replace(password, "[redacted]")
+
+
+def _run_pg(command, password: str, *, timed_out: str, failed: str) -> None:
+    from control.provisioning import ProvisionError
+
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            env=_pg_env(password),
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ProvisionError(timed_out) from exc
+    except subprocess.CalledProcessError as exc:
+        tail = _scrub_password(_stderr_tail(exc.stderr), password)
+        if isinstance(exc.stderr, str) and password:
+            exc.stderr = _scrub_password(exc.stderr, password)
+        if not tail:
+            raise ProvisionError(f"{failed}.") from exc
+        raise ProvisionError(f"{failed}: {redact_job_error(tail)}") from exc
+
+
 def dump_tenant_database(tenant, when: datetime | None = None) -> str:
     from control.provisioning import ProvisionError
 
@@ -69,16 +117,12 @@ def dump_tenant_database(tenant, when: datetime | None = None) -> str:
     ]
     if tenant.db_name == settings.DATABASES["default"]["NAME"]:
         raise ProvisionError("Refusing to dump the control database as a tenant.")
-    try:
-        subprocess.run(
-            command,
-            check=True,
-            env=_pg_env(tenant.db_password()),
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise ProvisionError("Tenant dump failed.") from exc
+    _run_pg(
+        command,
+        tenant.db_password(),
+        timed_out="Tenant dump timed out.",
+        failed="Tenant dump failed",
+    )
     _chmod_private(path)
     return str(path)
 
@@ -110,16 +154,12 @@ def restore_tenant_database(tenant, dump_name: str) -> None:
     ]
     if tenant.db_name == settings.DATABASES["default"]["NAME"]:
         raise ProvisionError("Refusing to restore into the control database.")
-    try:
-        subprocess.run(
-            command,
-            check=True,
-            env=_pg_env(tenant.db_password()),
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise ProvisionError("Tenant restore failed.") from exc
+    _run_pg(
+        command,
+        tenant.db_password(),
+        timed_out="Tenant restore timed out.",
+        failed="Tenant restore failed",
+    )
 
 
 def _require_binary(name: str) -> str:

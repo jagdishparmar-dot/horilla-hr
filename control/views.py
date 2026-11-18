@@ -225,7 +225,6 @@ def _failed_jobs_last_7_days(now=None):
         .filter(
             Q(finished_at__gte=cutoff)
             | Q(finished_at__isnull=True, started_at__gte=cutoff)
-            | Q(finished_at__isnull=True, started_at__isnull=True)
         )
         .count()
     )
@@ -283,40 +282,50 @@ def tenant_list(request):
     plan_filter = (request.GET.get("plan") or "").strip()
     rows = _tenant_rows(query, plan_filter)
     failed_jobs_7d = _failed_jobs_last_7_days(now=now)
-    stats = _summarize(rows, now=now, failed_jobs_7d=failed_jobs_7d)
+    directory = _summarize(rows, now=now, failed_jobs_7d=failed_jobs_7d)
+    if query or plan_filter:
+        platform = _summarize(
+            _tenant_rows(),
+            now=now,
+            failed_jobs_7d=failed_jobs_7d,
+        )
+    else:
+        platform = directory
     status = (request.GET.get("status") or "").strip()
     allowed = {choice.value for choice in Tenant.Status} | {"setup"}
     if status not in allowed:
         status = ""
     status_tabs = [
-        {"id": "", "label": "All", "count": stats["total"]},
-        {"id": Tenant.Status.ACTIVE, "label": "Active", "count": stats["active"]},
-        {"id": Tenant.Status.TRIALING, "label": "Trialing", "count": stats["trialing"]},
-        {"id": Tenant.Status.PAST_DUE, "label": "Past due", "count": stats["past_due"]},
+        {"id": "", "label": "All", "count": directory["total"]},
+        {"id": Tenant.Status.ACTIVE, "label": "Active", "count": directory["active"]},
+        {"id": Tenant.Status.TRIALING, "label": "Trialing", "count": directory["trialing"]},
+        {"id": Tenant.Status.PAST_DUE, "label": "Past due", "count": directory["past_due"]},
         {
             "id": Tenant.Status.PROVISIONING,
             "label": "Provisioning",
-            "count": stats["provisioning"],
+            "count": directory["provisioning"],
         },
         {
             "id": Tenant.Status.SUSPENDED,
             "label": "Suspended",
-            "count": stats["suspended"],
+            "count": directory["suspended"],
         },
-        {"id": Tenant.Status.FAILED, "label": "Failed", "count": stats["failed"]},
+        {"id": Tenant.Status.FAILED, "label": "Failed", "count": directory["failed"]},
     ]
     return render_control(
         request,
         "control/tenant_list.html",
         {
             "rows": _visible_rows(rows, status),
-            "stats": stats,
+            "stats": platform,
             "status_tabs": status_tabs,
             "query": query,
             "plan_filter": plan_filter,
             "plans": Plan.objects.order_by("sort_order", "name"),
             "status_filter": status,
             "activity": ProvisionJob.objects.select_related("tenant").order_by("-pk")[:8],
+            "nav_tenant_count": platform["total"],
+            "nav_trial_count": platform["trialing"] + platform["past_due"],
         },
     )
 
@@ -766,6 +775,7 @@ def _detail_context(tenant, delete_error="", restore_error="", active_section="a
         "storage_pct": _usage_pct(tenant.used_storage_gb, tenant.storage_limit_gb),
         "suspend_form": SuspendForm(),
         "subscription_form": SubscriptionForm(tenant=tenant),
+        "can_convert": _can_convert(tenant),
     }
 
 
@@ -882,6 +892,12 @@ def tenant_quota(request, slug):
                 f"performance_reviews {before[4]} -> {modules_after[2]}"
             ),
         )
+    if (
+        tenant.seat_limit != before[0]
+        and tenant.plan_fk_id
+        and tenant.status in (Tenant.Status.ACTIVE, Tenant.Status.PAST_DUE)
+    ):
+        issue_invoice(tenant, request.operator)
     messages.success(request, f"Saved limits for {tenant.slug}.")
     return redirect(f"/control/tenants/{tenant.slug}/?section=overview")
 
@@ -897,11 +913,28 @@ def _queue(request, tenant, action, job):
     return redirect("control-tenant-detail", slug=tenant.slug)
 
 
+def _can_convert(tenant):
+    if tenant.status == Tenant.Status.TRIALING:
+        return True
+    return tenant.status == Tenant.Status.PAST_DUE and tenant.trial_ends_at is not None
+
+
+def _operation_rejected(request, tenant, message):
+    context = _detail_context(tenant, active_section="operations")
+    context["action_error"] = str(message)
+    return render_control(
+        request,
+        "control/tenant_detail.html",
+        context,
+        status=400,
+    )
+
+
 @operator_required
 @require_POST
 def tenant_convert(request, slug):
     tenant = get_object_or_404(Tenant, slug=slug)
-    if tenant.status != Tenant.Status.TRIALING:
+    if not _can_convert(tenant):
         context = _detail_context(tenant, active_section="overview")
         context["convert_error"] = "Only a trial can be converted."
         return render_control(request, "control/tenant_detail.html", context, status=400)
@@ -962,7 +995,10 @@ def tenant_suspend(request, slug):
         context = _detail_context(tenant, active_section="operations")
         context["suspend_form"] = form
         return render_control(request, "control/tenant_detail.html", context, status=400)
-    job = enqueue_suspend(tenant, form.cleaned_data["reason"])
+    try:
+        job = enqueue_suspend(tenant, form.cleaned_data["reason"])
+    except ProvisionError as exc:
+        return _operation_rejected(request, tenant, exc)
     return _queue(request, tenant, OperatorAudit.Action.SUSPEND, job)
 
 
@@ -970,7 +1006,10 @@ def tenant_suspend(request, slug):
 @require_POST
 def tenant_resume(request, slug):
     tenant = get_object_or_404(Tenant, slug=slug)
-    job = enqueue_resume(tenant)
+    try:
+        job = enqueue_resume(tenant)
+    except ProvisionError as exc:
+        return _operation_rejected(request, tenant, exc)
     return _queue(request, tenant, OperatorAudit.Action.RESUME, job)
 
 
@@ -978,7 +1017,10 @@ def tenant_resume(request, slug):
 @require_POST
 def tenant_backup(request, slug):
     tenant = get_object_or_404(Tenant, slug=slug)
-    job = enqueue_backup(tenant)
+    try:
+        job = enqueue_backup(tenant)
+    except ProvisionError as exc:
+        return _operation_rejected(request, tenant, exc)
     return _queue(request, tenant, OperatorAudit.Action.BACKUP, job)
 
 
@@ -986,7 +1028,10 @@ def tenant_backup(request, slug):
 @require_POST
 def tenant_migrate(request, slug):
     tenant = get_object_or_404(Tenant, slug=slug)
-    job = enqueue_migrate(tenant)
+    try:
+        job = enqueue_migrate(tenant)
+    except ProvisionError as exc:
+        return _operation_rejected(request, tenant, exc)
     return _queue(request, tenant, OperatorAudit.Action.MIGRATE, job)
 
 

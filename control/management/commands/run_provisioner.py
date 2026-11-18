@@ -14,18 +14,25 @@ from control.provisioning import (
 POLL_SECONDS = 5
 
 
+def _expire_lapsed_trials():
+    from control.trials import expire_trials
+
+    return expire_trials()
+
+
 class Command(BaseCommand):
     help = (
         "Run tenant provisioning one job at a time. On startup, a job left "
-        "running by a dead worker is queued again and continues from its "
-        "completed steps. Do not run a second copy."
+        "running for more than 30 minutes is failed. A newer interrupted job "
+        "is queued again and continues from its completed steps. Do not run "
+        "a second copy."
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--once",
             action="store_true",
-            help="Requeue, reclaim, and drain the queue once, then exit.",
+            help="Reclaim stale jobs, requeue interrupted jobs, and drain the queue once, then exit.",
         )
 
     def handle(self, *args, **options):
@@ -44,13 +51,14 @@ class Command(BaseCommand):
         signal.signal(signal.SIGTERM, _request_stop)
         signal.signal(signal.SIGINT, _request_stop)
         self.stdout.write(
-            "Provisioner running. A job left running is queued again on startup."
+            "Provisioner running. A stale running job is failed. A newer one is queued again."
         )
         self._drain_once()
         while not stop["flag"]:
             # Reclaim only while idle. A migrate longer than 30 minutes is
             # still this process's current job and must not be failed here.
             reclaimed = reclaim_stale_jobs()
+            _expire_lapsed_trials()
             processed = process_available_jobs()
             if processed or reclaimed:
                 continue
@@ -64,8 +72,11 @@ class Command(BaseCommand):
         self.stdout.write("Provisioner stopped.")
 
     def _drain_once(self):
-        requeued = requeue_interrupted_jobs()
+        # Reclaim while the row is still running. Requeue clears started_at,
+        # so a stale job would otherwise look queued and never be failed.
         reclaimed = reclaim_stale_jobs()
+        requeued = requeue_interrupted_jobs()
+        _expire_lapsed_trials()
         processed = process_available_jobs()
         self.stdout.write(
             f"requeued={requeued} reclaimed={reclaimed} processed={processed}"
