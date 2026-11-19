@@ -7,6 +7,7 @@ from pathlib import Path
 from django.db import connections
 from django.utils import timezone
 
+from control import backup_store
 from control.backup import backup_dir
 from control.models import ProvisionJob, Tenant
 
@@ -76,7 +77,11 @@ def _backup_line(tenant, now) -> HealthLine:
 
 
 def _dump_file_present(tenant, job) -> bool:
-    raw = str((job.payload or {}).get("dump_path") or "")
+    payload = job.payload or {}
+    key = str(payload.get("dump_key") or "")
+    if key:
+        return _stored_dump_present(tenant, key)
+    raw = str(payload.get("dump_path") or "")
     if not raw:
         return False
     root = backup_dir(tenant.slug).resolve()
@@ -85,6 +90,19 @@ def _dump_file_present(tenant, job) -> bool:
     except OSError:
         return False
     return path.parent == root and path.is_file()
+
+
+def _stored_dump_present(tenant, key: str) -> bool:
+    """True when the object exists under this tenant's own prefix."""
+    if not backup_store.configured():
+        return False
+    name = key.rsplit("/", 1)[-1]
+    try:
+        if backup_store.object_key(tenant.slug, name) != key:
+            return False
+        return backup_store.head(tenant.slug, name) is not None
+    except backup_store.BackupStoreError:
+        return False
 
 
 def _migrate_line(tenant) -> HealthLine:

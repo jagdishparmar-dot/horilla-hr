@@ -13,7 +13,7 @@
       <button type="submit" class="control-btn-primary">Save add-on</button>
       <a href="{% url 'control-plans' %}" class="control-btn-ghost no-underline">Back</a>
     </form>
-    {% if request.resolver_match.url_name == "control-addon-edit" %}
+    {% if operator.is_staff and request.resolver_match.url_name == "control-addon-edit" %}
       <form method="post" action="{% url 'control-addon-delete' request.resolver_match.kwargs.code %}" class="mt-6">
         {% csrf_token %}
         <button type="submit" class="control-btn-danger" data-confirm="Deactivate this add-on if a subscription uses it, or delete it if none do?">Deactivate or delete</button>

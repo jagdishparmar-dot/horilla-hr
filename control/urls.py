@@ -63,6 +63,7 @@ urlpatterns = [
     path("control/tenants/<slug:slug>/resume/", views.tenant_resume, name="control-tenant-resume"),
     path("control/tenants/<slug:slug>/backup/", views.tenant_backup, name="control-tenant-backup"),
     path("control/tenants/<slug:slug>/migrate/", views.tenant_migrate, name="control-tenant-migrate"),
+    path("control/tenants/<slug:slug>/retry/", views.tenant_retry, name="control-tenant-retry"),
     path("control/tenants/<slug:slug>/restore/", views.tenant_restore, name="control-tenant-restore"),
     path("control/tenants/<slug:slug>/delete/", views.tenant_delete, name="control-tenant-delete"),
     path("control/tenants/<slug:slug>/remove/", views.tenant_purge, name="control-tenant-purge"),
@@ -73,8 +74,18 @@ urlpatterns = [
     ),
     path("control/operators/", views.operators, name="control-operators"),
     path(
+        "control/operators/password/",
+        views.operator_password,
+        name="control-operator-password",
+    ),
+    path(
         "control/operators/<int:pk>/deactivate/",
         views.operator_deactivate,
         name="control-operator-deactivate",
+    ),
+    path(
+        "control/operators/<int:pk>/reactivate/",
+        views.operator_reactivate,
+        name="control-operator-reactivate",
     ),
 ]

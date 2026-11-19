@@ -8,10 +8,12 @@
       <h1 class="control-title">Subscription Plans &amp; Add-ons</h1>
       <p class="control-lede">Each plan and add-on has its own monthly, semi-annual, and annual price. Amounts are whole rupees, exclusive of GST. A catalog edit does not change a tenant that already has a locked price.</p>
     </div>
+    {% if operator.is_staff %}
     <div class="flex flex-wrap gap-2">
       <a href="{% url 'control-plan-create' %}" class="control-btn-primary no-underline">New plan</a>
       <a href="{% url 'control-addon-create' %}" class="control-btn-ghost no-underline">New add-on</a>
     </div>
+    {% endif %}
   </div>
 
   <section class="control-plan-grid mb-8" aria-label="Sellable plans">
@@ -41,7 +43,9 @@
             <dd class="control-mono">{% if plan.storage_gb_per_seat %}{{ plan.storage_gb_per_seat }} GB / seat{% else %}None{% endif %}</dd>
           </div>
         </dl>
+        {% if operator.is_staff %}
         <a href="{% url 'control-plan-edit' plan.code %}" class="control-btn-ghost mt-3 no-underline">Edit {{ plan.name }}</a>
+        {% endif %}
         <a href="{% url 'control-tenant-create' %}?plan={{ plan.code }}" class="control-btn {% if plan.code == 'growth' %}control-btn-primary{% else %}control-btn-ghost{% endif %} mt-2 no-underline">Provision with {{ plan.name }}</a>
       </article>
     {% endfor %}
@@ -69,7 +73,7 @@
                 <td>{{ addon.name }}</td>
                 <td class="control-mono">{{ addon.amount|inr }} / month</td>
                 <td class="control-muted">{% if addon.per_seat %}Per seat{% else %}Flat{% endif %}{% if addon.required %} · Mandatory{% endif %}</td>
-                <td><a href="{% url 'control-addon-edit' addon.code %}">Edit</a></td>
+                <td>{% if operator.is_staff %}<a href="{% url 'control-addon-edit' addon.code %}">Edit</a>{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>

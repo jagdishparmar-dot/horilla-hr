@@ -8,15 +8,16 @@
   {% endif %}
 {% endblock %}
 {% block content %}
-  <div class="control-card control-card-pad mb-6">
+  <header class="control-card control-card-pad mb-6">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div class="flex items-start gap-4">
-        <div>
+      <div class="control-identity">
+        <span class="control-avatar" style="--hue: {{ tenant.name|avatar_hue }}" aria-hidden="true">{{ tenant.name|initials }}</span>
+        <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="control-title mt-0">{{ tenant.name }}</h1>
             {{ tenant.status|tenant_status_badge }}
             {% if setup_password %}
-              <span class="text-xs font-semibold text-amber-700">Setup pending</span>
+              <span class="text-xs font-semibold text-amber-800">Setup pending</span>
             {% endif %}
           </div>
           <p class="control-lede">
@@ -29,86 +30,44 @@
       </div>
       <div class="flex flex-wrap gap-2">
         {% if primary_host %}
-          <a href="http://{{ primary_host }}/" class="control-btn-primary no-underline" target="_blank" rel="noopener">Open app</a>
+          <a href="http://{{ primary_host }}/" class="control-btn-primary no-underline" target="_blank" rel="noopener" aria-label="Open {{ primary_host }} in a new tab">Open app</a>
         {% endif %}
         <a href="{% url 'control-home' %}" class="control-btn-ghost no-underline">All tenants</a>
       </div>
     </div>
 
-    <div class="control-section-tabs mt-5" role="tablist" aria-label="Tenant inspector sections">
-      <a
-        href="?section=all"
-        role="tab"
-        data-section-tab="all"
-        aria-selected="{% if active_section == 'all' %}true{% else %}false{% endif %}"
-        class="control-section-tab {% if active_section == 'all' %}control-section-tab-active{% endif %}"
-      >
-        All sections
-      </a>
-      <a
-        href="?section=overview"
-        role="tab"
-        data-section-tab="overview"
-        aria-selected="{% if active_section == 'overview' %}true{% else %}false{% endif %}"
-        class="control-section-tab {% if active_section == 'overview' %}control-section-tab-active{% endif %}"
-      >
-        Overview
-      </a>
-      <a
-        href="?section=operations"
-        role="tab"
-        data-section-tab="operations"
-        aria-selected="{% if active_section == 'operations' %}true{% else %}false{% endif %}"
-        class="control-section-tab {% if active_section == 'operations' %}control-section-tab-active{% endif %}"
-      >
+    <nav class="control-section-tabs mt-5" aria-label="Tenant sections">
+      <a href="?section=all" data-section-tab="all" class="control-section-tab {% if active_section == 'all' %}control-section-tab-active{% endif %}" {% if active_section == 'all' %}aria-current="page"{% endif %}>All sections</a>
+      <a href="?section=overview" data-section-tab="overview" class="control-section-tab {% if active_section == 'overview' %}control-section-tab-active{% endif %}" {% if active_section == 'overview' %}aria-current="page"{% endif %}>Overview</a>
+      <a href="?section=operations" data-section-tab="operations" class="control-section-tab {% if active_section == 'operations' %}control-section-tab-active{% endif %}" {% if active_section == 'operations' %}aria-current="page"{% endif %}>
         <span>Operations</span>
         <span class="control-tab-count">{{ jobs|length }}</span>
       </a>
-      <a
-        href="?section=access"
-        role="tab"
-        data-section-tab="access"
-        aria-selected="{% if active_section == 'access' %}true{% else %}false{% endif %}"
-        class="control-section-tab {% if active_section == 'access' %}control-section-tab-active{% endif %}"
-      >
+      <a href="?section=access" data-section-tab="access" class="control-section-tab {% if active_section == 'access' %}control-section-tab-active{% endif %}" {% if active_section == 'access' %}aria-current="page"{% endif %}>
         <span>Access</span>
         <span class="control-tab-count">{{ domains|length }}</span>
       </a>
-    </div>
-  </div>
+    </nav>
+  </header>
 
   {% if watch_jobs %}
-    <p class="control-alert-info mb-6">A job is still in progress. This page refreshes every 15 seconds.</p>
+    <p class="control-alert-info mb-6" role="status">A job is still in progress. This page refreshes every 15 seconds.</p>
   {% endif %}
 
-  <!-- Section 1: Overview -->
   <section
     id="section-overview"
     data-detail-section="overview"
     class="mb-8"
+    aria-labelledby="overview-heading"
     {% if active_section != 'all' and active_section != 'overview' %}hidden{% endif %}
   >
-    <div class="mb-3">
-      <h2 class="control-section-heading">Registry &amp; Database Identity</h2>
-    </div>
+    <h2 id="overview-heading" class="control-section-heading mb-3">Overview</h2>
 
     <div class="control-split control-split-2">
       <div class="control-card control-card-pad">
-        <h3 class="control-section-title">Tenant profile</h3>
-        <p class="control-help">Registry metadata stored in the control database.</p>
+        <h3 class="control-section-title">Profile</h3>
+        <p class="control-help">Registry facts stored in the control database.</p>
         <dl class="control-facts control-facts-grid mt-4">
-          <div class="control-fact">
-            <dt>Company name</dt>
-            <dd>{{ tenant.name }}</dd>
-          </div>
-          <div class="control-fact">
-            <dt>Slug</dt>
-            <dd class="control-mono">{{ tenant.slug }}</dd>
-          </div>
-          <div class="control-fact">
-            <dt>Status</dt>
-            <dd>{{ tenant.status|tenant_status_badge }}</dd>
-          </div>
           <div class="control-fact">
             <dt>Plan</dt>
             <dd>{{ tenant.plan_label }} · {{ tenant.get_cadence_display }}</dd>
@@ -117,7 +76,7 @@
             <dt>Primary host</dt>
             <dd>
               {% if primary_host %}
-                <a href="http://{{ primary_host }}/" class="control-mono control-host-link" target="_blank" rel="noopener">{{ primary_host }}</a>
+                <a href="http://{{ primary_host }}/" class="control-mono control-host-link" target="_blank" rel="noopener" aria-label="Open {{ primary_host }} in a new tab">{{ primary_host }}</a>
               {% else %}
                 <span class="control-muted">No host yet</span>
               {% endif %}
@@ -132,12 +91,11 @@
             <dd>{% if tenant.industry %}{{ tenant.industry }}{% else %}—{% endif %}</dd>
           </div>
           <div class="control-fact">
-            <dt>Admin name</dt>
-            <dd>{% if tenant.admin_name %}{{ tenant.admin_name }}{% else %}—{% endif %}</dd>
-          </div>
-          <div class="control-fact">
-            <dt>Admin email</dt>
-            <dd>{% if tenant.admin_email %}{{ tenant.admin_email }}{% else %}—{% endif %}</dd>
+            <dt>Admin</dt>
+            <dd>
+              {% if tenant.admin_name %}{{ tenant.admin_name }}{% else %}—{% endif %}
+              {% if tenant.admin_email %}<span class="mt-0.5 block control-mono text-sm font-normal">{{ tenant.admin_email }}</span>{% endif %}
+            </dd>
           </div>
           {% if tenant.status == "trialing" or tenant.trial_ends_at %}
             <div class="control-fact">
@@ -157,25 +115,9 @@
             {% csrf_token %}
             <button type="submit" class="control-btn-primary">Convert to active</button>
           </form>
-          {% if convert_error %}<p class="control-error mt-2">{{ convert_error }}</p>{% endif %}
+          {% if convert_error %}<p class="control-error mt-2" role="alert">{{ convert_error }}</p>{% endif %}
         {% elif convert_error %}
-          <p class="control-error mt-4">{{ convert_error }}</p>
-        {% endif %}
-        {% if tenant.status == "active" or tenant.status == "past_due" %}
-          <form method="post" action="{% url 'control-tenant-subscription' tenant.slug %}" class="mt-5 space-y-3">
-            {% csrf_token %}
-            <h3 class="control-section-title">Subscription</h3>
-            <p class="control-help">A new plan, cadence, or add-on set records an open invoice. A seat-limit change does too when the tenant is active or past due. Storage and module saves do not.</p>
-            {% for field in subscription_form %}
-              <label class="block text-sm">
-                <span class="control-label">{{ field.label }}</span>
-                {{ field }}
-                {% if field.errors %}<span class="control-error">{{ field.errors|striptags }}</span>{% endif %}
-              </label>
-            {% endfor %}
-            <button type="submit" class="control-btn-primary">Save subscription</button>
-          </form>
-          {% if subscription_error %}<p class="control-error mt-2">{{ subscription_error }}</p>{% endif %}
+          <p class="control-error mt-4" role="alert">{{ convert_error }}</p>
         {% endif %}
       </div>
 
@@ -203,78 +145,95 @@
       </div>
     </div>
 
-    <div class="control-card control-card-pad mt-6">
+    {% if tenant.status == "active" or tenant.status == "past_due" %}
+      <form method="post" action="{% url 'control-tenant-subscription' tenant.slug %}" class="control-card control-card-pad mt-6">
+        {% csrf_token %}
+        <h3 class="control-section-title">Subscription</h3>
+        <p class="control-help">A new plan, cadence, or add-on set records an open invoice. A seat-limit change does too when the tenant is active or past due. Storage and module saves do not.</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          {% for field in subscription_form %}
+            <label class="block text-sm">
+              <span class="control-label">{{ field.label }}</span>
+              {{ field }}
+              {% if field.errors %}<span class="control-error" role="alert">{{ field.errors|striptags }}</span>{% endif %}
+            </label>
+          {% endfor %}
+        </div>
+        <button type="submit" class="control-btn-primary mt-4">Save subscription</button>
+        {% if subscription_error %}<p class="control-error mt-2" role="alert">{{ subscription_error }}</p>{% endif %}
+      </form>
+    {% endif %}
+
+    <form method="post" action="{% url 'control-tenant-quota' tenant.slug %}" class="control-card control-card-pad mt-6">
+      {% csrf_token %}
       <h3 class="control-section-title">Quotas and modules</h3>
       <p class="control-help">Usage is a stored snapshot. Saving limits does not queue a job and does not change the tenant database.</p>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <div class="flex items-center justify-between text-xs">
             <span class="control-muted">Seats</span>
-            <span class="control-mono">{{ tenant.active_seats }}/{{ tenant.seat_limit }} · {{ seat_pct }}%</span>
+            <span class="control-mono">{{ tenant.active_seats }} of {{ tenant.seat_limit }}</span>
           </div>
-          <div class="control-meter mt-1.5 {% if seat_pct >= 90 %}control-meter-danger{% elif seat_pct >= 80 %}control-meter-warn{% endif %}">
+          <div class="control-meter mt-1.5 {% if seat_pct >= 90 %}control-meter-danger{% elif seat_pct >= 80 %}control-meter-warn{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ seat_pct }}" aria-label="Seat use, {{ tenant.active_seats }} of {{ tenant.seat_limit }}">
             <span style="width: {{ seat_pct }}%"></span>
           </div>
         </div>
         <div>
           <div class="flex items-center justify-between text-xs">
             <span class="control-muted">Storage</span>
-            <span class="control-mono">{{ tenant.used_storage_gb }}/{{ tenant.storage_limit_gb }} GB · {{ storage_pct }}%</span>
+            <span class="control-mono">{% if tenant.storage_limit_gb %}{{ tenant.used_storage_gb }} of {{ tenant.storage_limit_gb }} GB{% else %}Not capped{% endif %}</span>
           </div>
-          <div class="control-meter mt-1.5 {% if storage_pct >= 90 %}control-meter-danger{% elif storage_pct >= 80 %}control-meter-warn{% endif %}">
-            <span style="width: {{ storage_pct }}%"></span>
-          </div>
+          {% if tenant.storage_limit_gb %}
+            <div class="control-meter mt-1.5 {% if storage_pct >= 90 %}control-meter-danger{% elif storage_pct >= 80 %}control-meter-warn{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ storage_pct }}" aria-label="Storage use, {{ tenant.used_storage_gb }} of {{ tenant.storage_limit_gb }} gigabytes">
+              <span style="width: {{ storage_pct }}%"></span>
+            </div>
+          {% endif %}
         </div>
       </div>
-      <form method="post" action="{% url 'control-tenant-quota' tenant.slug %}" class="mt-5">
-        {% csrf_token %}
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label class="control-label" for="{{ quota_form.seat_limit.id_for_label }}">Seat limit</label>
-            {{ quota_form.seat_limit }}
-            {% if quota_form.seat_limit.errors %}<p class="control-error">{{ quota_form.seat_limit.errors|join:", " }}</p>{% endif %}
-          </div>
-          <div>
-            <label class="control-label" for="{{ quota_form.storage_limit_gb.id_for_label }}">Storage limit (GB)</label>
-            {{ quota_form.storage_limit_gb }}
-            {% if quota_form.storage_limit_gb.errors %}<p class="control-error">{{ quota_form.storage_limit_gb.errors|join:", " }}</p>{% endif %}
-          </div>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="control-label" for="{{ quota_form.seat_limit.id_for_label }}">Seat limit</label>
+          {{ quota_form.seat_limit }}
+          {% if quota_form.seat_limit.errors %}<p class="control-error" role="alert">{{ quota_form.seat_limit.errors|join:", " }}</p>{% endif %}
         </div>
-        <fieldset class="mt-4 space-y-2">
-          <legend class="control-label">Modules</legend>
-          {% for field in quota_form %}
-            {% if field.field.widget.input_type == "checkbox" %}
-              <label class="flex items-center gap-2 text-sm">
-                {{ field }}
-                <span>{{ field.label }}</span>
-              </label>
-            {% endif %}
-          {% endfor %}
-        </fieldset>
-        <button type="submit" class="control-btn-primary mt-4">Save limits</button>
-      </form>
+        <div>
+          <label class="control-label" for="{{ quota_form.storage_limit_gb.id_for_label }}">Storage limit (GB)</label>
+          {{ quota_form.storage_limit_gb }}
+          {% if quota_form.storage_limit_gb.errors %}<p class="control-error" role="alert">{{ quota_form.storage_limit_gb.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+      <fieldset class="mt-4 space-y-2">
+        <legend class="control-label">Modules</legend>
+        {% for field in quota_form %}
+          {% if field.field.widget.input_type == "checkbox" %}
+            <label class="flex items-center gap-2 text-sm">
+              {{ field }}
+              <span>{{ field.label }}</span>
+            </label>
+          {% endif %}
+        {% endfor %}
+      </fieldset>
+      <button type="submit" class="control-btn-primary mt-4">Save limits</button>
       {% if tenant.usage_updated_at %}
         <p class="control-help mt-3">Snapshot {{ tenant.usage_updated_at|date:"M j, Y H:i" }}</p>
       {% endif %}
-    </div>
+    </form>
   </section>
 
-  <!-- Section 2: Operations -->
   <section
     id="section-operations"
     data-detail-section="operations"
     class="mb-8"
+    aria-labelledby="operations-heading"
     {% if active_section != 'all' and active_section != 'operations' %}hidden{% endif %}
   >
-    <div class="mb-3">
-      <h2 class="control-section-heading">Lifecycle Actions &amp; Provisioning Jobs</h2>
-    </div>
+    <h2 id="operations-heading" class="control-section-heading mb-3">Operations</h2>
 
     <div class="control-card control-card-pad mb-6">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 class="control-section-title">Tenant health</h3>
-          <p class="control-help">Checks this tenant only. Connection, backup, migrate, and the stored storage snapshot.</p>
+          <h3 id="health-heading" class="control-section-title">Health</h3>
+          <p class="control-help">Connection, backup, migrate, and the stored storage snapshot for this tenant.</p>
         </div>
         <form method="post" action="{% url 'control-tenant-health' tenant.slug %}">
           {% csrf_token %}
@@ -282,7 +241,7 @@
         </form>
       </div>
       {% if health_lines %}
-        <ul class="mt-4 divide-y divide-slate-200 border-t border-slate-200">
+        <ul class="mt-4 divide-y divide-slate-200 border-t border-slate-200" aria-labelledby="health-heading">
           {% for line in health_lines %}
             <li class="flex items-start justify-between gap-4 py-3">
               <div>
@@ -302,67 +261,118 @@
       {% if action_error %}
         <p class="control-alert-error mb-4" role="alert">{{ action_error }}</p>
       {% endif %}
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 class="control-section-title">Queued maintenance</h3>
-          <p class="control-help">Each action writes a job to the control queue. The scheduler executes SQL and backups asynchronously.</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          {% if tenant.status != "deleted" %}
-            <form method="post" action="{% url 'control-tenant-backup' tenant.slug %}">
-              {% csrf_token %}
-              <button type="submit" class="control-btn-ghost" data-confirm="Queue a backup for {{ tenant.name }}?">Backup</button>
-            </form>
-            <form method="post" action="{% url 'control-tenant-migrate' tenant.slug %}">
-              {% csrf_token %}
-              <button type="submit" class="control-btn-ghost" data-confirm="Queue a schema migrate for {{ tenant.name }}?">Migrate</button>
-            </form>
-          {% endif %}
-          {% if tenant.status != "suspended" and tenant.status != "deleted" and tenant.status != "deleting" %}
-            <form method="post" action="{% url 'control-tenant-suspend' tenant.slug %}" class="flex flex-wrap items-end gap-2">
-              {% csrf_token %}
-              <label class="text-xs">
-                <span class="control-label">Suspension reason</span>
-                {{ suspend_form.reason }}
-              </label>
-              <button type="submit" class="control-btn-warn">Suspend</button>
-            </form>
-            {% if suspend_form.reason.errors %}
-              <p class="control-error">{{ suspend_form.reason.errors|join:", " }}</p>
-            {% endif %}
-          {% endif %}
-          {% if tenant.status == "suspended" %}
-            <form method="post" action="{% url 'control-tenant-resume' tenant.slug %}">
-              {% csrf_token %}
-              <button type="submit" class="control-btn-primary" data-confirm="Resume {{ tenant.name }}?">Resume</button>
-            </form>
-          {% endif %}
-        </div>
+      <h3 id="maintenance-heading" class="control-section-title">Maintenance</h3>
+      <p class="control-help">Each action writes a job. The provisioner runs it. Nothing here connects to the tenant database.</p>
+      <div class="control-action-bar mt-4" role="group" aria-labelledby="maintenance-heading">
+        {% if tenant.status != "deleted" %}
+          <form method="post" action="{% url 'control-tenant-backup' tenant.slug %}">
+            {% csrf_token %}
+            <button type="submit" class="control-btn-ghost" data-confirm="Queue a backup for {{ tenant.name }}?">Backup</button>
+          </form>
+          <form method="post" action="{% url 'control-tenant-migrate' tenant.slug %}">
+            {% csrf_token %}
+            <button type="submit" class="control-btn-ghost" data-confirm="Queue a schema migrate for {{ tenant.name }}?">Migrate</button>
+          </form>
+        {% endif %}
+        {% if tenant.status == "failed" %}
+          <form method="post" action="{% url 'control-tenant-retry' tenant.slug %}">
+            {% csrf_token %}
+            <button type="submit" class="control-btn-primary" data-confirm="Retry provisioning for {{ tenant.name }}? Finished steps are not repeated.">Retry</button>
+          </form>
+        {% endif %}
+        {% if tenant.status == "suspended" %}
+          <form method="post" action="{% url 'control-tenant-resume' tenant.slug %}">
+            {% csrf_token %}
+            <button type="submit" class="control-btn-primary" data-confirm="Resume {{ tenant.name }}?">Resume</button>
+          </form>
+        {% endif %}
+        {% if tenant.status != "suspended" and tenant.status != "deleted" and tenant.status != "deleting" %}
+          <form method="post" action="{% url 'control-tenant-suspend' tenant.slug %}" class="flex flex-wrap items-end gap-2">
+            {% csrf_token %}
+            <label class="text-xs" for="{{ suspend_form.reason.id_for_label }}">
+              <span class="control-label">Suspension reason</span>
+              {{ suspend_form.reason }}
+            </label>
+            <button type="submit" class="control-btn-warn">Suspend</button>
+          </form>
+        {% endif %}
       </div>
+      {% if suspend_form.reason.errors %}
+        <p class="control-error mt-2" role="alert">{{ suspend_form.reason.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+
+    <div class="control-card mb-6 overflow-hidden" id="backups">
+      <div class="border-b border-slate-200 px-5 py-4">
+        <h3 id="backups-heading" class="control-section-title">Backups</h3>
+        <p class="control-help">Files kept for this tenant. Restore replaces the workspace from the chosen file and does not run in the browser.</p>
+      </div>
+      {% if dumps_error %}
+        <p class="control-alert-error m-5" role="alert">{{ dumps_error }}</p>
+      {% endif %}
+      {% if restore_error %}
+        <p class="control-alert-error m-5" role="alert">{{ restore_error }}</p>
+      {% endif %}
+      {% if backup_rows %}
+      <div class="control-table-wrap">
+        <table class="control-table control-table-auto" aria-labelledby="backups-heading">
+          <thead>
+            <tr>
+              <th scope="col">Taken</th>
+              <th scope="col">File</th>
+              <th scope="col">Size</th>
+              {% if operator.is_staff and tenant.status != "deleted" and tenant.status != "deleting" %}
+                <th scope="col" class="text-right"><span class="sr-only">Restore</span></th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for dump in backup_rows %}
+              <tr>
+                <td class="whitespace-nowrap control-muted">{% if dump.taken %}{{ dump.taken|date:"M j, Y H:i" }}{% else %}—{% endif %}</td>
+                <td class="control-mono break-all">{{ dump.name }}</td>
+                <td class="whitespace-nowrap control-muted">{{ dump.size_label }}</td>
+                {% if operator.is_staff and tenant.status != "deleted" and tenant.status != "deleting" %}
+                  <td class="text-right">
+                    <form method="post" action="{% url 'control-tenant-restore' tenant.slug %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="dump_name" value="{{ dump.name }}">
+                      <button type="submit" class="control-btn-ghost" aria-label="Restore from {{ dump.name }}" data-confirm="Restore {{ tenant.name }} from {{ dump.name }}? This replaces the workspace data.">Restore</button>
+                    </form>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% elif not dumps_error %}
+        <p class="control-muted px-5 py-4">No backups yet.</p>
+      {% endif %}
     </div>
 
     <div class="control-card mb-6 overflow-hidden">
       <div class="border-b border-slate-200 px-5 py-4">
-        <h3 class="control-section-title">Jobs</h3>
-        <p class="control-help">Every create, migrate, backup, restore, suspend, resume, and delete run for this tenant.</p>
+        <h3 id="jobs-heading" class="control-section-title">Jobs</h3>
+        <p class="control-help">Create, migrate, backup, restore, suspend, resume, and delete runs for this tenant.</p>
       </div>
       <div class="control-table-wrap">
-        <table class="control-table">
+        <table class="control-table" aria-labelledby="jobs-heading">
           <thead>
             <tr>
-              <th>Kind</th>
-              <th>Status</th>
-              <th>Step</th>
-              <th>Progress</th>
-              <th>Error</th>
-              <th>Started</th>
-              <th>Finished</th>
+              <th scope="col">Kind</th>
+              <th scope="col">Status</th>
+              <th scope="col">Step</th>
+              <th scope="col">Progress</th>
+              <th scope="col">Error</th>
+              <th scope="col">Started</th>
+              <th scope="col">Finished</th>
             </tr>
           </thead>
           <tbody>
             {% for item in jobs %}
               <tr>
-                <td class="control-mono">{{ item.job.kind }}</td>
+                <td class="control-mono">{{ item.job.kind|capfirst }}</td>
                 <td>{{ item.job.status|job_status_badge }}</td>
                 <td class="control-mono control-muted">{{ item.job.step|default:"—" }}</td>
                 <td>
@@ -374,7 +384,7 @@
                     <span class="control-muted">—</span>
                   {% endif %}
                 </td>
-                <td class="max-w-xs text-rose-700"><span class="break-all text-sm">{{ item.job.error|default:"" }}</span></td>
+                <td class="max-w-xs text-rose-700"><span class="break-all text-sm">{% if item.job.error %}{{ item.job.error }}{% else %}—{% endif %}</span></td>
                 <td class="whitespace-nowrap control-muted">{% if item.job.started_at %}{{ item.job.started_at|date:"M j, H:i" }}{% else %}—{% endif %}</td>
                 <td class="whitespace-nowrap control-muted">{% if item.job.finished_at %}{{ item.job.finished_at|date:"M j, H:i" }}{% else %}—{% endif %}</td>
               </tr>
@@ -388,28 +398,28 @@
 
     <div class="control-card mb-6 overflow-hidden">
       <div class="border-b border-slate-200 px-5 py-4">
-        <h3 class="control-section-title">Operator history</h3>
+        <h3 id="history-heading" class="control-section-title">Operator history</h3>
         <p class="control-help">Who queued each change for this tenant.</p>
       </div>
       <div class="control-table-wrap">
-        <table class="control-table control-table-auto">
+        <table class="control-table control-table-auto" aria-labelledby="history-heading">
           <thead>
             <tr>
-              <th>When</th>
-              <th>Operator</th>
-              <th>Category</th>
-              <th>Action</th>
-              <th>Detail</th>
+              <th scope="col">When</th>
+              <th scope="col">Operator</th>
+              <th scope="col">Category</th>
+              <th scope="col">Action</th>
+              <th scope="col">Detail</th>
             </tr>
           </thead>
           <tbody>
             {% for audit in audits %}
               <tr>
                 <td class="whitespace-nowrap control-muted">{{ audit.created_at|date:"M j, Y H:i" }}</td>
-                <td>{{ audit.operator.email }}</td>
+                <td>{{ audit.operator.email|default:"—" }}</td>
                 <td>{{ audit.get_category_display }}</td>
                 <td class="control-mono">{{ audit.action }}</td>
-                <td class="control-muted">{{ audit.detail }}</td>
+                <td class="control-muted">{{ audit.detail|default:"—" }}</td>
               </tr>
             {% empty %}
               <tr><td colspan="5"><div class="control-empty">No operator actions recorded yet.</div></td></tr>
@@ -419,39 +429,26 @@
       </div>
     </div>
 
-    {% if can_purge %}
-    <div class="control-card control-danger-zone control-card-pad mb-6">
-      <h3 class="control-section-title">Remove tenant</h3>
-      <p class="control-help">No backup is taken. The database, the login, and this record are removed so the slug can be created again. Use this when provisioning failed or the tenant login cannot connect.</p>
-      {% if remove_error %}
-        <p class="control-alert-error mt-3" role="alert">{{ remove_error }}</p>
-      {% endif %}
-      <form method="post" action="{% url 'control-tenant-purge' tenant.slug %}" class="mt-4">
-        {% csrf_token %}
-        {% include "control/partials/form_fields.html" with form=delete_form %}
-        <button type="submit" class="control-btn-danger" data-confirm="Remove {{ tenant.name }} without a backup? This cannot be undone.">Remove tenant</button>
-      </form>
-    </div>
-    {% endif %}
-
-    {% if tenant.status != "deleted" and tenant.status != "deleting" %}
-    <details class="control-card control-danger-zone" {% if restore_error or delete_error %}open{% endif %}>
-      <summary>Danger zone — restore or delete</summary>
-      <div class="grid gap-8 border-t border-rose-100 px-5 py-5 lg:grid-cols-2">
-        <div>
-          <h3 class="control-section-title">Restore a backup</h3>
-          <p class="control-help">Use the dump file name exactly. This queues a restore and does not run it in the browser.</p>
-          {% if restore_error %}
-            <p class="control-alert-error mt-3" role="alert">{{ restore_error }}</p>
+    {% if can_purge and operator.is_staff or operator.is_staff and tenant.status != "deleted" and tenant.status != "deleting" %}
+    <div class="control-card control-danger-zone control-card-pad">
+      <h3 id="danger-heading" class="control-section-title">Danger zone</h3>
+      {% if can_purge and operator.is_staff %}
+        <div class="mt-4">
+          <h4 class="font-semibold">Remove tenant</h4>
+          <p class="control-help">No backup is taken. The database, the login, and this record are removed so the slug can be created again. Use this when provisioning failed or the tenant login cannot connect.</p>
+          {% if remove_error %}
+            <p class="control-alert-error mt-3" role="alert">{{ remove_error }}</p>
           {% endif %}
-          <form method="post" action="{% url 'control-tenant-restore' tenant.slug %}" class="mt-4">
+          <form method="post" action="{% url 'control-tenant-purge' tenant.slug %}" class="mt-4">
             {% csrf_token %}
-            {% include "control/partials/form_fields.html" with form=restore_form %}
-            <button type="submit" class="control-btn-ghost" data-confirm="Queue a restore for {{ tenant.name }}? This replaces tenant data from the named dump.">Queue restore</button>
+            {% include "control/partials/form_fields.html" with form=delete_form %}
+            <button type="submit" class="control-btn-danger" data-confirm="Remove {{ tenant.name }} without a backup? This cannot be undone.">Remove tenant</button>
           </form>
         </div>
-        <div>
-          <h3 class="control-section-title">Delete tenant</h3>
+      {% endif %}
+      {% if operator.is_staff and tenant.status != "deleted" and tenant.status != "deleting" %}
+        <div class="mt-6">
+          <h4 class="font-semibold">Delete tenant</h4>
           <p class="control-help">Type <span class="control-mono">{{ tenant.slug }}</span> to queue deletion. The database is not dropped on this click.</p>
           {% if delete_error %}
             <p class="control-alert-error mt-3" role="alert">{{ delete_error }}</p>
@@ -462,20 +459,18 @@
             <button type="submit" class="control-btn-danger">Queue delete</button>
           </form>
         </div>
-      </div>
-    </details>
+      {% endif %}
+    </div>
     {% endif %}
   </section>
 
-  <!-- Section 3: Access -->
   <section
     id="section-access"
     data-detail-section="access"
+    aria-labelledby="access-heading"
     {% if active_section != 'all' and active_section != 'access' %}hidden{% endif %}
   >
-    <div class="mb-3">
-      <h2 class="control-section-heading">Setup Password &amp; Domains</h2>
-    </div>
+    <h2 id="access-heading" class="control-section-heading mb-3">Access</h2>
 
     <div class="control-card control-card-pad mb-6">
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -495,12 +490,14 @@
       {% if invite_state == "pending" %}
         <p class="control-help mt-3">The Initialize Database password is set. This page does not print it. Regenerate it to show a new password once.</p>
         {% if signup_url %}
-          <p class="control-help mt-2">Open <a href="{{ signup_url }}" target="_blank" rel="noopener">{{ signup_url }}</a> and choose Initialize Database.</p>
+          <p class="control-help mt-2">Open <a href="{{ signup_url }}" target="_blank" rel="noopener" aria-label="Open the Initialize Database page in a new tab">{{ signup_url }}</a> and choose Initialize Database.</p>
         {% endif %}
+        {% if operator.is_staff %}
         <form method="post" action="{% url 'control-tenant-setup-password' tenant.slug %}" class="mt-4">
           {% csrf_token %}
           <button type="submit" class="control-btn-warn" data-confirm="Generate a new setup password for {{ tenant.name }}? The current one stops working.">Regenerate setup password</button>
         </form>
+        {% endif %}
       {% elif invite_state == "accepted" %}
         <p class="control-help mt-3">Initialize Database was completed and the setup password was cleared.</p>
       {% else %}
@@ -509,13 +506,13 @@
     </div>
 
     {% if revealed_setup_password %}
-      <div class="control-callout mb-6">
+      <div class="control-callout mb-6" role="status">
         <h3 class="control-section-title">New setup password</h3>
         <p class="control-lede">Shown once on this load. The next visit does not include it, and it is not the admin login.</p>
         <div class="mt-4 flex flex-wrap items-center gap-2">
           <code id="setup-secret" class="control-secret" data-visible="false">{{ revealed_setup_password }}</code>
-          <button type="button" class="control-btn-ghost" data-toggle-secret="setup-secret">Show</button>
-          <button type="button" class="control-btn-warn" data-copy="{{ revealed_setup_password }}">Copy password</button>
+          <button type="button" class="control-btn-ghost" data-toggle-secret="setup-secret" aria-controls="setup-secret" aria-pressed="false">Show</button>
+          <button type="button" class="control-btn-warn" data-copy="{{ revealed_setup_password }}" aria-label="Copy setup password">Copy password</button>
         </div>
       </div>
     {% endif %}
@@ -523,28 +520,28 @@
     <div class="control-card control-card-pad">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 class="control-section-title">Domains &amp; workspace URL</h3>
-          <p class="control-help">Tenant hosts routed to this database.</p>
+          <h3 id="domains-heading" class="control-section-title">Domains</h3>
+          <p class="control-help">Hosts routed to this database.</p>
         </div>
         {% if primary_host %}
-          <a href="http://{{ primary_host }}/" class="control-btn-primary no-underline" target="_blank" rel="noopener">Open tenant host</a>
+          <a href="http://{{ primary_host }}/" class="control-btn-primary no-underline" target="_blank" rel="noopener" aria-label="Open {{ primary_host }} in a new tab">Open tenant host</a>
         {% endif %}
       </div>
-      <ul class="mt-4 divide-y divide-slate-200">
+      <ul class="mt-4 divide-y divide-slate-200" aria-labelledby="domains-heading">
         {% for domain in domains %}
           <li class="flex flex-wrap items-center justify-between gap-3 py-3">
             <div>
-              <a href="http://{{ domain.host }}/" class="control-name control-mono" target="_blank" rel="noopener">{{ domain.host }}</a>
+              <a href="http://{{ domain.host }}/" class="control-name control-mono" target="_blank" rel="noopener" aria-label="Open {{ domain.host }} in a new tab">{{ domain.host }}</a>
               <div class="mt-1 flex gap-2">
-                {% if domain.is_primary %}<span class="control-pill control-pill-info">PRIMARY</span>{% endif %}
+                {% if domain.is_primary %}<span class="control-pill control-pill-info">Primary</span>{% endif %}
                 {% if domain.verified %}
-                  <span class="control-pill control-pill-ok">VERIFIED</span>
+                  <span class="control-pill control-pill-ok">Verified</span>
                 {% else %}
-                  <span class="control-pill control-pill-neutral">UNVERIFIED</span>
+                  <span class="control-pill control-pill-neutral">Unverified</span>
                 {% endif %}
               </div>
             </div>
-            <button type="button" class="control-btn-ghost" data-copy="{{ domain.host }}">Copy</button>
+            <button type="button" class="control-btn-ghost" data-copy="{{ domain.host }}" aria-label="Copy {{ domain.host }}">Copy</button>
           </li>
         {% empty %}
           <li class="control-muted py-4 text-sm">No domain has been attached yet.</li>

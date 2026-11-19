@@ -19,6 +19,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from control.audit import public_audit_detail, record_operator_action
 from control.health import tenant_health as run_tenant_health
+from control.heartbeat import provisioner_notice
 from control.billing import (
     BillingError,
     issue_invoice,
@@ -39,6 +40,7 @@ from control.forms import (
     DeleteConfirmForm,
     LoginForm,
     OperatorCreateForm,
+    OperatorPasswordForm,
     PlanCatalogForm,
     QuoteForm,
     RestoreForm,
@@ -47,6 +49,14 @@ from control.forms import (
     TenantCreateForm,
     TenantQuotaForm,
 )
+from control.lockout import (
+    INVALID_MESSAGE,
+    LOCKED_MESSAGE,
+    clear_failures,
+    is_locked,
+    record_failure,
+)
+from horilla.client_ip import client_ip
 from control.setup_access import (
     SetupAccessError,
     consume_setup_password,
@@ -66,6 +76,7 @@ from control.provisioning import (
     enqueue_migrate,
     enqueue_purge,
     enqueue_restore,
+    enqueue_retry,
     enqueue_resume,
     enqueue_suspend,
 )
@@ -104,6 +115,11 @@ def render_control(request, template, context=None, status=200):
         data["nav_billing_count"] = Invoice.objects.filter(
             status__in=(Invoice.Status.OPEN, Invoice.Status.PAST_DUE)
         ).count()
+    if "provisioner_notice" not in data:
+        try:
+            data["provisioner_notice"] = provisioner_notice()
+        except Exception:
+            data["provisioner_notice"] = ""
     return TemplateResponse(
         request,
         template,
@@ -119,6 +135,15 @@ def _safe_next(raw):
     return raw
 
 
+def _audit_login_failure(operator, email: str, ip: str) -> None:
+    """Email and IP only. The password is never written here."""
+    record_operator_action(
+        operator=operator,
+        action=OperatorAudit.Action.OPERATOR_LOGIN_FAILED,
+        detail=f"Failed sign-in for {email} from {ip}.",
+    )
+
+
 @require_http_methods(["GET", "POST"])
 def login(request):
     if current_operator(request) is not None:
@@ -128,15 +153,25 @@ def login(request):
     if request.method == "POST" and form.is_valid():
         email = form.cleaned_data["email"].strip()
         password = form.cleaned_data["password"]
+        ip = client_ip(request) or ""
         operator = Operator.objects.filter(email__iexact=email).first()
-        if (
-            operator is None
-            or not operator.is_active
-            or not operator.check_password(password)
-        ):
-            error = "Email or password is not valid."
+        # Inactive accounts are not a login target, same as an unknown email.
+        known = operator if operator is not None and operator.is_active else None
+        if is_locked(email, ip):
+            _audit_login_failure(known, email, ip)
+            error = LOCKED_MESSAGE
+        elif known is None or not known.check_password(password):
+            record_failure(email, ip)
+            _audit_login_failure(known, email, ip)
+            error = LOCKED_MESSAGE if is_locked(email, ip) else INVALID_MESSAGE
         else:
-            login_operator(request, operator)
+            clear_failures(email, ip)
+            login_operator(request, known)
+            record_operator_action(
+                operator=known,
+                action=OperatorAudit.Action.OPERATOR_LOGIN,
+                detail=f"Signed in from {ip}.",
+            )
             return redirect(_safe_next(request.POST.get("next") or request.GET.get("next")))
     return render_control(
         request,
@@ -408,56 +443,84 @@ def _catalog_response(request, template, form, title):
     )
 
 
-@operator_required
+def _cycle_prices(obj, monthly_attr: str) -> str:
+    # Query the price rows directly. A prefetched plan still holds the prices
+    # from before this save, and the audit must record the values just written.
+    related = obj.prices
+    rows = related.model.objects.filter(**{related.field.name: obj})
+    prices = {row.cadence: row.unit_rupees for row in rows}
+    monthly = prices.get("monthly", getattr(obj, monthly_attr, 0) or 0)
+    return (
+        f"monthly {monthly}, semiannual {prices.get('semiannual', 0)}, "
+        f"annual {prices.get('annual', 0)}"
+    )
+
+
+def _audit_catalog(request, kind: str, code: str, before: str, after: str) -> None:
+    record_operator_action(
+        operator=request.operator,
+        action=OperatorAudit.Action.CATALOG_UPDATE,
+        detail=f"{kind} {code}: {before} -> {after}",
+    )
+
+
+@staff_required
 @require_http_methods(["GET", "POST"])
 def plan_create(request):
     form = PlanCatalogForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         plan = form.save()
+        _audit_catalog(request, "plan", plan.code, "none", _cycle_prices(plan, "monthly_price"))
         messages.success(request, f"Saved plan {plan.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/plan_form.html", form, "New plan")
 
 
-@operator_required
+@staff_required
 @require_http_methods(["GET", "POST"])
 def plan_edit(request, code):
     plan = get_object_or_404(Plan.objects.exclude(code=UNASSIGNED).prefetch_related("prices"), code=code)
     form = PlanCatalogForm(request.POST or None, instance=plan)
+    before = _cycle_prices(plan, "monthly_price")
     if request.method == "POST" and form.is_valid():
-        form.save()
+        saved = form.save()
+        _audit_catalog(request, "plan", saved.code, before, _cycle_prices(saved, "monthly_price"))
         messages.success(request, f"Saved plan {plan.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/plan_form.html", form, plan.name)
 
 
-@operator_required
+@staff_required
 @require_POST
 def plan_delete(request, code):
     plan = get_object_or_404(Plan.objects.exclude(code=UNASSIGNED), code=code)
+    prices = _cycle_prices(plan, "monthly_price")
     if plan.tenants.exists():
         plan.status = Plan.Status.ARCHIVED
         plan.is_active = False
         plan.save(update_fields=["status", "is_active"])
+        _audit_catalog(request, "plan", plan.code, prices, "archived")
         messages.success(request, f"{plan.name} is archived. Tenants already on it keep their locked price.")
     else:
+        _audit_catalog(request, "plan", code, prices, "deleted")
         plan.delete()
         messages.success(request, f"Deleted plan {code}.")
     return redirect("control-plans")
 
 
-@operator_required
+@staff_required
 @require_http_methods(["GET", "POST"])
 def addon_create(request):
     form = AddonCatalogForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         addon = form.save()
+        _audit_catalog(request, "add-on", addon.code, "none", _cycle_prices(addon, "amount"))
         messages.success(request, f"Saved add-on {addon.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/addon_form.html", form, "New add-on")
 
 
-@operator_required
+@staff_required
 @require_http_methods(["GET", "POST"])
 def addon_edit(request, code):
     addon = get_object_or_404(
@@ -465,22 +528,27 @@ def addon_edit(request, code):
         code=code,
     )
     form = AddonCatalogForm(request.POST or None, instance=addon)
+    before = _cycle_prices(addon, "amount")
     if request.method == "POST" and form.is_valid():
-        form.save()
+        saved = form.save()
+        _audit_catalog(request, "add-on", saved.code, before, _cycle_prices(saved, "amount"))
         messages.success(request, f"Saved add-on {addon.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/addon_form.html", form, addon.name)
 
 
-@operator_required
+@staff_required
 @require_POST
 def addon_delete(request, code):
     addon = get_object_or_404(Addon, code=code)
+    prices = _cycle_prices(addon, "amount")
     if addon.subscriptions.exists():
         addon.is_active = False
         addon.save(update_fields=["is_active"])
+        _audit_catalog(request, "add-on", addon.code, prices, "deactivated")
         messages.success(request, f"{addon.name} is inactive. Subscriptions that already include it keep the locked price.")
     else:
+        _audit_catalog(request, "add-on", code, prices, "deleted")
         addon.delete()
         messages.success(request, f"Deleted add-on {code}.")
     return redirect("control-plans")
@@ -629,19 +697,23 @@ def _invoice_action(request, pk, change):
     return redirect("control-billing")
 
 
-@operator_required
+@staff_required
 @require_POST
 def invoice_past_due(request, pk):
-    return _invoice_action(request, pk, mark_past_due)
+    return _invoice_action(
+        request, pk, lambda invoice: mark_past_due(invoice, request.operator)
+    )
 
 
-@operator_required
+@staff_required
 @require_POST
 def invoice_paid(request, pk):
-    return _invoice_action(request, pk, mark_paid)
+    return _invoice_action(
+        request, pk, lambda invoice: mark_paid(invoice, request.operator)
+    )
 
 
-@operator_required
+@staff_required
 @require_POST
 def invoice_void(request, pk):
     return _invoice_action(
@@ -732,6 +804,35 @@ def tenant_create(request):
     )
 
 
+def _format_bytes(size) -> str:
+    amount = int(size or 0)
+    if amount < 1024:
+        return f"{amount} B"
+    if amount < 1024 * 1024:
+        return f"{amount / 1024:.1f} KB"
+    return f"{amount / (1024 * 1024):.1f} MB"
+
+
+def _backup_rows(slug):
+    """This tenant's dumps for the backups table. Errors stay secret-free."""
+    from control.backup import list_dumps
+
+    try:
+        dumps = list_dumps(slug)
+    except Exception:
+        return [], "Backups could not be listed."
+    rows = []
+    for entry in dumps:
+        rows.append(
+            {
+                "name": entry["name"],
+                "size_label": _format_bytes(entry.get("size")),
+                "taken": entry.get("last_modified"),
+            }
+        )
+    return rows, ""
+
+
 def _job_steps(job):
     raw = job.payload.get("completed_steps") if isinstance(job.payload, dict) else None
     if not isinstance(raw, list):
@@ -747,6 +848,7 @@ def _detail_context(tenant, delete_error="", restore_error="", remove_error="", 
     if state == "pending":
         host = primary_host or f"{tenant.slug}.{settings.HORILLA_PLATFORM_DOMAIN}"
         signup_url = f"http://{host}/login/"
+    backup_rows, dumps_error = _backup_rows(tenant.slug)
     job_rows = []
     watch_jobs = tenant.status == Tenant.Status.PROVISIONING
     for job in tenant.jobs.order_by("-pk"):
@@ -762,7 +864,8 @@ def _detail_context(tenant, delete_error="", restore_error="", remove_error="", 
         "jobs": job_rows,
         "audits": _public_audits(tenant.slug),
         "delete_form": DeleteConfirmForm(),
-        "restore_form": RestoreForm(),
+        "backup_rows": backup_rows,
+        "dumps_error": dumps_error,
         "delete_error": delete_error,
         "restore_error": restore_error,
         "remove_error": remove_error,
@@ -810,7 +913,7 @@ def tenant_detail(request, slug):
     return render_control(request, "control/tenant_detail.html", context)
 
 
-@operator_required
+@staff_required
 @require_POST
 def tenant_setup_password(request, slug):
     """Replace a pending setup password and reveal the new one on the next GET."""
@@ -1041,14 +1144,39 @@ def tenant_migrate(request, slug):
 
 @operator_required
 @require_POST
+def tenant_retry(request, slug):
+    tenant = get_object_or_404(Tenant, slug=slug)
+    try:
+        job = enqueue_retry(tenant)
+    except ProvisionError as exc:
+        return _operation_rejected(request, tenant, exc)
+    record_operator_action(
+        operator=request.operator,
+        action=OperatorAudit.Action.CREATE,
+        slug=tenant.slug,
+        detail="Queued retry.",
+    )
+    messages.success(request, f"Retry queued for {tenant.slug}.")
+    return redirect("control-tenant-detail", slug=tenant.slug)
+
+
+@staff_required
+@require_POST
 def tenant_restore(request, slug):
     tenant = get_object_or_404(Tenant, slug=slug)
-    form = RestoreForm(request.POST)
+    from control.backup import list_dumps
+
+    try:
+        dumps = list_dumps(tenant.slug)
+    except Exception:
+        dumps = []
+    form = RestoreForm(dumps, request.POST)
     if not form.is_valid():
         return render_control(
             request,
             "control/tenant_detail.html",
-            _detail_context(tenant, restore_error="Dump name is required."),
+            _detail_context(tenant, restore_error="Dump name is not valid."),
+            status=400,
         )
     try:
         job = enqueue_restore(tenant, form.cleaned_data["dump_name"])
@@ -1057,6 +1185,7 @@ def tenant_restore(request, slug):
             request,
             "control/tenant_detail.html",
             _detail_context(tenant, restore_error=str(exc)),
+            status=400,
         )
     record_operator_action(
         operator=request.operator,
@@ -1068,7 +1197,7 @@ def tenant_restore(request, slug):
     return redirect("control-tenant-detail", slug=tenant.slug)
 
 
-@operator_required
+@staff_required
 @require_POST
 def tenant_delete(request, slug):
     tenant = get_object_or_404(Tenant, slug=slug)
@@ -1100,7 +1229,7 @@ def tenant_delete(request, slug):
     return redirect("control-tenant-detail", slug=tenant.slug)
 
 
-@operator_required
+@staff_required
 @require_POST
 def tenant_purge(request, slug):
     """Remove a tenant that cannot be provisioned. No dump is taken."""
@@ -1173,6 +1302,7 @@ def operators(request):
             "active_operator_count": sum(1 for row in operator_rows if row.is_active),
             "inactive_operator_count": sum(1 for row in operator_rows if not row.is_active),
             "staff_count": sum(1 for row in operator_rows if row.is_active and row.is_staff),
+            "password_form": OperatorPasswordForm(request.operator),
         },
     )
 
@@ -1196,3 +1326,44 @@ def operator_deactivate(request, pk):
     )
     messages.success(request, f"Deactivated {target.email}.")
     return redirect("control-operators")
+
+
+@staff_required
+@require_POST
+def operator_reactivate(request, pk):
+    target = get_object_or_404(Operator, pk=pk)
+    if target.is_active:
+        return redirect("control-operators")
+    target.is_active = True
+    target.save(update_fields=["is_active"])
+    record_operator_action(
+        operator=request.operator,
+        action=OperatorAudit.Action.OPERATOR_REACTIVATE,
+        detail=f"Reactivated {target.email}.",
+    )
+    messages.success(request, f"Reactivated {target.email}.")
+    return redirect("control-operators")
+
+
+@operator_required
+@require_http_methods(["GET", "POST"])
+def operator_password(request):
+    form = OperatorPasswordForm(request.operator, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        operator = request.operator
+        operator.set_password(form.cleaned_data["new_password"])
+        operator.session_version += 1
+        operator.save(update_fields=["password", "session_version"])
+        login_operator(request, operator)
+        record_operator_action(
+            operator=operator,
+            action=OperatorAudit.Action.OPERATOR_PASSWORD_CHANGE,
+            detail="Changed own password.",
+        )
+        messages.success(request, "Password changed. Other sessions were signed out.")
+        return redirect("control-operator-password")
+    return render_control(
+        request,
+        "control/password.html",
+        {"form": form},
+    )

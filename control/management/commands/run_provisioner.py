@@ -1,5 +1,6 @@
 """Run queued provisioning jobs. Deploy exactly one copy of this process."""
 
+import logging
 import signal
 import time
 
@@ -12,12 +13,43 @@ from control.provisioning import (
 )
 
 POLL_SECONDS = 5
+# Dumps of deleted tenants are swept at startup and then every six hours.
+SWEEP_SECONDS = 6 * 60 * 60
+
+logger = logging.getLogger(__name__)
+
+_next_sweep = 0.0
+
+
+def _beat() -> None:
+    from control.heartbeat import beat
+
+    try:
+        beat()
+    except Exception:  # noqa: BLE001 - a missed beat must not stop the worker
+        logger.exception("Provisioner heartbeat failed.")
 
 
 def _expire_lapsed_trials():
     from control.trials import expire_trials
 
     return expire_trials()
+
+
+def _sweep_deleted_dumps(force=False) -> int:
+    """Prune dumps of long-deleted tenants. Never interrupts job processing."""
+    global _next_sweep
+    now = time.monotonic()
+    if not force and now < _next_sweep:
+        return 0
+    _next_sweep = now + SWEEP_SECONDS
+    from control.backup import prune_deleted_tenant_dumps
+
+    try:
+        return prune_deleted_tenant_dumps()
+    except Exception:  # noqa: BLE001 - the sweep must not stop the worker
+        logger.exception("Deleted-tenant dump sweep failed.")
+        return 0
 
 
 class Command(BaseCommand):
@@ -57,8 +89,10 @@ class Command(BaseCommand):
         while not stop["flag"]:
             # Reclaim only while idle. A migrate longer than 30 minutes is
             # still this process's current job and must not be failed here.
+            _beat()
             reclaimed = reclaim_stale_jobs()
             _expire_lapsed_trials()
+            _sweep_deleted_dumps()
             processed = process_available_jobs()
             if processed or reclaimed:
                 continue
@@ -74,10 +108,13 @@ class Command(BaseCommand):
     def _drain_once(self):
         # Reclaim while the row is still running. Requeue clears started_at,
         # so a stale job would otherwise look queued and never be failed.
+        _beat()
         reclaimed = reclaim_stale_jobs()
         requeued = requeue_interrupted_jobs()
         _expire_lapsed_trials()
+        swept = _sweep_deleted_dumps(force=True)
         processed = process_available_jobs()
         self.stdout.write(
-            f"requeued={requeued} reclaimed={reclaimed} processed={processed}"
+            f"requeued={requeued} reclaimed={reclaimed} processed={processed} "
+            f"swept={swept}"
         )

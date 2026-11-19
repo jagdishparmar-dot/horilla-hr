@@ -34,7 +34,13 @@ class RegistryTests(SimpleTestCase):
     def tearDown(self):
         clear_registry()
         for job in self._saved:
-            register_job(job.func, job.trigger, job_id=job.job_id, **job.kwargs)
+            register_job(
+                job.func,
+                job.trigger,
+                job_id=job.job_id,
+                per_tenant=job.per_tenant,
+                **job.kwargs,
+            )
 
     def test_register_job_records_trigger_and_kwargs(self):
         def dummy():
@@ -46,6 +52,20 @@ class RegistryTests(SimpleTestCase):
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0].trigger, "interval")
         self.assertEqual(jobs[0].kwargs, {"hours": 4})
+
+    def test_usage_snapshot_is_a_control_plane_nightly_job(self):
+        # Fresh import re-runs register_job; reload would clash on a new function object.
+        import importlib
+        import sys
+
+        sys.modules.pop("control.scheduler", None)
+        importlib.import_module("control.scheduler")
+        jobs = {job.job_id: job for job in get_registered_jobs()}
+        job = jobs["control.snapshot_usage"]
+        self.assertFalse(job.per_tenant)
+        self.assertEqual(job.trigger, "cron")
+        self.assertEqual(job.kwargs.get("hour"), 1)
+        self.assertEqual(job.kwargs.get("minute"), 15)
 
     def test_job_id_defaults_to_module_qualified_name(self):
         def dummy():

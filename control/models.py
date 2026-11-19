@@ -19,6 +19,8 @@ class Operator(models.Model):
     password = models.CharField(max_length=128)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=True)
+    # Bumped when the password changes so other sessions stop matching.
+    session_version = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = "operator"
@@ -31,6 +33,18 @@ class Operator(models.Model):
 
     def __str__(self) -> str:
         return self.email
+
+
+class ProvisionerHeartbeat(models.Model):
+    """The single row the provisioner refreshes every loop."""
+
+    beat_at = models.DateTimeField()
+
+    class Meta:
+        verbose_name = "provisioner heartbeat"
+
+    def __str__(self) -> str:
+        return self.beat_at.isoformat()
 
 
 class Plan(models.Model):
@@ -359,11 +373,18 @@ class OperatorAudit(models.Model):
         DELETE = "delete", "Delete"
         OPERATOR_CREATE = "operator_create", "Operator create"
         OPERATOR_DEACTIVATE = "operator_deactivate", "Operator deactivate"
+        OPERATOR_REACTIVATE = "operator_reactivate", "Operator reactivate"
+        OPERATOR_LOGIN = "operator_login", "Operator login"
+        OPERATOR_LOGIN_FAILED = "operator_login_failed", "Operator login failed"
+        OPERATOR_PASSWORD_CHANGE = "operator_password_change", "Operator password change"
         QUOTA_UPDATE = "quota_update", "Quota update"
         MODULE_UPDATE = "module_update", "Module update"
         TRIAL_CONVERT = "trial_convert", "Trial convert"
         INVOICE_ISSUE = "invoice_issue", "Invoice issue"
         INVOICE_VOID = "invoice_void", "Invoice void"
+        INVOICE_PAID = "invoice_paid", "Invoice paid"
+        INVOICE_PAST_DUE = "invoice_past_due", "Invoice past due"
+        CATALOG_UPDATE = "catalog_update", "Catalog update"
         SETUP_PASSWORD_RESET = "setup_password_reset", "Setup password reset"
 
     class Category(models.TextChoices):
@@ -377,6 +398,8 @@ class OperatorAudit(models.Model):
         Operator,
         on_delete=models.PROTECT,
         related_name="audits",
+        null=True,
+        blank=True,
     )
     action = models.CharField(max_length=32, choices=Action.choices)
     category = models.CharField(

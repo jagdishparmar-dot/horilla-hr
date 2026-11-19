@@ -5,6 +5,7 @@ from unittest import mock
 
 from cryptography.fernet import Fernet
 from django.test import Client, RequestFactory, TestCase, override_settings
+from django.utils import timezone
 
 from control.models import Operator, OperatorAudit, Tenant
 from control.setup_access import invite_state, setup_password_matches
@@ -68,23 +69,39 @@ class InviteStateTests(TestCase):
             admin_email="ada@pend.test",
             password="pending-secret-value",
         )
+        activated = timezone.now()
         accepted = _tenant(
             "okco",
             status=Tenant.Status.ACTIVE,
             admin_name="Grace Hopper",
             admin_email="grace@ok.test",
+            activated_at=activated,
         )
         trialing = _tenant(
             "trialco",
             status=Tenant.Status.TRIALING,
             admin_name="Trial Admin",
             admin_email="trial@ok.test",
+            activated_at=activated,
         )
         missing = _tenant(
             "waitco",
             status=Tenant.Status.SUSPENDED,
             admin_name="Not Yet",
             admin_email="wait@none.test",
+        )
+        suspended = _tenant(
+            "heldco",
+            status=Tenant.Status.SUSPENDED,
+            admin_name="Held Admin",
+            admin_email="held@ok.test",
+            activated_at=activated,
+        )
+        failed = _tenant(
+            "failco",
+            status=Tenant.Status.FAILED,
+            admin_name="Failed Create",
+            admin_email="fail@none.test",
         )
 
         pending_page = self.client.get(f"/control/tenants/{pending.slug}/")
@@ -110,8 +127,22 @@ class InviteStateTests(TestCase):
         self.assertContains(missing_page, "wait@none.test")
         self.assertNotContains(missing_page, "Regenerate setup password")
 
+        held_page = self.client.get(f"/control/tenants/{suspended.slug}/")
+        self.assertContains(held_page, "Accepted")
+        self.assertContains(held_page, "held@ok.test")
+        self.assertNotContains(held_page, "Regenerate setup password")
+
+        failed_page = self.client.get(f"/control/tenants/{failed.slug}/")
+        self.assertContains(failed_page, "Not issued")
+        self.assertContains(failed_page, "fail@none.test")
+
     def test_regenerate_shows_the_password_once_and_retires_the_old_one(self):
-        tenant = _tenant("resetco", password="old-setup-secret", status=Tenant.Status.ACTIVE)
+        tenant = _tenant(
+            "resetco",
+            password="old-setup-secret",
+            status=Tenant.Status.ACTIVE,
+            activated_at=timezone.now(),
+        )
         rotated = self.client.post(f"/control/tenants/{tenant.slug}/setup-password/")
         self.assertEqual(rotated.status_code, 302)
         tenant.refresh_from_db()

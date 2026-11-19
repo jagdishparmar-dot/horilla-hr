@@ -103,7 +103,7 @@
                 <td>{{ invoice.get_status_display }}</td>
                 <td class="control-mono text-right" data-amount-rupees="{{ invoice.amount_rupees }}">{{ invoice.amount_rupees }}</td>
                 <td class="text-right">
-                  {% if invoice.status == "open" or invoice.status == "past_due" %}
+                  {% if operator.is_staff and invoice.status == "open" or operator.is_staff and invoice.status == "past_due" %}
                     <form method="post" action="{% url 'control-invoice-paid' invoice.pk %}" class="inline">
                       {% csrf_token %}
                       {% if invoice_status %}<input type="hidden" name="status" value="{{ invoice_status }}">{% endif %}

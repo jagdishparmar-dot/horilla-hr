@@ -100,8 +100,18 @@ services:
       # Must stay above Traefik's 90s idle upstream timeout, otherwise Traefik
       # reuses a connection gunicorn just closed and the user sees a 502.
       - GUNICORN_KEEPALIVE=${GUNICORN_KEEPALIVE:-95}
+      # Tenant dump store (S3-compatible). Web only HEADs objects for the
+      # health page; dumps are written by the provisioner. Empty bucket =
+      # local backups volume (same-host only — not disaster recovery).
+      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-}
+      - BACKUP_S3_ENDPOINT_URL=${BACKUP_S3_ENDPOINT_URL:-}
+      - BACKUP_S3_ACCESS_KEY=${BACKUP_S3_ACCESS_KEY:-}
+      - BACKUP_S3_SECRET_KEY=${BACKUP_S3_SECRET_KEY:-}
+      - BACKUP_S3_REGION=${BACKUP_S3_REGION:-}
+      - BACKUP_S3_PREFIX=${BACKUP_S3_PREFIX:-}
     volumes:
       - media:/app/media
+      - backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -167,6 +177,7 @@ services:
       - SENTRY_DSN=${SENTRY_DSN:-}
     volumes:
       - media:/app/media
+      - backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -223,8 +234,21 @@ services:
       - TIME_ZONE=${TIME_ZONE:-Asia/Kolkata}
       - HORILLA_SCHEDULER_HISTORY_DAYS=${HORILLA_SCHEDULER_HISTORY_DAYS:-7}
       - SENTRY_DSN=${SENTRY_DSN:-}
+      # Tenant dumps: pg_dump writes to /app/backups, then uploads to this
+      # store and removes the local file. With an empty bucket the dumps stay
+      # on the backups volume — same host as the database, so set the
+      # BACKUP_S3_* variables for real deployments.
+      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-}
+      - BACKUP_S3_ENDPOINT_URL=${BACKUP_S3_ENDPOINT_URL:-}
+      - BACKUP_S3_ACCESS_KEY=${BACKUP_S3_ACCESS_KEY:-}
+      - BACKUP_S3_SECRET_KEY=${BACKUP_S3_SECRET_KEY:-}
+      - BACKUP_S3_REGION=${BACKUP_S3_REGION:-}
+      - BACKUP_S3_PREFIX=${BACKUP_S3_PREFIX:-}
+      - BACKUP_KEEP_DAILY=${BACKUP_KEEP_DAILY:-7}
+      - BACKUP_KEEP_WEEKLY=${BACKUP_KEEP_WEEKLY:-4}
     volumes:
       - media:/app/media
+      - backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -334,3 +358,5 @@ volumes:
   postgres_data:
   redis_data:
   db_backups:
+  # Tenant dump spool / fallback store (see BACKUP_S3_* above).
+  backups:

@@ -1,12 +1,27 @@
 from django import forms
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 
 from control.catalog import UNASSIGNED, sellable_plans
-from control.models import Addon, Plan, Tenant
+from control.models import Addon, Operator, Plan, Tenant
 from control.pricing import addon_fits, required_addon_codes
 from control.naming import TenantSlugError, validate_tenant_slug
 
 INPUT_CLASS = "control-input"
 CHECKBOX_CLASS = "control-check"
+
+
+def validate_operator_password(password: str, email: str) -> str:
+    """Django's AUTH_PASSWORD_VALIDATORS, including similarity to the email.
+
+    An unsaved Operator supplies the email field the similarity check reads.
+    """
+    user = Operator(email=email or "")
+    try:
+        validate_password(password, user=user)
+    except ValidationError as exc:
+        raise forms.ValidationError(exc.messages) from exc
+    return password
 
 
 class LoginForm(forms.Form):
@@ -293,11 +308,23 @@ class DeleteConfirmForm(forms.Form):
 
 
 class RestoreForm(forms.Form):
-    dump_name = forms.CharField(
-        label="Dump file name",
-        max_length=200,
-        widget=forms.TextInput(attrs={"class": INPUT_CLASS}),
+    dump_name = forms.ChoiceField(
+        label="Backup",
+        widget=forms.Select(attrs={"class": INPUT_CLASS}),
     )
+
+    def __init__(self, dumps=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = []
+        for entry in dumps or []:
+            when = entry.get("last_modified")
+            stamp = when.strftime("%Y-%m-%d %H:%M") if hasattr(when, "strftime") else ""
+            size = int(entry.get("size") or 0)
+            label = f"{entry['name']} · {size} bytes"
+            if stamp:
+                label = f"{label} · {stamp}"
+            choices.append((entry["name"], label))
+        self.fields["dump_name"].choices = choices
 
 
 class OperatorCreateForm(forms.Form):
@@ -308,7 +335,7 @@ class OperatorCreateForm(forms.Form):
     password = forms.CharField(
         label="Password",
         min_length=8,
-        help_text="At least 8 characters. Share it with the operator through a private channel.",
+        help_text="At least 8 characters, not a common password, and not based on the email. Share it through a private channel.",
         widget=forms.PasswordInput(attrs={"class": INPUT_CLASS, "autocomplete": "new-password"}),
     )
     is_staff = forms.BooleanField(
@@ -321,6 +348,44 @@ class OperatorCreateForm(forms.Form):
 
     def clean_email(self):
         return self.cleaned_data["email"].strip().lower()
+
+    def clean_password(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        return validate_operator_password(self.cleaned_data["password"], email)
+
+
+class OperatorPasswordForm(forms.Form):
+    """An operator changing their own password. Requires the current one."""
+
+    current_password = forms.CharField(
+        label="Current password",
+        widget=forms.PasswordInput(
+            attrs={"class": INPUT_CLASS, "autocomplete": "current-password"}
+        ),
+    )
+    new_password = forms.CharField(
+        label="New password",
+        min_length=8,
+        help_text="At least 8 characters, not a common password, and not based on your email.",
+        widget=forms.PasswordInput(
+            attrs={"class": INPUT_CLASS, "autocomplete": "new-password"}
+        ),
+    )
+
+    def __init__(self, operator, *args, **kwargs):
+        self.operator = operator
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        raw = self.cleaned_data["current_password"]
+        if not self.operator.check_password(raw):
+            raise forms.ValidationError("Current password is not valid.")
+        return raw
+
+    def clean_new_password(self):
+        return validate_operator_password(
+            self.cleaned_data["new_password"], self.operator.email
+        )
 
 
 class SuspendForm(forms.Form):

@@ -212,8 +212,8 @@ class DashboardTests(TestCase):
         self.assertEqual(suspended.status_code, 302)
         self.assertEqual(backed_up.status_code, 302)
         self.assertEqual(migrated.status_code, 302)
-        self.assertEqual(restored.status_code, 200)
-        self.assertContains(restored, "not valid")
+        self.assertEqual(restored.status_code, 400)
+        self.assertContains(restored, "not valid", status_code=400)
         self.assertContains(mismatch, "Type the tenant slug", status_code=400)
         self.assertFalse(
             tenant.jobs.filter(kind=ProvisionJob.Kind.DELETE).exists()

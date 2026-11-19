@@ -578,6 +578,50 @@ docker run --rm -v horilla_media:/data -v $(pwd):/backup alpine tar czf /backup/
 docker run --rm -v horilla_media:/data -v $(pwd):/backup alpine tar xzf /backup/media_backup.tar.gz -C /data
 ```
 
+### Tenant Database Backups (multi-tenant mode)
+
+Tenant backups are taken with `pg_dump` by the **provisioner** service —
+nightly for every tenant whose database holds data (active, trialing,
+past due, suspended), on demand from the operator dashboard, and always
+before a tenant delete drops the database.
+
+**Where dumps go.** Each dump is written to `/app/backups/<slug>/` (the
+`backups` volume) and then, when `BACKUP_S3_BUCKET` is set, uploaded to the
+S3-compatible store and removed locally. The object key is
+`[BACKUP_S3_PREFIX/]backups/<slug>/<timestamp>.dump`. Without a bucket the
+dumps stay on the `backups` volume — same host as the database, fine for
+development, **not disaster recovery** for production.
+
+```bash
+# Store configuration (Coolify env vars, or .env for the prod overlay)
+BACKUP_S3_BUCKET=horilla-backups
+BACKUP_S3_ENDPOINT_URL=   # empty for AWS S3; URL for R2 / B2 / MinIO
+BACKUP_S3_ACCESS_KEY=...
+BACKUP_S3_SECRET_KEY=...
+BACKUP_S3_REGION=         # optional
+BACKUP_S3_PREFIX=         # optional key prefix
+
+# Retention (applied after each successful backup)
+BACKUP_KEEP_DAILY=7       # newest N dumps
+BACKUP_KEEP_WEEKLY=4      # plus the newest dump per ISO week, N weeks back
+```
+
+Dumps of deleted tenants are kept for 30 days after deletion, then pruned by
+the provisioner. A tenant delete never drops the database unless its final
+dump succeeded (including the upload, when the store is configured).
+
+**Local S3 store for development** (RustFS, bucket `horilla-backups`):
+
+```bash
+docker compose --profile backups-s3 up -d
+# Console: http://localhost:9001  (horilla-backup / dev-backup-secret-change-in-production)
+# Point the app at it via docker-compose.override.yml:
+#   BACKUP_S3_BUCKET=horilla-backups
+#   BACKUP_S3_ENDPOINT_URL=http://rustfs:9000
+#   BACKUP_S3_ACCESS_KEY=horilla-backup
+#   BACKUP_S3_SECRET_KEY=dev-backup-secret-change-in-production
+```
+
 ---
 
 ## 11. Monitoring & Health Checks

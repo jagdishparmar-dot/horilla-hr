@@ -128,14 +128,24 @@ def backup_default_database():
 
 
 def backup_postgres():
-    """Nightly entry point. One job per active tenant, or the single database."""
+    """Nightly entry point. One job per data-holding tenant, or the single database."""
     from django.conf import settings as django_settings
 
     if getattr(django_settings, "HORILLA_MULTITENANT", False):
         from control.models import Tenant
         from control.provisioning import enqueue_backup
 
-        for tenant in Tenant.objects.filter(status=Tenant.Status.ACTIVE).order_by("pk"):
+        # Every status whose database still holds customer data: active,
+        # trialing, past_due, and suspended. Skipped: provisioning and failed
+        # (no data yet), deleting and deleted (the delete job takes its own
+        # final dump before the drop).
+        covered = (
+            Tenant.Status.ACTIVE,
+            Tenant.Status.TRIALING,
+            Tenant.Status.PAST_DUE,
+            Tenant.Status.SUSPENDED,
+        )
+        for tenant in Tenant.objects.filter(status__in=covered).order_by("pk"):
             enqueue_backup(tenant)
         return
     if "postgresql" not in DB_ENGINE:

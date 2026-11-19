@@ -240,7 +240,8 @@
     min-height: 4rem;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
     border-bottom: 1px solid var(--line);
     background: rgba(255, 255, 255, 0.94);
     padding: 0.65rem 1.25rem;
@@ -456,6 +457,18 @@
     color: var(--ink);
   }
 
+  .control-tab:focus-visible,
+  .control-name:focus-visible,
+  .control-inspect:focus-visible,
+  .control-domain:focus-visible,
+  .control-quiet-link:focus-visible,
+  .control-btn-ghost:focus-visible,
+  .control-btn-primary:focus-visible,
+  .control-btn-quiet:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .control-tab-active,
   .control-tab-active:hover {
     background: #0f172a;
@@ -502,6 +515,19 @@
   .control-section-tab-active {
     border-bottom-color: var(--accent);
     color: var(--ink);
+  }
+
+  .control-section-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 0.2rem;
+  }
+
+  .control-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1rem;
   }
 
   .control-chips {
@@ -561,6 +587,12 @@
   .control-search-field .control-input {
     padding-left: 2rem;
     height: 2.25rem;
+  }
+
+  .control-search-submit {
+    height: 2.25rem;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .control-inspect {
@@ -677,6 +709,11 @@
     overflow-x: auto;
   }
 
+  #backups,
+  [data-detail-section] {
+    scroll-margin-top: 6.5rem;
+  }
+
   .control-table {
     width: 100%;
     min-width: 46rem;
@@ -701,8 +738,69 @@
   }
 
   .control-table.control-table-directory {
-    min-width: 44rem;
+    min-width: 40rem;
     font-size: 0.875rem;
+  }
+
+  .control-directory-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.35rem 1rem;
+    border-bottom: 1px solid var(--line);
+    padding: 0.9rem 1.25rem;
+  }
+
+  .control-directory-count {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .control-usage {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.55rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .control-usage-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .control-usage-meter {
+    display: block;
+    width: 4.5rem;
+    height: 0.35rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e2e8f0;
+  }
+
+  .control-usage-meter > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+
+  .control-usage-meter[data-hot] > span {
+    background: var(--warn);
+  }
+
+  .control-quiet-link {
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .control-quiet-link:hover {
+    color: var(--ink);
   }
 
   .control-table.control-table-directory th {

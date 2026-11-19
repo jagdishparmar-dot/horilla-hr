@@ -9,6 +9,7 @@ from control.models import Operator
 
 CONTROL_SESSION_COOKIE_NAME = "control_sessionid"
 SESSION_OPERATOR_ID = "control_operator_id"
+SESSION_VERSION = "control_session_version"
 
 
 def session_cookie_name(request) -> str:
@@ -24,12 +25,20 @@ def current_operator(request):
     operator_id = request.session.get(SESSION_OPERATOR_ID)
     if not operator_id:
         return None
-    return Operator.objects.filter(pk=operator_id, is_active=True).first()
+    operator = Operator.objects.filter(pk=operator_id, is_active=True).first()
+    if operator is None:
+        return None
+    # Missing key matches version 0, so sessions from before this field
+    # stay valid until the operator changes their password.
+    if request.session.get(SESSION_VERSION, 0) != operator.session_version:
+        return None
+    return operator
 
 
 def login_operator(request, operator) -> None:
     request.session.cycle_key()
     request.session[SESSION_OPERATOR_ID] = operator.pk
+    request.session[SESSION_VERSION] = operator.session_version
 
 
 def logout_operator(request) -> None:

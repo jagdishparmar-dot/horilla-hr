@@ -103,9 +103,11 @@ def readiness_check(request):
                 status=503,
             )
 
+    from control.heartbeat import heartbeat_status
     from control.readiness import tenant_migration_status
 
     checks["tenant_migrations"] = tenant_migration_status()
+    checks["provisioner"] = heartbeat_status()[0]
     checks["scheduler"] = _scheduler_status()
     if (
         getattr(django_settings, "HORILLA_REQUIRE_SCHEDULER", False)

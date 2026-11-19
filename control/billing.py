@@ -85,7 +85,7 @@ def subscription_changed(tenant, plan, cadence, addon_codes) -> bool:
     )
 
 
-def mark_past_due(invoice):
+def mark_past_due(invoice, operator=None):
     with transaction.atomic():
         locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
         if locked.status != Invoice.Status.OPEN:
@@ -96,11 +96,18 @@ def mark_past_due(invoice):
         if tenant.status == Tenant.Status.ACTIVE:
             tenant.status = Tenant.Status.PAST_DUE
             tenant.save(update_fields=["status"])
+        if operator is not None:
+            record_operator_action(
+                operator=operator,
+                action=OperatorAudit.Action.INVOICE_PAST_DUE,
+                slug=tenant.slug,
+                detail=f"invoice {locked.pk} marked past due",
+            )
     invoice.status = locked.status
     return invoice
 
 
-def mark_paid(invoice):
+def mark_paid(invoice, operator=None):
     with transaction.atomic():
         locked = Invoice.objects.select_for_update().get(pk=invoice.pk)
         if locked.status not in (Invoice.Status.OPEN, Invoice.Status.PAST_DUE):
@@ -109,6 +116,13 @@ def mark_paid(invoice):
         locked.paid_on = timezone.localdate()
         locked.save(update_fields=["status", "paid_on"])
         _release_past_due(locked.tenant)
+        if operator is not None:
+            record_operator_action(
+                operator=operator,
+                action=OperatorAudit.Action.INVOICE_PAID,
+                slug=locked.tenant.slug,
+                detail=f"invoice {locked.pk} marked paid",
+            )
     invoice.status = locked.status
     invoice.paid_on = locked.paid_on
     return invoice

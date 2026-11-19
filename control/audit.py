@@ -19,8 +19,15 @@ ACTION_CATEGORIES = {
     OperatorAudit.Action.TRIAL_CONVERT: OperatorAudit.Category.SUBSCRIPTION,
     OperatorAudit.Action.INVOICE_ISSUE: OperatorAudit.Category.BILLING,
     OperatorAudit.Action.INVOICE_VOID: OperatorAudit.Category.BILLING,
+    OperatorAudit.Action.INVOICE_PAID: OperatorAudit.Category.BILLING,
+    OperatorAudit.Action.INVOICE_PAST_DUE: OperatorAudit.Category.BILLING,
+    OperatorAudit.Action.CATALOG_UPDATE: OperatorAudit.Category.BILLING,
     OperatorAudit.Action.OPERATOR_CREATE: OperatorAudit.Category.SECURITY,
     OperatorAudit.Action.OPERATOR_DEACTIVATE: OperatorAudit.Category.SECURITY,
+    OperatorAudit.Action.OPERATOR_REACTIVATE: OperatorAudit.Category.SECURITY,
+    OperatorAudit.Action.OPERATOR_LOGIN: OperatorAudit.Category.SECURITY,
+    OperatorAudit.Action.OPERATOR_LOGIN_FAILED: OperatorAudit.Category.SECURITY,
+    OperatorAudit.Action.OPERATOR_PASSWORD_CHANGE: OperatorAudit.Category.SECURITY,
     OperatorAudit.Action.SETUP_PASSWORD_RESET: OperatorAudit.Category.SECURITY,
 }
 
@@ -49,7 +56,7 @@ def public_audit_detail(detail) -> str:
     return _HIDDEN_DETAIL.sub("[redacted]", text)
 
 
-def record_operator_action(*, operator, action, slug="", detail=""):
+def record_operator_action(*, operator=None, action, slug="", detail=""):
     return OperatorAudit.objects.create(
         operator=operator,
         action=action,

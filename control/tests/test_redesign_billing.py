@@ -182,6 +182,23 @@ class PastDueTests(TestCase):
         tenant = _tenant(slug)
         return issue_invoice(tenant, self.operator), tenant
 
+    def test_payment_changes_are_audited_without_secrets(self):
+        invoice, tenant = self._open("auditco")
+        mark_past_due(invoice, self.operator)
+        mark_paid(invoice, self.operator)
+        past_due = OperatorAudit.objects.get(
+            slug="auditco", action=OperatorAudit.Action.INVOICE_PAST_DUE
+        )
+        paid = OperatorAudit.objects.get(
+            slug="auditco", action=OperatorAudit.Action.INVOICE_PAID
+        )
+        self.assertEqual(past_due.category, OperatorAudit.Category.BILLING)
+        self.assertEqual(paid.category, OperatorAudit.Category.BILLING)
+        self.assertIn(str(invoice.pk), paid.detail)
+        self.assertNotIn("postgres://", paid.detail)
+        self.assertNotIn("correct-horse", paid.detail)
+        self.assertEqual(tenant.slug, "auditco")
+
     def test_one_overdue_invoice_returns_the_tenant_to_active_when_paid(self):
         invoice, tenant = self._open("oneco")
         mark_past_due(invoice)

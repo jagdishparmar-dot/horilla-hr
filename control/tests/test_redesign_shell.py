@@ -229,6 +229,9 @@ class RedesignShellTests(TestCase):
         self._login()
         all_page = self.client.get("/control/")
         self.assertContains(all_page, "Alpha Corp")
+        self.assertContains(all_page, "Workspaces")
+        self.assertContains(all_page, 'aria-current="page"')
+        self.assertNotContains(all_page, 'role="tab"')
         self.assertContains(all_page, "Bravo Org")
         self.assertContains(all_page, "Charlie Ltd")
 
@@ -340,13 +343,12 @@ class RedesignShellTests(TestCase):
             tenant.status = status
             tenant.save(update_fields=["status"])
             page = self.client.get("/control/tenants/north/?section=operations")
-            self.assertContains(page, "Queue restore")
+            self.assertContains(page, "Backups")
             self.assertContains(page, "Queue delete")
         for status in (Tenant.Status.DELETED, Tenant.Status.DELETING):
             tenant.status = status
             tenant.save(update_fields=["status"])
             page = self.client.get("/control/tenants/north/?section=operations")
-            self.assertNotContains(page, "Queue restore")
             self.assertNotContains(page, "Queue delete")
 
     def test_lapsed_trial_past_due_can_convert(self):

@@ -4,6 +4,7 @@ The dashboard only inserts a queued ProvisionJob. This module runs that job.
 Database passwords are never put in job errors or logs.
 """
 
+import logging
 import re
 import secrets
 from datetime import timedelta
@@ -12,12 +13,15 @@ from django.conf import settings
 from django.db import DatabaseError, connections, transaction
 from django.utils import timezone
 
+from control import backup_store
 from control.context import activate_tenant_alias, clear_tenant_alias
 from control.crypto import redact_job_error
 from control.db import ensure_tenant_connection
 from control.catalog import UNASSIGNED
 from control.models import Domain, Invoice, Plan, ProvisionJob, Tenant
 from control.naming import tenant_database_name, tenant_role_name, validate_tenant_slug
+
+logger = logging.getLogger(__name__)
 
 PROVISION_STALE_AFTER = timedelta(minutes=30)
 IDENT_RE = re.compile(r"^tenant_[a-z][a-z0-9_]{2,30}$")
@@ -131,9 +135,20 @@ def enqueue_create(
 
 
 def enqueue_retry(tenant):
+    """Queue another create that continues from completed_steps.
+
+    Only a failed tenant can be retried, and not while a create, delete, or
+    removal is already queued. The tenant goes back to provisioning.
+    """
+    tenant.refresh_from_db()
+    if tenant.status != Tenant.Status.FAILED:
+        raise ProvisionError("Only a failed tenant can be retried.")
+    _reject_if_create_or_delete_blocked(tenant)
     previous = tenant.jobs.order_by("-pk").first()
     payload = dict(previous.payload or {}) if previous else {}
     payload["completed_steps"] = list(payload.get("completed_steps") or [])
+    tenant.status = Tenant.Status.PROVISIONING
+    tenant.save(update_fields=["status"])
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.CREATE,
@@ -235,6 +250,13 @@ def enqueue_delete(tenant, confirm_slug):
     )
 
 
+def _reject_purge_with_invoices(tenant):
+    if tenant.invoices.exists():
+        raise ProvisionError(
+            "Void or resolve this tenant's invoices before removing the record."
+        )
+
+
 # A live workspace still uses the dump-then-drop delete. Removal is for a
 # tenant whose database login cannot be used.
 PURGEABLE_STATUSES = (
@@ -263,6 +285,7 @@ def enqueue_purge(tenant, confirm_slug):
         status__in=(ProvisionJob.Status.QUEUED, ProvisionJob.Status.RUNNING),
     ).exists():
         raise ProvisionError("A create, delete, or removal job is already queued for this tenant.")
+    _reject_purge_with_invoices(tenant)
     return ProvisionJob.objects.create(
         tenant=tenant,
         kind=ProvisionJob.Kind.PURGE,
@@ -431,6 +454,24 @@ def _status_after_restore(tenant, status_before):
     return _status_after_resume(tenant)
 
 
+def terminate_tenant_sessions(tenant) -> None:
+    """Drop other backends on this tenant database. Never the control database.
+
+    The maintenance connection itself is on the control database, so
+    ``pid <> pg_backend_pid()`` is a second guard rather than the only one.
+    """
+    name = (tenant.db_name or "").strip()
+    control_name = settings.DATABASES["default"]["NAME"]
+    if not name or name == control_name:
+        return
+    with maintenance_cursor() as cursor:
+        cursor.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            "WHERE datname = %s AND pid <> pg_backend_pid()",
+            [name],
+        )
+
+
 def _run_restore(job):
     """Hold the workspace offline, load the dump, then restore the prior status."""
     from control.backup import restore_tenant_database
@@ -443,6 +484,9 @@ def _run_restore(job):
         job.save(update_fields=["payload"])
     tenant.status = Tenant.Status.SUSPENDED
     tenant.save(update_fields=["status"])
+    job.step = "terminate"
+    job.save(update_fields=["step"])
+    terminate_tenant_sessions(tenant)
     job.step = "restore"
     job.save(update_fields=["step"])
     try:
@@ -455,6 +499,11 @@ def _run_restore(job):
     tenant.status = _status_after_restore(tenant, payload.get("status_before"))
     tenant.suspension_reason = ""
     tenant.save(update_fields=["status", "suspension_reason"])
+    ProvisionJob.objects.create(
+        tenant=tenant,
+        kind=ProvisionJob.Kind.MIGRATE,
+        status=ProvisionJob.Status.QUEUED,
+    )
 
 
 def delete_tenant(job, dump=None):
@@ -497,6 +546,7 @@ def purge_tenant(job):
         raise ProvisionError(
             "Only a failed or unfinished tenant can be removed without a backup."
         )
+    _reject_purge_with_invoices(tenant)
     if tenant.status != Tenant.Status.DELETED:
         tenant.status = Tenant.Status.DELETING
         tenant.save(update_fields=["status"])
@@ -565,9 +615,12 @@ def _run_claimed(job):
         elif job.kind == ProvisionJob.Kind.BACKUP:
             job.step = "dump"
             job.save(update_fields=["step"])
-            path = dump_tenant(job.tenant)
+            location = dump_tenant(job.tenant)
             payload = dict(job.payload or {})
-            payload["dump_path"] = path
+            payload.update(_dump_payload(job.tenant.slug, location))
+            pruned = _prune_after_backup(job.tenant.slug)
+            if pruned:
+                payload["pruned"] = pruned
             job.payload = payload
             job.save(update_fields=["payload"])
             _succeed(job)
@@ -582,6 +635,31 @@ def _run_claimed(job):
             raise ProvisionError("Unsupported provisioning job.")
     except Exception as exc:
         _fail(job, exc)
+
+
+def _dump_payload(slug: str, location: str) -> dict:
+    """Job-payload fields naming the finished dump. Never a credential."""
+    if not backup_store.configured():
+        return {"dump_path": location}
+    payload = {"dump_key": location}
+    try:
+        stored = backup_store.head(slug, location.rsplit("/", 1)[-1])
+    except backup_store.BackupStoreError:
+        stored = None
+    if stored:
+        payload["dump_bytes"] = stored["size"]
+    return payload
+
+
+def _prune_after_backup(slug: str) -> list[str]:
+    """Retention runs after a good backup. Its failure never fails the job."""
+    from control.backup import prune_backups
+
+    try:
+        return prune_backups(slug)
+    except Exception:  # noqa: BLE001 - logged, backup already succeeded
+        logger.exception("Backup retention failed for %s", slug)
+        return []
 
 
 def _succeed(job):

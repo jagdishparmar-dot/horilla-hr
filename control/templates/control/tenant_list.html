@@ -1,128 +1,155 @@
 {% extends "control/base.html" %}
 {% load control_ui %}
 {% block title %}Tenants{% endblock %}
-{% block breadcrumb %}Tenant Directory{% endblock %}
+{% block breadcrumb %}Tenants{% endblock %}
 {% block content %}
   <div class="mb-6">
-    <h1 class="control-title">HRMS Tenant Directory</h1>
+    <h1 class="control-title">Tenants</h1>
     <p class="control-lede">The tenant registry lists every customer workspace. Opening a row does not connect to that database.</p>
   </div>
 
-  <section class="control-kpi-strip mb-6" aria-label="Platform key metrics">
+  <section class="control-kpi-strip mb-6" aria-label="Platform summary">
     <div class="control-kpi-cell" data-kpi="managed">
-      <p class="control-kpi-label">Managed HRMS Tenants</p>
+      <p class="control-kpi-label">Tenants</p>
       <p class="control-kpi-value">{{ stats.total }}</p>
-      <p class="control-kpi-detail">{{ stats.active }} active · {{ stats.provisioning }} provisioning</p>
+      <p class="control-kpi-detail">{{ stats.active }} active · {{ stats.trialing }} trialing{% if stats.provisioning %} · {{ stats.provisioning }} provisioning{% endif %}</p>
     </div>
     <div class="control-kpi-cell" data-kpi="suspended">
-      <p class="control-kpi-label">Suspended Tenants</p>
+      <p class="control-kpi-label">Suspended</p>
       <p class="control-kpi-value">{{ stats.suspended }}</p>
-      <p class="control-kpi-detail">{% if stats.suspended %}Routing paused until resumed{% else %}All active hosts serving{% endif %}</p>
+      <p class="control-kpi-detail">{% if stats.suspended %}These hosts are not served{% else %}No workspaces are paused{% endif %}</p>
     </div>
     <div class="control-kpi-cell" data-kpi="failed-jobs">
-      <p class="control-kpi-label">Failed Jobs (Last 7 Days)</p>
+      <p class="control-kpi-label">Failed jobs</p>
       <p class="control-kpi-value {% if stats.failed_jobs_7d %}control-kpi-danger{% endif %}">{{ stats.failed_jobs_7d }}</p>
-      <p class="control-kpi-detail">Provisioner errors in 7-day window</p>
+      <p class="control-kpi-detail">Last 7 days</p>
     </div>
     <div class="control-kpi-cell" data-kpi="backup-stale">
-      <p class="control-kpi-label">Backup Missing or &gt;7d</p>
+      <p class="control-kpi-label">Backups to check</p>
       <p class="control-kpi-value {% if stats.backup_stale %}control-kpi-warn{% endif %}">{{ stats.backup_stale }}</p>
-      <p class="control-kpi-detail">{{ stats.no_backup }} missing · {{ stats.old_backup }} older than 7d</p>
+      <p class="control-kpi-detail">{{ stats.no_backup }} missing · {{ stats.old_backup }} older than 7 days</p>
     </div>
   </section>
 
   <div class="control-toolbar mb-4">
-    <div class="control-tabs" role="tablist" aria-label="Filter tenants by status">
+    <nav class="control-tabs" aria-label="Filter by status">
       {% for tab in status_tabs %}
         <a
-          role="tab"
-          aria-selected="{% if status_filter == tab.id %}true{% else %}false{% endif %}"
           class="control-tab {% if status_filter == tab.id %}control-tab-active{% endif %}"
+          {% if status_filter == tab.id %}aria-current="page"{% endif %}
           href="{% if tab.id %}?status={{ tab.id }}{% if query %}&amp;q={{ query|urlencode }}{% endif %}{% if plan_filter %}&amp;plan={{ plan_filter|urlencode }}{% endif %}{% else %}{% url 'control-home' %}{% if query or plan_filter %}?{% endif %}{% if query %}q={{ query|urlencode }}{% endif %}{% if query and plan_filter %}&amp;{% endif %}{% if plan_filter %}plan={{ plan_filter|urlencode }}{% endif %}{% endif %}"
         >
           <span>{{ tab.label }}</span>
           <span class="control-tab-count">{{ tab.count }}</span>
         </a>
       {% endfor %}
-    </div>
+    </nav>
 
-    <form class="control-search" method="get" action="{% url 'control-home' %}">
+    <form class="control-search" method="get" action="{% url 'control-home' %}" role="search">
       {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
       <label class="control-search-field">
+        <span class="sr-only">Search tenants</span>
         <svg class="control-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.25" stroke="currentColor" stroke-width="1.4"/><path d="m10.4 10.4 3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        <input class="control-input" type="search" name="q" value="{{ query }}" placeholder="Search company, host, or contact" aria-label="Search tenants">
+        <input class="control-input" type="search" name="q" value="{{ query }}" placeholder="Company, host, or contact">
       </label>
       <label class="sr-only" for="plan-filter">Plan</label>
-      <select id="plan-filter" class="control-input" name="plan" aria-label="Filter by plan" onchange="this.form.requestSubmit()">
+      <select id="plan-filter" class="control-input" name="plan" onchange="this.form.requestSubmit()">
         <option value="">All plans</option>
         {% for plan in plans %}
           <option value="{{ plan.code }}" {% if plan_filter == plan.code %}selected{% endif %}>{{ plan.name }}</option>
         {% endfor %}
       </select>
+      <button type="submit" class="control-btn-ghost control-search-submit">Search</button>
       {% if query or status_filter or plan_filter %}
-        <a href="{% url 'control-home' %}" class="control-btn-ghost no-underline">Clear Filters</a>
+        <a href="{% url 'control-home' %}" class="control-btn-ghost no-underline">Clear</a>
       {% endif %}
     </form>
   </div>
 
-  <section class="control-card overflow-hidden">
+  <section class="control-card overflow-hidden" aria-labelledby="directory-heading">
+    <div class="control-directory-head">
+      <h2 id="directory-heading" class="control-section-title">Workspaces</h2>
+      <p id="directory-count" class="control-directory-count">
+        {% if query or status_filter or plan_filter %}
+          Showing {{ rows|length }} of {{ stats.total }}
+        {% else %}
+          {{ rows|length }} workspace{{ rows|length|pluralize }}
+        {% endif %}
+      </p>
+    </div>
     <div class="control-table-wrap">
-      <table class="control-table control-table-directory">
+      <table class="control-table control-table-directory" aria-describedby="directory-count">
         <thead>
           <tr>
-            <th scope="col">Organization &amp; Domain</th>
-            <th scope="col">Subscription</th>
-            <th scope="col">Usage</th>
-            <th scope="col">Status</th>
-            <th scope="col">Last job</th>
-            <th scope="col">Last backup</th>
-            <th scope="col" class="text-right">Manage</th>
+            <th scope="col">Workspace</th>
+            <th scope="col">Plan and usage</th>
+            <th scope="col">Latest</th>
+            <th scope="col"><span class="sr-only">Open</span></th>
           </tr>
         </thead>
         <tbody>
           {% for row in rows %}
             <tr data-href="{% url 'control-tenant-detail' row.tenant.slug %}">
               <td>
-                <a href="{% url 'control-tenant-detail' row.tenant.slug %}" class="control-name">{{ row.tenant.name }}</a>
-                <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
-                  {% if row.primary_host %}
-                    <a href="http://{{ row.primary_host }}/" class="control-mono control-domain" target="_blank" rel="noopener">{{ row.primary_host }}</a>
-                  {% else %}
-                    <span class="control-mono control-muted">{{ row.tenant.slug }}</span>
-                  {% endif %}
+                <div class="control-identity">
+                  <span class="control-avatar" style="--hue: {{ row.tenant.name|avatar_hue }}" aria-hidden="true">{{ row.tenant.name|initials }}</span>
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <a href="{% url 'control-tenant-detail' row.tenant.slug %}" class="control-name">{{ row.tenant.name }}</a>
+                      {{ row.tenant.status|tenant_status_badge }}
+                    </div>
+                    <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                      <span class="control-mono control-muted">{{ row.tenant.slug }}</span>
+                      {% if row.primary_host %}
+                        <a href="http://{{ row.primary_host }}/" class="control-mono control-domain" target="_blank" rel="noopener" aria-label="Open {{ row.primary_host }} in a new tab">{{ row.primary_host }}</a>
+                      {% endif %}
+                    </div>
+                    {% if row.needs_setup %}<p class="mt-1 text-xs font-semibold text-amber-800">Setup pending</p>{% endif %}
+                  </div>
                 </div>
               </td>
               <td>
                 <div>{{ row.tenant.plan_label }}</div>
-                <div class="mt-0.5 text-xs control-muted">{{ row.tenant.get_cadence_display }}</div>
-                <div class="mt-0.5 text-xs control-muted">{{ row.tenant.module_names|join:", "|default:"No modules" }}</div>
-              </td>
-              <td class="control-mono text-xs">
-                <div>Seats {{ row.seat_pct }}%</div>
-                <div class="mt-0.5">Storage {{ row.storage_pct }}%</div>
+                <p class="mt-0.5 text-xs control-muted">{{ row.tenant.get_cadence_display }}</p>
+                <div class="control-usage">
+                  <div class="control-usage-line">
+                    <span>Seats {{ row.tenant.active_seats }} of {{ row.tenant.seat_limit }}</span>
+                    {% if row.tenant.seat_limit %}
+                      <span class="control-usage-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ row.seat_pct }}" aria-label="Seat use {{ row.seat_pct }} percent"{% if row.seat_pct >= 90 %} data-hot{% endif %}><span style="width: {{ row.seat_pct }}%"></span></span>
+                    {% endif %}
+                  </div>
+                  <div class="control-usage-line">
+                    {% if row.tenant.storage_limit_gb %}
+                      <span>Storage {{ row.tenant.used_storage_gb }} of {{ row.tenant.storage_limit_gb }} GB</span>
+                      <span class="control-usage-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ row.storage_pct }}" aria-label="Storage use {{ row.storage_pct }} percent"{% if row.storage_pct >= 90 %} data-hot{% endif %}><span style="width: {{ row.storage_pct }}%"></span></span>
+                    {% else %}
+                      <span>Storage not capped</span>
+                    {% endif %}
+                  </div>
+                </div>
               </td>
               <td>
-                {{ row.tenant.status|tenant_status_badge }}
-                {% if row.needs_setup %}<div class="mt-0.5 text-xs font-semibold text-amber-700">Setup pending</div>{% endif %}
-              </td>
-              <td class="control-mono control-muted">{{ row.last_job|default:"—" }}</td>
-              <td class="control-muted">
-                {% if row.last_backup_at %}{{ row.last_backup_at|date:"M j, Y H:i" }}{% else %}No backup{% endif %}
+                <div>{% if row.last_job %}{{ row.last_job|capfirst }}{% else %}<span class="control-muted">No jobs yet</span>{% endif %}</div>
+                <div class="mt-1">
+                  <a href="{% url 'control-tenant-detail' row.tenant.slug %}?section=operations#backups" class="control-quiet-link" aria-label="View backups for {{ row.tenant.name }}">
+                    {% if row.last_backup_at %}Backup {{ row.last_backup_at|date:"M j, Y H:i" }}{% else %}No backup{% endif %}
+                  </a>
+                </div>
               </td>
               <td class="text-right">
-                <a href="{% url 'control-tenant-detail' row.tenant.slug %}" class="control-inspect"><span>Inspect</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 11 11 5M6.5 5H11v4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+                <a href="{% url 'control-tenant-detail' row.tenant.slug %}" class="control-inspect" aria-label="Inspect {{ row.tenant.name }}"><span aria-hidden="true">Inspect</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 11 11 5M6.5 5H11v4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="7">
+              <td colspan="4">
                 <div class="control-empty">
                   {% if query or status_filter or plan_filter %}
                     <p class="control-section-title">No tenants match the active filters</p>
-                    <a href="{% url 'control-home' %}" class="control-btn-ghost mt-4 no-underline">Clear Filters</a>
+                    <a href="{% url 'control-home' %}" class="control-btn-ghost mt-4 no-underline">Clear filters</a>
                   {% else %}
-                    <p class="control-section-title">No HRMS tenants provisioned yet</p>
-                    <a href="{% url 'control-tenant-create' %}" class="control-btn-primary mt-4">Provision First Tenant</a>
+                    <p class="control-section-title">No tenants yet</p>
+                    <a href="{% url 'control-tenant-create' %}" class="control-btn-primary mt-4">Provision first tenant</a>
                   {% endif %}
                 </div>
               </td>

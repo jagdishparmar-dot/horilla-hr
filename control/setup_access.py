@@ -24,10 +24,16 @@ class SetupAccessError(Exception):
 
 
 def invite_state(tenant) -> str:
-    """Pending, accepted, or not_issued. The password itself is not returned."""
+    """Pending, accepted, or not_issued. The password itself is not returned.
+
+    Accepted means the setup password was cleared and the tenant has been
+    activated at least once. The current status does not matter: a suspended
+    or past-due workspace that already finished Initialize Database stays
+    accepted. A row that never activated, and has no password, is not issued.
+    """
     if tenant.setup_password_encrypted:
         return "pending"
-    if tenant.status in (Tenant.Status.ACTIVE, Tenant.Status.TRIALING):
+    if tenant.activated_at is not None:
         return "accepted"
     return "not_issued"
 

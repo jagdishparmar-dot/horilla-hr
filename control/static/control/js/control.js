@@ -69,8 +69,10 @@ document.addEventListener("click", (event) => {
     const target = document.getElementById(reveal.getAttribute("data-toggle-secret"));
     if (!target) return;
     const visible = target.getAttribute("data-visible") === "true";
-    target.setAttribute("data-visible", visible ? "false" : "true");
+    const next = visible ? "false" : "true";
+    target.setAttribute("data-visible", next);
     reveal.textContent = visible ? "Show" : "Hide";
+    reveal.setAttribute("aria-pressed", next);
     return;
   }
 
@@ -87,7 +89,11 @@ document.addEventListener("click", (event) => {
       document.querySelectorAll("[data-section-tab]").forEach((tab) => {
         const active = tab.getAttribute("data-section-tab") === selected;
         tab.classList.toggle("control-section-tab-active", active);
-        tab.setAttribute("aria-selected", active ? "true" : "false");
+        if (active) {
+          tab.setAttribute("aria-current", "page");
+        } else {
+          tab.removeAttribute("aria-current");
+        }
       });
       if (window.history && window.history.replaceState) {
         const url = new URL(window.location.href);

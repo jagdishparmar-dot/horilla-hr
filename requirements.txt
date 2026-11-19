@@ -93,6 +93,11 @@ google-cloud-storage==3.0.0
 # Geolocation
 geopy==2.5.0
 
+# Tenant backup store (S3-compatible: AWS S3, R2, B2, MinIO, ...).
+# control/backup_store.py builds its client from BACKUP_S3_* env vars at the
+# moment of use. Pure Python, so pinned exactly per the rule above.
+boto3==1.40.0
+
 # Biometric device integration
 # Sdist-only (no wheel published), but pure Python, so the "build" needs
 # only setuptools -- no compiler. Exact pin is safe.

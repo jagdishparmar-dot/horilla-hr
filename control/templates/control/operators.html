@@ -59,10 +59,15 @@
                   {% endif %}
                 </td>
                 <td class="text-right">
-                  {% if row.is_active %}
+                  {% if operator.is_staff and row.is_active %}
                     <form method="post" action="{% url 'control-operator-deactivate' row.pk %}" class="inline">
                       {% csrf_token %}
                       <button type="submit" class="control-btn-warn" data-confirm="Deactivate {{ row.email }}? They will not be able to sign in.">Deactivate</button>
+                    </form>
+                  {% elif operator.is_staff %}
+                    <form method="post" action="{% url 'control-operator-reactivate' row.pk %}" class="inline">
+                      {% csrf_token %}
+                      <button type="submit" class="control-btn-ghost">Reactivate</button>
                     </form>
                   {% endif %}
                 </td>
@@ -83,6 +88,13 @@
         {% csrf_token %}
         {% include "control/partials/form_fields.html" %}
         <button type="submit" class="control-btn-primary w-full">Create operator</button>
+      </form>
+      <h2 class="control-section-title mt-8">Change my password</h2>
+      <p class="control-help">This signs out every other session for your account.</p>
+      <form method="post" action="{% url 'control-operator-password' %}" class="mt-4">
+        {% csrf_token %}
+        {% include "control/partials/form_fields.html" with form=password_form %}
+        <button type="submit" class="control-btn-ghost w-full">Change password</button>
       </form>
     </section>
   </div>

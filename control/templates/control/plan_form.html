@@ -13,7 +13,7 @@
       <button type="submit" class="control-btn-primary">Save plan</button>
       <a href="{% url 'control-plans' %}" class="control-btn-ghost no-underline">Back</a>
     </form>
-    {% if request.resolver_match.url_name == "control-plan-edit" %}
+    {% if operator.is_staff and request.resolver_match.url_name == "control-plan-edit" %}
       <form method="post" action="{% url 'control-plan-delete' request.resolver_match.kwargs.code %}" class="mt-6">
         {% csrf_token %}
         <button type="submit" class="control-btn-danger" data-confirm="Archive this plan if tenants use it, or delete it if none do?">Archive or delete</button>

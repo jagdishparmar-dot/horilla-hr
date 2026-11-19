@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'control/css/control.css' %}?v=20261118a">
-  <script src="{% static 'control/js/control.js' %}?v=20261118a" defer></script>
+  <link rel="stylesheet" href="{% static 'control/css/control.css' %}?v=20261119f">
+  <script src="{% static 'control/js/control.js' %}?v=20261119d" defer></script>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -106,12 +106,13 @@
             <span class="control-crumb-current">{% block breadcrumb %}Platform{% endblock %}</span>
           </nav>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           {% if operator %}
             <a href="{% url 'control-tenant-create' %}" class="control-btn-primary no-underline">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               <span>Provision Tenant</span>
             </a>
+            <a href="{% url 'control-operator-password' %}" class="control-btn-quiet no-underline">Password</a>
             <form method="post" action="{% url 'control-logout' %}">
               {% csrf_token %}
               <button type="submit" class="control-btn-quiet">Sign out</button>
@@ -120,6 +121,9 @@
         </div>
       </header>
       <main class="control-page">
+        {% if provisioner_notice %}
+          <p class="control-alert-error mb-4" role="status">{{ provisioner_notice }}</p>
+        {% endif %}
         {% include "control/partials/messages.html" %}
         {% block content %}{% endblock %}
       </main>
