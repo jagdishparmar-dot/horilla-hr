@@ -172,5 +172,8 @@ CLAUDE.md
 /tmp/
 /_tmp_*
 
+# Play Store captures from a signed-in device. They include employee data.
+/playstore/
+
 # Per-tenant database dumps. Never commit these.
 /backups/
