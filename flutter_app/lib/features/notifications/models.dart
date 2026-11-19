@@ -3,6 +3,18 @@ import 'package:hugeicons/hugeicons.dart';
 
 enum NotificationLevel { success, info, warning, error }
 
+/// Web notifications store a gettext template such as
+/// `%(attendance_date)s` and the real values in `data.verb_params`.
+String _fillVerbParams(String text, Map<String, dynamic>? data) {
+  final raw = data?['verb_params'];
+  if (raw is! Map || raw.isEmpty || !text.contains('%(')) return text;
+  return text.replaceAllMapped(RegExp(r'%\(([A-Za-z0-9_]+)\)[sdi]'), (match) {
+    final value = raw[match.group(1)];
+    if (value == null) return match.group(0)!;
+    return value.toString();
+  });
+}
+
 /// Where a notification comes from. Drives the icon, color and filter chips.
 enum NotificationCategory { requests, attendance, updates, general }
 
@@ -75,10 +87,15 @@ class AppNotification {
       data = Map<String, dynamic>.from(rawData);
     }
 
+    final verb = _fillVerbParams(json['verb'] as String? ?? '', data);
+    final description = json['description'] == null
+        ? null
+        : _fillVerbParams(json['description'].toString(), data);
+
     return AppNotification(
       id: json['id'] as int,
-      verb: json['verb'] as String? ?? '',
-      description: json['description'] as String?,
+      verb: verb,
+      description: description,
       unread: json['unread'] as bool? ?? false,
       deleted: json['deleted'] as bool? ?? false,
       timestamp: ts,

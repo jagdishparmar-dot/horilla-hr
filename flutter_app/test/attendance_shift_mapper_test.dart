@@ -454,4 +454,27 @@ void main() {
     expect(schedule.companyToday, DateTime(2026, 3, 10));
     expect(schedule.timezone, 'Asia/Kolkata');
   });
+
+  test('a calendar date shows time worked, not the check-in clock', () {
+    final worked = AttendanceDay(
+      date: DateTime(2026, 3, 10),
+      status: AttendanceStatus.present,
+      clockIn: '09:41',
+      workedSeconds: 8 * 3600 + 30 * 60,
+    );
+    expect(calendarWorkedText(worked), '8h 30m');
+
+    final open = AttendanceDay(
+      date: DateTime(2026, 3, 10),
+      status: AttendanceStatus.missingOut,
+      clockIn: '09:41',
+    );
+    expect(calendarWorkedText(open), '0h');
+
+    final absent = AttendanceDay(
+      date: DateTime(2026, 3, 10),
+      status: AttendanceStatus.absent,
+    );
+    expect(calendarWorkedText(absent), '—');
+  });
 }

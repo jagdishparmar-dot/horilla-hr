@@ -13,6 +13,8 @@ import '../home/home_provider.dart';
 import '../home/home_typography.dart';
 import '../home/models.dart';
 import 'activity_center_screen.dart';
+import 'contract_screen.dart';
+import 'claims_screen.dart';
 import 'change_password_screen.dart';
 import '../directory/directory_screen.dart';
 import 'documents_repository.dart';
@@ -35,6 +37,8 @@ class MoreScreen extends ConsumerWidget {
   Future<void> _refresh(WidgetRef ref) async {
     ref.invalidate(mobileHomeProvider);
     ref.invalidate(payslipsProvider);
+    ref.invalidate(contractsProvider);
+    ref.invalidate(expenseClaimsProvider);
     ref.invalidate(policiesProvider);
     ref.invalidate(documentsProvider);
     ref.invalidate(ticketsProvider);
@@ -129,6 +133,9 @@ class MoreScreen extends ConsumerWidget {
     // Subtitles come from the same endpoints the detail screens use. A failed
     // or still-loading call just falls back to the static description.
     final payslips = ref.watch(payslipsProvider).asData?.value;
+    final contracts = ref.watch(contractsProvider).asData?.value;
+    final currentContract = preferredContract(contracts ?? const []);
+    final claims = ref.watch(expenseClaimsProvider).asData?.value;
     final policies = ref.watch(policiesProvider).asData?.value;
     final documents = ref.watch(documentsProvider).asData?.value;
     final tickets = ref.watch(ticketsProvider).asData?.value;
@@ -199,6 +206,29 @@ class MoreScreen extends ConsumerWidget {
                                 ? 'No payslips issued yet'
                                 : 'Latest: ${payslips.first.periodLabel}',
                             onTap: () => _open(context, const PayslipsScreen()),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedContracts,
+                            color: const Color(0xFF0F766E),
+                            title: 'Pay',
+                            subtitle: contracts == null
+                                ? 'Salary, dates and pay file'
+                                : currentContract == null
+                                ? 'No pay details yet'
+                                : '${currentContract.statusLabel} · ${currentContract.payLabel}',
+                            onTap: () => _open(context, const ContractScreen()),
+                          ),
+                          _MenuTile(
+                            icon: HugeIcons.strokeRoundedReceipt,
+                            color: const Color(0xFFD97706),
+                            title: 'Expense claims',
+                            subtitle: claims == null
+                                ? 'Receipts and reimbursements'
+                                : claims.isEmpty
+                                ? 'No claims yet'
+                                : '${claims.first.statusLabel} · ${claims.first.title}',
+                            onTap: () =>
+                                _open(context, const ExpenseClaimsScreen()),
                           ),
                           _MenuTile(
                             icon: HugeIcons.strokeRoundedFolder01,

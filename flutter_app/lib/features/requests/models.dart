@@ -131,7 +131,7 @@ extension RequestStatusX on RequestStatus {
 }
 
 /// Which Horilla record a row came from. Cancel and detail calls follow this.
-enum RequestSource { leave, attendance, workType, shift }
+enum RequestSource { leave, attendance, workType, shift, allocation }
 
 enum RequestListFilter { all, leave, permission, remote, attendance, shift }
 
@@ -174,6 +174,7 @@ class LeaveRequestItem {
     this.timeline,
     this.source = RequestSource.leave,
     this.durationOverride,
+    this.leaveTypeId,
   });
 
   final int id;
@@ -191,6 +192,9 @@ class LeaveRequestItem {
   /// Clock window or other label that replaces the day count on the card.
   final String? durationOverride;
 
+  /// Leave type on an extra-leave allocation. Needed to save an edit.
+  final int? leaveTypeId;
+
   /// Nullable so hot-reload of older mock instances does not crash.
   final List<ApprovalStep>? timeline;
 
@@ -207,6 +211,7 @@ class LeaveRequestItem {
   String get categoryLabel => switch (source) {
     RequestSource.attendance => 'Attendance',
     RequestSource.shift => 'Shift',
+    RequestSource.allocation => 'Extra leave',
     RequestSource.workType =>
       kind == RequestKind.remote ? 'Remote work' : 'Work type',
     RequestSource.leave => switch (kind) {
@@ -219,14 +224,21 @@ class LeaveRequestItem {
   bool matchesFilter(RequestListFilter filter) => switch (filter) {
     RequestListFilter.all => true,
     RequestListFilter.leave =>
-      source == RequestSource.leave &&
-          kind != RequestKind.permission &&
-          kind != RequestKind.remote,
+      source == RequestSource.allocation ||
+          (source == RequestSource.leave &&
+              kind != RequestKind.permission &&
+              kind != RequestKind.remote),
     RequestListFilter.permission => kind == RequestKind.permission,
     RequestListFilter.remote => kind == RequestKind.remote,
     RequestListFilter.attendance => source == RequestSource.attendance,
     RequestListFilter.shift => source == RequestSource.shift,
   };
+
+  /// Extra leave can be changed only while it is still waiting for approval.
+  bool get canEdit =>
+      source == RequestSource.allocation &&
+      status == RequestStatus.pending &&
+      leaveTypeId != null;
 
   /// Pending rows can be withdrawn. An approved leave can ask to be cancelled.
   bool get canCancel {
@@ -254,6 +266,9 @@ class LeaveRequestItem {
     if (source == RequestSource.shift) {
       return HugeIcons.strokeRoundedClock01;
     }
+    if (source == RequestSource.allocation) {
+      return HugeIcons.strokeRoundedCalendarAdd01;
+    }
     return switch (kind) {
       RequestKind.remote => HugeIcons.strokeRoundedHome01,
       RequestKind.annual => HugeIcons.strokeRoundedSun03,
@@ -267,6 +282,7 @@ class LeaveRequestItem {
   Color get accent {
     if (source == RequestSource.attendance) return const Color(0xFF8B5CF6);
     if (source == RequestSource.shift) return AppColors.navBlue;
+    if (source == RequestSource.allocation) return const Color(0xFF0F766E);
     return switch (kind) {
       RequestKind.remote => const Color(0xFF22B8E8),
       RequestKind.annual => const Color(0xFF22C55E),

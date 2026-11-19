@@ -11,6 +11,7 @@ import '../../core/api/dio_client.dart';
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../auth/auth_provider.dart';
+import '../more/profile_screen.dart';
 import '../shell/main_shell.dart';
 import 'fence_status_line.dart';
 import 'home_extra_sections.dart';
@@ -155,18 +156,19 @@ class _PinnedRefresh extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFFF0F5FF), Colors.white],
+              colors: [Color(0xFFF4F7FF), Colors.white],
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(16, top + 10, 16, 12),
-                child: header,
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x1A1E3A8A),
+                blurRadius: 16,
+                offset: Offset(0, 6),
               ),
-              const Divider(height: 1, thickness: 1, color: homeLine),
             ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, top + 10, 16, 14),
+            child: header,
           ),
         ),
         Expanded(
@@ -200,7 +202,7 @@ class _PinnedRefresh extends StatelessWidget {
   }
 }
 
-class _Header extends ConsumerWidget {
+class _Header extends StatelessWidget {
   const _Header({required this.home});
 
   final MobileHome home;
@@ -219,7 +221,7 @@ class _Header extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final avatar = _resolveAvatar(home.avatarUrl);
     final role = home.roleLine;
     final dateLabel = DateFormat('EEEE, MMM d').format(DateTime.now());
@@ -231,73 +233,74 @@ class _Header extends ConsumerWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        PopupMenuButton<String>(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          onSelected: (value) {
-            if (value == 'logout') {
-              ref.read(authProvider.notifier).logout();
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'logout', child: Text('Sign out')),
-          ],
-          child: SizedBox(
-            width: 52,
-            height: 52,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                DecoratedBox(
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomLeft,
-                      end: Alignment.topRight,
-                      colors: [
-                        homePrimary,
-                        Color(0xFF638AFF),
-                        Color(0xFFA3F69C),
-                      ],
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.white,
-                      backgroundImage: avatar != null
-                          ? CachedNetworkImageProvider(avatar)
-                          : null,
-                      child: avatar == null
-                          ? Text(
-                              home.firstName.isNotEmpty
-                                  ? home.firstName[0].toUpperCase()
-                                  : '?',
-                              style: HomeType.headline(
-                                color: homePrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
+        Semantics(
+          button: true,
+          label: 'Profile',
+          child: GestureDetector(
+            key: const Key('home-avatar'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ProfileScreen(backLabel: null),
                 ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: homeGreenDeep,
+              );
+            },
+            child: SizedBox(
+              width: 52,
+              height: 52,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  DecoratedBox(
+                    decoration: const BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomLeft,
+                        end: Alignment.topRight,
+                        colors: [
+                          homePrimary,
+                          Color(0xFF638AFF),
+                          Color(0xFFA3F69C),
+                        ],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Colors.white,
+                        backgroundImage: avatar != null
+                            ? CachedNetworkImageProvider(avatar)
+                            : null,
+                        child: avatar == null
+                            ? Text(
+                                home.firstName.isNotEmpty
+                                    ? home.firstName[0].toUpperCase()
+                                    : '?',
+                                style: HomeType.headline(
+                                  color: homePrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              )
+                            : null,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: homeGreenDeep,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

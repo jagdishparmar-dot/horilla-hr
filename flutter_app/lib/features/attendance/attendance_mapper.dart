@@ -38,6 +38,14 @@ String formatHhMmFromSeconds(int seconds) {
   return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 }
 
+/// Compact duration under a calendar date. A punched day with no
+/// accumulated time reads as zero; a day with no punch stays blank.
+String calendarWorkedText(AttendanceDay day) {
+  if (day.workedSeconds > 0) return formatSeconds(day.workedSeconds);
+  if (day.hasPunch) return '0h';
+  return '—';
+}
+
 String formatSeconds(int seconds) {
   final s = seconds < 0 ? 0 : seconds;
   final h = s ~/ 3600;

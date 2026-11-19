@@ -436,7 +436,7 @@ class LeaveAllocationRequestGetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LeaveAllocationRequest
-        exclude = ["requested_date", "created_at", "reject_reason"]
+        exclude = ["created_at"]
 
     def get_employee_id(self, obj):
         employee = obj.employee_id

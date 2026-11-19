@@ -33,3 +33,27 @@ void invalidateRequests(dynamic ref) {
   // ignore: avoid_dynamic_calls
   ref.invalidate(leaveRequestsProvider);
 }
+
+typedef AllocationEditor = Future<void> Function({
+  required int id,
+  required int leaveTypeId,
+  required num days,
+  required String description,
+});
+
+final allocationEditorProvider = Provider<AllocationEditor>((ref) {
+  final repository = ref.watch(requestsRepositoryProvider);
+  return ({
+    required int id,
+    required int leaveTypeId,
+    required num days,
+    required String description,
+  }) {
+    return repository.updateAllocation(
+      id: id,
+      leaveTypeId: leaveTypeId,
+      days: days,
+      description: description,
+    );
+  };
+});

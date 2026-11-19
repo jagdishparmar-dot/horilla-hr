@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:horilla_employee/features/home/home_provider.dart';
 import 'package:horilla_employee/features/home/home_screen.dart';
 import 'package:horilla_employee/features/home/models.dart';
+import 'package:horilla_employee/features/more/more_providers.dart';
+import 'package:horilla_employee/features/more/profile_screen.dart';
 
 MobileHome _home() {
   return MobileHome(
@@ -26,6 +28,7 @@ MobileHome _home() {
 Future<void> _pumpHome(
   WidgetTester tester, {
   required Override override,
+  List<Override> extra = const [],
   double statusBar = 48,
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -36,7 +39,7 @@ Future<void> _pumpHome(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [override],
+      overrides: [override, ...extra],
       child: const MaterialApp(home: HomeScreen()),
     ),
   );
@@ -136,5 +139,26 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('avatar opens the employee profile', (tester) async {
+    await _pumpHome(
+      tester,
+      override: mobileHomeProvider.overrideWith((ref) async => _home()),
+      extra: [
+        profileBundleProvider.overrideWith((ref) async {
+          throw Exception('offline');
+        }),
+      ],
+    );
+
+    expect(find.text('Sign out'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('home-avatar')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(find.text('My Profile'), findsOneWidget);
   });
 }

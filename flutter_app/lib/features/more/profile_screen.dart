@@ -14,7 +14,10 @@ import 'more_providers.dart';
 import 'more_widgets.dart';
 
 class ProfileScreen extends ConsumerWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.backLabel = 'More'});
+
+  /// Shown beside the back arrow. Home opens this screen with no label.
+  final String? backLabel;
 
   Future<void> _refresh(WidgetRef ref) async {
     ref.invalidate(mobileHomeProvider);
@@ -35,7 +38,7 @@ class ProfileScreen extends ConsumerWidget {
 
     return MorePage(
       title: 'My Profile',
-      backLabel: 'More',
+      backLabel: backLabel,
       actions: [
         if (bundle != null)
           IconButton(

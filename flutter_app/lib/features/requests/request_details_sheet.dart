@@ -7,6 +7,7 @@ import '../../core/api/dio_client.dart';
 import '../../core/theme.dart';
 import '../home/home_provider.dart';
 import 'models.dart';
+import 'allocation_edit_screen.dart';
 import 'requests_provider.dart';
 import 'requests_repository.dart';
 
@@ -79,6 +80,13 @@ class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
     RequestStatus.rejected => HugeIcons.strokeRoundedCancelCircle,
     RequestStatus.cancelled => HugeIcons.strokeRoundedCancel01,
   };
+
+  Future<void> _edit() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => AllocationEditScreen(item: item)),
+    );
+    if (saved == true && mounted) Navigator.of(context).pop();
+  }
 
   Future<void> _cancel() async {
     final approvedLeave =
@@ -388,6 +396,26 @@ class _RequestDetailsSheetState extends ConsumerState<_RequestDetailsSheet> {
                           fontSize: 14,
                           color: AppColors.textPrimary,
                           height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (item.canEdit) ...[
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _edit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.navBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          'Edit',
+                          style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
                     ),

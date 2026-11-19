@@ -98,12 +98,19 @@ class RequestsRepository {
           employeeId,
         ).then((rows) => rows.map(mapShiftRequest).toList()),
       ),
+      _safeList(
+        () => _fetchOwned(
+          '/leave/user-allocation-request/',
+          employeeId,
+        ).then((rows) => rows.map(mapAllocationRequest).toList()),
+      ),
     ]);
     final items = <LeaveRequestItem>[
       ...leave,
       ...extras[0],
       ...extras[1],
       ...extras[2],
+      ...extras[3],
     ];
     items.sort((a, b) {
       final byDate = b.startDate.compareTo(a.startDate);
@@ -175,6 +182,26 @@ class RequestsRepository {
     }
   }
 
+  Future<void> updateAllocation({
+    required int id,
+    required int leaveTypeId,
+    required num days,
+    required String description,
+  }) async {
+    try {
+      await _dio.put(
+        '/leave/user-allocation-request/$id/',
+        data: allocationUpdateBody(
+          leaveTypeId: leaveTypeId,
+          days: days,
+          description: description,
+        ),
+      );
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
   Future<void> cancelRequest(LeaveRequestItem item) async {
     try {
       switch (item.source) {
@@ -199,6 +226,8 @@ class RequestsRepository {
             '/base/shift-request-cancel/${item.id}',
             data: const {},
           );
+        case RequestSource.allocation:
+          await _dio.delete('/leave/user-allocation-request/${item.id}/');
       }
     } on DioException catch (e) {
       throwApi(e);
@@ -329,6 +358,47 @@ LeaveBalance mapLeaveBalance(Map<String, dynamic> json) {
     total: total,
     unit: _inferUnit(name, typeMap?['period_in'] as String?),
     kind: _inferBalanceKind(name),
+  );
+}
+
+/// Body for `PUT /leave/user-allocation-request/<id>/` while it is still requested.
+Map<String, dynamic> allocationUpdateBody({
+  required int leaveTypeId,
+  required num days,
+  required String description,
+}) {
+  return {
+    'leave_type_id': leaveTypeId,
+    'requested_days': days,
+    'description': description,
+  };
+}
+
+LeaveRequestItem mapAllocationRequest(Map<String, dynamic> json) {
+  final leaveType = json['leave_type_id'];
+  var title = 'Extra leave';
+  int? leaveTypeId;
+  if (leaveType is Map) {
+    title = leaveType['name'] as String? ?? title;
+    leaveTypeId = leaveType['id'] as int?;
+  } else if (leaveType is int) {
+    leaveTypeId = leaveType;
+  }
+  final day = _parseDay(json['requested_date']);
+  final reason = json['description']?.toString().trim();
+  final rejection = json['reject_reason']?.toString().trim();
+  return LeaveRequestItem(
+    id: json['id'] as int? ?? 0,
+    title: title,
+    status: RequestStatusX.fromApi(json['status'] as String?),
+    requestedDays: json['requested_days'] as num? ?? 0,
+    startDate: day,
+    endDate: day,
+    kind: RequestKind.other,
+    reason: reason == null || reason.isEmpty ? null : reason,
+    rejectionReason: rejection == null || rejection.isEmpty ? null : rejection,
+    source: RequestSource.allocation,
+    leaveTypeId: leaveTypeId,
   );
 }
 

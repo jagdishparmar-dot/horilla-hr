@@ -1,3 +1,5 @@
+import '../more/more_models.dart';
+
 class MobileHome {
   MobileHome({
     required this.employeeId,
@@ -217,7 +219,9 @@ class HomeAnnouncement {
     return HomeAnnouncement(
       id: json['id'] as int? ?? 0,
       title: json['title'] as String? ?? 'Announcement',
-      description: json['description'] as String?,
+      description: json['description'] == null
+          ? null
+          : stripHtml(json['description']?.toString()),
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
       expireDate: DateTime.tryParse(json['expire_date'] as String? ?? ''),
     );

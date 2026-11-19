@@ -11,6 +11,7 @@ import '../attendance/models.dart';
 import '../requests/models.dart';
 import '../requests/request_details_sheet.dart';
 import '../shell/main_shell.dart';
+import 'announcements_screen.dart';
 import 'home_typography.dart';
 import 'models.dart';
 
@@ -313,10 +314,18 @@ class HomeAnnouncementSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const HomeSectionTitle(
+        HomeSectionTitle(
           title: 'Announcement',
           icon: HugeIcons.strokeRoundedMegaphone01,
           showBar: true,
+          actionLabel: 'View all',
+          onAction: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const AnnouncementsScreen(),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 12),
         Material(

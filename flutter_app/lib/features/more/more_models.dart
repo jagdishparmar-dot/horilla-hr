@@ -402,6 +402,174 @@ class PayslipItem {
 }
 
 // ---------------------------------------------------------------------------
+// Payslip file
+// ---------------------------------------------------------------------------
+
+enum PayslipFileKind { pdf, html }
+
+/// What `GET /payroll/payslip-download/<id>` actually returned.
+///
+/// A PDF is the file. HTML is the same payslip when the server has no PDF
+/// renderer. Any error status means this attempt did not produce a file.
+PayslipFileKind? payslipFileKind({
+  required int? statusCode,
+  required String? contentType,
+}) {
+  if (statusCode == null || statusCode >= 400) return null;
+  final type = (contentType ?? '').toLowerCase();
+  if (type.contains('pdf')) return PayslipFileKind.pdf;
+  if (type.contains('html')) return PayslipFileKind.html;
+  return null;
+}
+
+String payslipFileName(int id, PayslipFileKind kind) {
+  final ext = kind == PayslipFileKind.html ? 'html' : 'pdf';
+  return 'payslip-$id.$ext';
+}
+
+// ---------------------------------------------------------------------------
+// Employment contract
+// ---------------------------------------------------------------------------
+
+class ContractItem {
+  const ContractItem({
+    required this.id,
+    required this.employeeId,
+    required this.name,
+    required this.startDate,
+    required this.status,
+    required this.wage,
+    this.endDate,
+    this.wageType = 'monthly',
+    this.payFrequency,
+    this.hourlyWage,
+    this.monthlyCtc,
+    this.noticeDays,
+    this.department,
+    this.jobPosition,
+    this.jobRole,
+    this.shift,
+    this.workType,
+    this.documentUrl,
+    this.note,
+  });
+
+  final int id;
+  final int employeeId;
+  final String name;
+  final DateTime startDate;
+  final DateTime? endDate;
+  final String status;
+  final String wageType;
+  final String? payFrequency;
+  final double wage;
+  final double? hourlyWage;
+  final double? monthlyCtc;
+  final int? noticeDays;
+  final String? department;
+  final String? jobPosition;
+  final String? jobRole;
+  final String? shift;
+  final String? workType;
+  final String? documentUrl;
+  final String? note;
+
+  factory ContractItem.fromJson(Map<String, dynamic> json) {
+    final start = _date(json['contract_start_date']) ?? DateTime.now();
+    final ctc = _double(json['monthly_ctc']);
+    final hourly = _double(json['hourly_wage']);
+    return ContractItem(
+      id: _int(json['id']) ?? 0,
+      employeeId: _int(json['employee_id']) ?? 0,
+      name: _str(json['contract_name']) ?? 'Pay',
+      startDate: start,
+      endDate: _date(json['contract_end_date']),
+      status: _str(json['contract_status']) ?? 'draft',
+      wageType: _str(json['wage_type']) ?? 'monthly',
+      payFrequency: _str(json['pay_frequency']),
+      wage: _double(json['wage']) ?? 0,
+      hourlyWage: hourly == null || hourly <= 0 ? null : hourly,
+      monthlyCtc: ctc == null || ctc <= 0 ? null : ctc,
+      noticeDays: _int(json['notice_period_in_days']),
+      department: _str(json['department_name']),
+      jobPosition: _str(json['job_position_name']),
+      jobRole: _str(json['job_role_name']),
+      shift: _str(json['shift_name']),
+      workType: _str(json['work_type_name']),
+      documentUrl: _str(json['contract_document']),
+      note: _str(json['note']),
+    );
+  }
+
+  bool get isActive => status == 'active';
+
+  String get statusLabel => switch (status) {
+    'active' => 'Active',
+    'expired' => 'Expired',
+    'terminated' => 'Terminated',
+    'draft' => 'Draft',
+    _ => humanize(status),
+  };
+
+  String get payLabel {
+    final hourly = wageType == 'hourly';
+    final amount = hourly ? (hourlyWage ?? wage) : wage;
+    final unit = switch (wageType) {
+      'daily' => 'day',
+      'hourly' => 'hour',
+      _ => 'month',
+    };
+    return '${formatMoney(amount)} / $unit';
+  }
+
+  String? get ctcLabel => monthlyCtc == null ? null : formatMoney(monthlyCtc!);
+
+  String get dateLabel {
+    final fmt = DateFormat('d MMM yyyy');
+    final start = fmt.format(startDate);
+    if (endDate == null) return '$start · open ended';
+    return '$start – ${fmt.format(endDate!)}';
+  }
+
+  String? get noticeLabel {
+    final days = noticeDays;
+    if (days == null || days <= 0) return null;
+    return days == 1 ? '1 day' : '$days days';
+  }
+
+  String? get frequencyLabel => switch (payFrequency) {
+    'weekly' => 'Weekly',
+    'semi_monthly' => 'Semi-monthly',
+    'monthly' => 'Monthly',
+    null => null,
+    _ => humanize(payFrequency),
+  };
+}
+
+/// This employee's contracts, active first, then newest start date.
+List<ContractItem> contractsForEmployee(
+  List<ContractItem> items,
+  int employeeId,
+) {
+  final own = items.where((item) => item.employeeId == employeeId).toList();
+  own.sort((a, b) {
+    if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
+    return b.startDate.compareTo(a.startDate);
+  });
+  return own;
+}
+
+ContractItem? preferredContract(List<ContractItem> items) {
+  if (items.isEmpty) return null;
+  final sorted = [...items]
+    ..sort((a, b) {
+      if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
+      return b.startDate.compareTo(a.startDate);
+    });
+  return sorted.first;
+}
+
+// ---------------------------------------------------------------------------
 // Policies
 // ---------------------------------------------------------------------------
 
@@ -635,4 +803,268 @@ class ActivityEvent {
   final DateTime at;
   final bool unread;
   final Color? accent;
+}
+
+// ---------------------------------------------------------------------------
+// Expense claims
+// ---------------------------------------------------------------------------
+
+class ExpenseClaim {
+  const ExpenseClaim({
+    required this.id,
+    required this.employeeId,
+    required this.title,
+    required this.type,
+    required this.status,
+    this.date,
+    this.amount,
+    this.description,
+    this.leaveType,
+    this.availableDays,
+    this.carryForwardDays,
+    this.bonusPoints,
+    this.files = const [],
+  });
+
+  final int id;
+  final int employeeId;
+  final String title;
+  final String type;
+  final String status;
+  final DateTime? date;
+  final double? amount;
+  final String? description;
+  final String? leaveType;
+  final double? availableDays;
+  final double? carryForwardDays;
+  final int? bonusPoints;
+  final List<String> files;
+
+  factory ExpenseClaim.fromJson(Map<String, dynamic> json) {
+    final employee = json['employee_id'];
+    final employeeId = employee is Map ? _int(employee['id']) : _int(employee);
+    final amount = _double(json['amount']);
+    final available = _double(json['ad_to_encash']);
+    final carry = _double(json['cfd_to_encash']);
+    final bonus = _int(json['bonus_to_encash']);
+    final files = <String>[];
+    final attachment = _str(json['attachment']);
+    if (attachment != null) files.add(attachment);
+    final extras = json['other_attachements'] ?? json['other_attachments'];
+    if (extras is List) {
+      for (final item in extras) {
+        final url = _str(item);
+        if (url != null && !files.contains(url)) files.add(url);
+      }
+    }
+    return ExpenseClaim(
+      id: _int(json['id']) ?? 0,
+      employeeId: employeeId ?? 0,
+      title: _str(json['title']) ?? 'Expense claim',
+      type: _str(json['type']) ?? 'reimbursement',
+      status: _str(json['status']) ?? 'requested',
+      date: _date(json['allowance_on']),
+      amount: json.containsKey('amount') ? amount : null,
+      description: _str(json['description']),
+      leaveType: _str(json['leave_type_name']),
+      availableDays: available == null || available <= 0 ? null : available,
+      carryForwardDays: carry == null || carry <= 0 ? null : carry,
+      bonusPoints: bonus == null || bonus <= 0 ? null : bonus,
+      files: files,
+    );
+  }
+
+  bool get isPending => status == 'requested';
+
+  String get statusLabel => switch (status) {
+    'approved' => 'Approved',
+    'rejected' => 'Rejected',
+    _ => 'Pending',
+  };
+
+  String get typeLabel => switch (type) {
+    'leave_encashment' => 'Leave encashment',
+    'bonus_encashment' => 'Bonus encashment',
+    'reimbursement' => 'Expense',
+    _ => humanize(type),
+  };
+
+  String? get amountLabel => amount == null ? null : formatMoney(amount!);
+
+  String? get dateLabel =>
+      date == null ? null : DateFormat('d MMM yyyy').format(date!);
+
+  String? get daysLabel {
+    final parts = <String>[];
+    if (availableDays != null) {
+      parts.add('${formatCount(availableDays!)} available');
+    }
+    if (carryForwardDays != null) {
+      parts.add('${formatCount(carryForwardDays!)} carry forward');
+    }
+    if (parts.isEmpty) return null;
+    return parts.join(' · ');
+  }
+
+  String? get bonusLabel => bonusPoints == null ? null : '$bonusPoints points';
+}
+
+/// A reimbursement an employee is about to file, receipt included.
+class ClaimDraft {
+  const ClaimDraft({
+    required this.title,
+    required this.date,
+    required this.amount,
+    required this.description,
+    required this.fileName,
+    required this.filePath,
+  });
+
+  final String title;
+  final DateTime date;
+  final double amount;
+  final String description;
+  final String fileName;
+  final String filePath;
+
+  Map<String, String> get fields {
+    final note = description.trim();
+    return {
+      'title': title.trim(),
+      'type': 'reimbursement',
+      'allowance_on': DateFormat('yyyy-MM-dd').format(date),
+      'amount': amount.toString(),
+      'description': note.isEmpty ? title.trim() : note,
+    };
+  }
+}
+
+/// True when the form has enough to file a reimbursement.
+bool claimReady({
+  required String title,
+  required String amountText,
+  required DateTime? date,
+  required String? fileName,
+}) {
+  final name = title.trim();
+  final amount = double.tryParse(amountText.trim());
+  return name.isNotEmpty &&
+      name.length <= 50 &&
+      amount != null &&
+      amount > 0 &&
+      date != null &&
+      fileName != null &&
+      fileName.trim().isNotEmpty;
+}
+
+String claimFileName(String url) {
+  final leaf = url.split('/').last.split('?').first.trim();
+  return leaf.isEmpty ? 'Receipt' : leaf;
+}
+
+/// This employee's claims, newest date first.
+List<ExpenseClaim> claimsForEmployee(List<ExpenseClaim> items, int employeeId) {
+  final own = items.where((item) => item.employeeId == employeeId).toList();
+  own.sort((a, b) {
+    final ad = a.date;
+    final bd = b.date;
+    if (ad != null && bd != null) {
+      final byDate = bd.compareTo(ad);
+      if (byDate != 0) return byDate;
+    } else if (ad == null && bd != null) {
+      return 1;
+    } else if (ad != null) {
+      return -1;
+    }
+    return b.id.compareTo(a.id);
+  });
+  return own;
+}
+
+/// One calendar month of claims, with the money filed and the money approved.
+class ClaimMonthGroup {
+  const ClaimMonthGroup({required this.month, required this.claims});
+
+  final DateTime? month;
+  final List<ExpenseClaim> claims;
+
+  String get label =>
+      month == null ? 'No date' : DateFormat('MMMM yyyy').format(month!);
+
+  double get filed => claims.fold(0, (sum, claim) => sum + (claim.amount ?? 0));
+
+  double get approved => claims
+      .where((claim) => claim.status == 'approved')
+      .fold(0, (sum, claim) => sum + (claim.amount ?? 0));
+
+  String get filedLabel => formatMoney(filed);
+
+  String get approvedLabel => formatMoney(approved);
+}
+
+/// Newest month first. Claims with no date sit in a final group.
+List<ClaimMonthGroup> groupClaimsByMonth(List<ExpenseClaim> items) {
+  final order = <String>[];
+  final buckets = <String, List<ExpenseClaim>>{};
+  final months = <String, DateTime>{};
+  final undated = <ExpenseClaim>[];
+
+  for (final claim in items) {
+    final date = claim.date;
+    if (date == null) {
+      undated.add(claim);
+      continue;
+    }
+    final key = '${date.year}-${date.month}';
+    buckets
+        .putIfAbsent(key, () {
+          order.add(key);
+          months[key] = DateTime(date.year, date.month);
+          return <ExpenseClaim>[];
+        })
+        .add(claim);
+  }
+
+  return [
+    for (final key in order)
+      ClaimMonthGroup(month: months[key], claims: buckets[key]!),
+    if (undated.isNotEmpty) ClaimMonthGroup(month: null, claims: undated),
+  ];
+}
+
+/// Months that appear in [items], newest first.
+List<DateTime> claimMonths(List<ExpenseClaim> items) => [
+  for (final group in groupClaimsByMonth(items))
+    if (group.month != null) group.month!,
+];
+
+bool _sameMonth(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month;
+
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// Keeps claims in [month] and, when set, on [day]. Both can be set together.
+List<ExpenseClaim> filterClaims(
+  List<ExpenseClaim> items, {
+  DateTime? month,
+  DateTime? day,
+}) {
+  return [
+    for (final claim in items)
+      if (_claimVisible(claim, month: month, day: day)) claim,
+  ];
+}
+
+bool _claimVisible(
+  ExpenseClaim claim, {
+  required DateTime? month,
+  required DateTime? day,
+}) {
+  final date = claim.date;
+  if (month != null && (date == null || !_sameMonth(date, month))) {
+    return false;
+  }
+  if (day != null && (date == null || !_sameDay(date, day))) return false;
+  return true;
 }

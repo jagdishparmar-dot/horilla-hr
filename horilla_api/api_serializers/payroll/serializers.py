@@ -48,6 +48,18 @@ class PayslipSerializer(serializers.ModelSerializer):
             return None
 
 
+def _related_label(obj, relation, attr):
+    """Name on a nullable contract relation, or None when it is unset."""
+    related = getattr(obj, relation, None)
+    if related is None:
+        return None
+    value = getattr(related, attr, None)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 class ContractSerializer(serializers.ModelSerializer):
     employee_first_name = serializers.CharField(
         source="employee_id.employee_first_name", read_only=True
@@ -55,21 +67,32 @@ class ContractSerializer(serializers.ModelSerializer):
     employee_last_name = serializers.CharField(
         source="employee_id.employee_last_name", read_only=True
     )
-    shift_name = serializers.CharField(source="shift_id.employee_shift", read_only=True)
     badge_id = serializers.CharField(source="employee_id.badge_id", read_only=True)
     employee_profile_url = serializers.SerializerMethodField(read_only=True)
 
-    job_position_name = serializers.CharField(
-        source="job_position_id.job_position", read_only=True
-    )
-    job_role_name = serializers.CharField(source="job_role_id.job_role", read_only=True)
-    department_name = serializers.CharField(
-        source="department_id.department", read_only=True
-    )
-    shift_name = serializers.CharField(source="shift_id.employee_shift", read_only=True)
-    work_type_name = serializers.CharField(
-        source="work_type_id.work_type", read_only=True
-    )
+    # The contract relations are ``department`` / ``job_position`` / ``shift``,
+    # not ``department_id``. A missing relation used to raise while serializing
+    # and the whole list came back as a 500.
+    job_position_name = serializers.SerializerMethodField()
+    job_role_name = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
+    shift_name = serializers.SerializerMethodField()
+    work_type_name = serializers.SerializerMethodField()
+
+    def get_job_position_name(self, obj):
+        return _related_label(obj, "job_position", "job_position")
+
+    def get_job_role_name(self, obj):
+        return _related_label(obj, "job_role", "job_role")
+
+    def get_department_name(self, obj):
+        return _related_label(obj, "department", "department")
+
+    def get_shift_name(self, obj):
+        return _related_label(obj, "shift", "employee_shift")
+
+    def get_work_type_name(self, obj):
+        return _related_label(obj, "work_type", "work_type")
 
     def get_employee_profile_url(self, obj):
         try:
@@ -207,8 +230,10 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     other_attachements = serializers.SerializerMethodField()
     leave_type_name = serializers.CharField(source="leave_type_id.name", read_only=True)
     employee_profile_url = serializers.SerializerMethodField(read_only=True)
-    badge_id = serializers.CharField(source="employee_id.badge_id")
-    employee_full_name = serializers.CharField(source="employee_id.get_full_name")
+    badge_id = serializers.CharField(source="employee_id.badge_id", read_only=True)
+    employee_full_name = serializers.CharField(
+        source="employee_id.get_full_name", read_only=True
+    )
 
     def get_employee_profile_url(self, obj):
         try:
@@ -220,7 +245,10 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reimbursement
         fields = "__all__"
-        read_only_fields = ("status",)
+        # is_active is a checkbox. A multipart post that omits it is stored
+        # as false, which hides the claim from the employee and the web list.
+        # The web form excludes it and keeps the model default.
+        read_only_fields = ("status", "is_active")
 
     def get_other_attachements(self, obj):
         attachments = []
@@ -313,10 +341,16 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         attachments = request_files.getlist("attachment")
         if attachments:
             for attachment in attachments:
+                # The same upload is also stored on the claim itself. Rewind
+                # after this copy so that file is not saved empty.
+                if hasattr(attachment, "seek"):
+                    attachment.seek(0)
                 file_instance = ReimbursementMultipleAttachment()
                 file_instance.attachment = attachment
                 file_instance.save()
                 multiple_attachment_ids.append(file_instance.pk)
+                if hasattr(attachment, "seek"):
+                    attachment.seek(0)
 
         instance = super().save()
         instance.other_attachments.add(*multiple_attachment_ids)

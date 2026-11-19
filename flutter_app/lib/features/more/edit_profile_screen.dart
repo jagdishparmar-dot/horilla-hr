@@ -175,214 +175,266 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           child: Material(
             color: moreCanvas,
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
-                Container(
-                  width: 36,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0x33767680),
-                    borderRadius: BorderRadius.circular(99),
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 36,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: const Color(0x33767680),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                  child: Row(
-                    children: [
-                      TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => Navigator.of(context).maybePop(),
-                        child: Text(
-                          'Cancel',
-                          style: HomeType.body(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w400,
-                            color: moreBlue,
-                          ),
+                  SizedBox(
+                    height: 48,
+                    child: Center(
+                      child: Text(
+                        'Edit Profile',
+                        textAlign: TextAlign.center,
+                        style: HomeType.headline(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: moreText,
                         ),
                       ),
-                      Expanded(
-                        child: Text(
-                          'Edit Profile',
-                          textAlign: TextAlign.center,
-                          style: HomeType.headline(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            color: moreText,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _busy ? null : _save,
-                        child: _busy
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: moreBlue,
-                                ),
-                              )
-                            : Text(
-                                'Save',
-                                style: HomeType.body(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: moreBlue,
-                                ),
-                              ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: Form(
-                    key: _formKey,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F3FF),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.only(top: 1),
-                                child: HugeIcon(
-                                  icon: HugeIcons.strokeRoundedShield01,
-                                  color: moreBlue,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Name, email and employee ID are managed by HR and cannot be changed here.',
-                                  style: HomeType.body(
-                                    color: moreSecondary,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 12,
-                                    height: 1.4,
+                  Expanded(
+                    child: Form(
+                      key: _formKey,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F3FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 1),
+                                  child: HugeIcon(
+                                    icon: HugeIcons.strokeRoundedShield01,
+                                    color: moreBlue,
+                                    size: 18,
                                   ),
                                 ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Name, email and employee ID are managed by HR and cannot be changed here.',
+                                    style: HomeType.body(
+                                      color: moreSecondary,
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 12,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _Group(
+                            title: 'Contact',
+                            children: [
+                              _Field(
+                                label: 'Mobile number',
+                                controller: _phone,
+                                keyboard: TextInputType.phone,
+                                maxLength: 20,
+                                validator: (v) {
+                                  final value = (v ?? '').trim();
+                                  if (value.isEmpty) {
+                                    return 'Mobile number is required';
+                                  }
+                                  if (!_phonePattern.hasMatch(value)) {
+                                    return 'Enter a valid number (7-20 digits, optional +)';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              _Field(
+                                label: 'Address',
+                                controller: _address,
+                                maxLength: 200,
+                                maxLines: 3,
+                                stacked: true,
+                              ),
+                              _Field(
+                                label: 'City',
+                                controller: _city,
+                                maxLength: 30,
+                              ),
+                              _Field(
+                                label: 'State',
+                                controller: _state,
+                                maxLength: 100,
+                              ),
+                              _Field(
+                                label: 'Country',
+                                controller: _country,
+                                maxLength: 100,
+                              ),
+                              _Field(
+                                label: 'Zip code',
+                                controller: _zip,
+                                maxLength: 20,
+                                last: true,
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 18),
-                        _Group(
-                          title: 'Contact',
-                          children: [
-                            _Field(
-                              label: 'Mobile number',
-                              controller: _phone,
-                              keyboard: TextInputType.phone,
-                              maxLength: 20,
-                              validator: (v) {
-                                final value = (v ?? '').trim();
-                                if (value.isEmpty) {
-                                  return 'Mobile number is required';
-                                }
-                                if (!_phonePattern.hasMatch(value)) {
-                                  return 'Enter a valid number (7-20 digits, optional +)';
-                                }
-                                return null;
-                              },
-                            ),
-                            _Field(
-                              label: 'Address',
-                              controller: _address,
-                              maxLength: 200,
-                              maxLines: 3,
-                              stacked: true,
-                            ),
-                            _Field(
-                              label: 'City',
-                              controller: _city,
-                              maxLength: 30,
-                            ),
-                            _Field(
-                              label: 'State',
-                              controller: _state,
-                              maxLength: 100,
-                            ),
-                            _Field(
-                              label: 'Country',
-                              controller: _country,
-                              maxLength: 100,
-                            ),
-                            _Field(
-                              label: 'Zip code',
-                              controller: _zip,
-                              maxLength: 20,
-                              last: true,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        _Group(
-                          title: 'Personal',
-                          children: [
-                            _TapRow(
-                              label: 'Date of birth',
-                              value: _dob == null
-                                  ? 'Select date'
-                                  : DateFormat('d MMMM yyyy').format(_dob!),
-                              placeholder: _dob == null,
-                              onTap: _pickDob,
-                            ),
-                            _DropdownRow(
-                              label: 'Gender',
-                              value: _gender,
-                              options: _genders,
-                              onChanged: (v) => setState(() => _gender = v),
-                            ),
-                            _DropdownRow(
-                              label: 'Marital status',
-                              value: _marital,
-                              options: _maritalStatuses,
-                              onChanged: (v) => setState(() => _marital = v),
-                              last: true,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        _Group(
-                          title: 'Emergency contact',
-                          children: [
-                            _Field(
-                              label: 'Name',
-                              controller: _emergencyName,
-                              maxLength: 20,
-                            ),
-                            _Field(
-                              label: 'Relation',
-                              controller: _emergencyRelation,
-                              maxLength: 20,
-                            ),
-                            _Field(
-                              label: 'Phone',
-                              controller: _emergencyPhone,
-                              keyboard: TextInputType.phone,
-                              maxLength: 15,
-                              last: true,
-                            ),
-                          ],
-                        ),
-                      ],
+                          const SizedBox(height: 18),
+                          _Group(
+                            title: 'Personal',
+                            children: [
+                              _TapRow(
+                                label: 'Date of birth',
+                                value: _dob == null
+                                    ? 'Select date'
+                                    : DateFormat('d MMMM yyyy').format(_dob!),
+                                placeholder: _dob == null,
+                                onTap: _pickDob,
+                              ),
+                              _DropdownRow(
+                                label: 'Gender',
+                                value: _gender,
+                                options: _genders,
+                                onChanged: (v) => setState(() => _gender = v),
+                              ),
+                              _DropdownRow(
+                                label: 'Marital status',
+                                value: _marital,
+                                options: _maritalStatuses,
+                                onChanged: (v) => setState(() => _marital = v),
+                                last: true,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _Group(
+                            title: 'Emergency contact',
+                            children: [
+                              _Field(
+                                label: 'Name',
+                                controller: _emergencyName,
+                                maxLength: 20,
+                              ),
+                              _Field(
+                                label: 'Relation',
+                                controller: _emergencyRelation,
+                                maxLength: 20,
+                              ),
+                              _Field(
+                                label: 'Phone',
+                                controller: _emergencyPhone,
+                                keyboard: TextInputType.phone,
+                                maxLength: 15,
+                                last: true,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  _EditProfileActions(
+                    busy: _busy,
+                    onCancel: () => Navigator.of(context).maybePop(),
+                    onSave: _save,
+                  ),
+                ],
+              ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditProfileActions extends StatelessWidget {
+  const _EditProfileActions({
+    required this.busy,
+    required this.onCancel,
+    required this.onSave,
+  });
+
+  final bool busy;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+    );
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: moreHairline)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: busy ? null : onCancel,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: moreText,
+                    disabledForegroundColor: moreMuted,
+                    side: const BorderSide(color: Color(0xFFD1D5DB)),
+                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: shape,
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: busy ? null : onSave,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: moreBlue,
+                    disabledBackgroundColor: moreBlue.withValues(alpha: 0.35),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: shape,
+                  ),
+                  child: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Save',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -469,7 +521,7 @@ class _Field extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: stacked
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -491,18 +543,15 @@ class _Field extends StatelessWidget {
                   ],
                 )
               : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     SizedBox(
-                      width: 118,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          label,
-                          style: HomeType.body(
-                            fontSize: 15,
-                            color: moreSecondary,
-                          ),
+                      width: 124,
+                      child: Text(
+                        label,
+                        style: HomeType.body(
+                          fontSize: 15,
+                          color: moreSecondary,
                         ),
                       ),
                     ),
@@ -540,7 +589,7 @@ class _TapRow extends StatelessWidget {
         InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
             child: Row(
               children: [
                 Expanded(
@@ -596,7 +645,7 @@ class _DropdownRow extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 4, 8, 4),
+          padding: const EdgeInsets.fromLTRB(16, 6, 10, 6),
           child: Row(
             children: [
               Expanded(
@@ -618,7 +667,7 @@ class _DropdownRow extends StatelessWidget {
                     decoration: _EditProfileScreenState._fieldDecoration,
                     hint: Text(
                       'Select',
-                      textAlign: TextAlign.right,
+                      textAlign: TextAlign.end,
                       style: HomeType.body(color: moreMuted, fontSize: 15),
                     ),
                     style: HomeType.headline(
@@ -627,11 +676,30 @@ class _DropdownRow extends StatelessWidget {
                       color: moreText,
                     ),
                     alignment: AlignmentDirectional.centerEnd,
+                    selectedItemBuilder: (context) => [
+                      for (final option in options)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            humanize(option),
+                            textAlign: TextAlign.end,
+                            style: HomeType.headline(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 15,
+                              color: moreText,
+                            ),
+                          ),
+                        ),
+                    ],
                     items: [
                       for (final option in options)
                         DropdownMenuItem(
                           value: option,
-                          child: Text(humanize(option)),
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: Text(
+                            humanize(option),
+                            textAlign: TextAlign.end,
+                          ),
                         ),
                     ],
                     onChanged: onChanged,

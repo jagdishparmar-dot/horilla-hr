@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
 
 import '../../core/theme.dart';
 import 'more_models.dart';
@@ -317,13 +318,42 @@ class _PayslipTile extends StatelessWidget {
   }
 }
 
-class PayslipDetailScreen extends StatelessWidget {
+class PayslipDetailScreen extends ConsumerStatefulWidget {
   const PayslipDetailScreen({super.key, required this.item});
 
   final PayslipItem item;
 
   @override
+  ConsumerState<PayslipDetailScreen> createState() =>
+      _PayslipDetailScreenState();
+}
+
+class _PayslipDetailScreenState extends ConsumerState<PayslipDetailScreen> {
+  bool _downloading = false;
+
+  Future<void> _download() async {
+    setState(() => _downloading = true);
+    try {
+      final path = await ref.read(payslipDownloaderProvider)(widget.item.id);
+      final result = await OpenFilex.open(path);
+      if (result.type != ResultType.done && mounted) {
+        showSnack(
+          context,
+          result.type == ResultType.noAppToOpen
+              ? 'No app on this device can open this file.'
+              : "Couldn't open the file.",
+        );
+      }
+    } catch (e) {
+      if (mounted) showSnack(context, cleanError(e));
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final fmt = DateFormat('d MMM yyyy');
     // Basic pay is its own line; the server lists the other earnings under
     // "allowances", so anything beyond them is reported as a remainder rather
@@ -498,6 +528,18 @@ class PayslipDetailScreen extends StatelessWidget {
                 ),
               ],
             ],
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: _downloading ? null : _download,
+            icon: _downloading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download_rounded),
+            label: Text(_downloading ? 'Preparing file…' : 'Download payslip'),
           ),
         ],
       ),

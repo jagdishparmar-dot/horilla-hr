@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
+import '../../core/api/api_exception.dart';
 import '../../core/api/dio_client.dart';
 import 'more_models.dart';
 
@@ -102,6 +106,168 @@ class MoreRepository {
           .toList();
       items.sort((a, b) => b.endDate.compareTo(a.endDate));
       return items;
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  /// The signed-in employee's expense claims. A manager's response also
+  /// includes their reports, so [employeeId] is applied again here.
+  Future<List<ExpenseClaim>> fetchClaims(int employeeId) async {
+    try {
+      final response = await _dio.get(
+        '/payroll/reimbusement/',
+        queryParameters: {'page_size': 100},
+      );
+      return claimsForEmployee(
+        _rows(response.data).map(ExpenseClaim.fromJson).toList(),
+        employeeId,
+      );
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  /// Files a reimbursement for [employeeId]. The receipt is required.
+  Future<void> fileClaim({
+    required int employeeId,
+    required ClaimDraft draft,
+  }) async {
+    if (draft.filePath.isEmpty) {
+      throw ApiException('Attach the receipt before filing.');
+    }
+    try {
+      await _dio.post(
+        '/payroll/reimbusement/',
+        data: FormData.fromMap({
+          ...draft.fields,
+          'employee_id': '$employeeId',
+          'attachment': await MultipartFile.fromFile(
+            draft.filePath,
+            filename: draft.fileName,
+          ),
+        }),
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  /// Downloads a claim receipt. Media is only served to a signed-in caller.
+  Future<String> downloadClaimFile(String url) async {
+    final resolved = resolveMediaUrl(url);
+    if (resolved == null) throw ApiException('This receipt has no file.');
+    final dir = await getTemporaryDirectory();
+    final name = claimFileName(url).replaceAll(RegExp(r'[^\w.\-]'), '_');
+    final path = '${dir.path}${Platform.pathSeparator}$name';
+    try {
+      final response = await _dio.download(
+        resolved,
+        path,
+        options: Options(headers: {'Accept': '*/*'}),
+      );
+      final type = response.headers.value('content-type') ?? '';
+      if (type.startsWith('text/html') &&
+          !name.toLowerCase().endsWith('.html')) {
+        await File(path).delete().catchError((_) => File(path));
+        throw ApiException('Your session expired. Please sign in again.');
+      }
+      return path;
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  /// Saves the payslip file and returns its local path.
+  ///
+  /// Asks for a PDF first. When the server has no PDF renderer it answers
+  /// with an error, and the HTML payslip is saved instead.
+  Future<String> downloadPayslip(int id) async {
+    final pdf = await _downloadPayslip(id, pdf: true);
+    if (pdf != null) return pdf;
+    final html = await _downloadPayslip(id, pdf: false);
+    if (html != null) return html;
+    throw ApiException('This payslip could not be downloaded.');
+  }
+
+  Future<String?> _downloadPayslip(int id, {required bool pdf}) async {
+    try {
+      final response = await _dio.get<List<int>>(
+        '/payroll/payslip-download/$id',
+        queryParameters: pdf ? {'format': 'pdf'} : null,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {'Accept': pdf ? 'application/pdf' : 'text/html'},
+          validateStatus: (code) => code != null && code < 600,
+        ),
+      );
+      final status = response.statusCode;
+      if (status == 403) {
+        throw ApiException(
+          "You don't have permission to do that.",
+          statusCode: 403,
+        );
+      }
+      if (status == 404) {
+        throw ApiException('This payslip could not be found.', statusCode: 404);
+      }
+      final kind = payslipFileKind(
+        statusCode: status,
+        contentType: response.headers.value('content-type'),
+      );
+      final bytes = response.data;
+      if (kind == null || bytes == null || bytes.isEmpty) return null;
+      if (pdf && kind != PayslipFileKind.pdf) return null;
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}${Platform.pathSeparator}${payslipFileName(id, kind)}';
+      await File(path).writeAsBytes(bytes, flush: true);
+      return path;
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  /// The signed-in employee's contracts. A payroll admin's list is the whole
+  /// company, so [employeeId] is sent and applied again on the result.
+  Future<List<ContractItem>> fetchContracts(int employeeId) async {
+    try {
+      final response = await _dio.get(
+        '/payroll/contract/',
+        queryParameters: {'page_size': 100, 'employee_id': employeeId},
+      );
+      return contractsForEmployee(
+        _rows(response.data).map(ContractItem.fromJson).toList(),
+        employeeId,
+      );
+    } on DioException catch (e) {
+      throwApi(e);
+    }
+  }
+
+  /// Downloads a contract file the media server only gives to signed-in callers.
+  Future<String> downloadContractFile(ContractItem contract) async {
+    final url = resolveMediaUrl(contract.documentUrl);
+    if (url == null) throw ApiException('No file is attached.');
+    final dir = await getTemporaryDirectory();
+    final leaf = url.split('/').last.split('?').first;
+    final safe = leaf.replaceAll(RegExp(r'[^\w.\-]'), '_');
+    final name = safe.isEmpty ? 'contract-${contract.id}' : safe;
+    final path = '${dir.path}${Platform.pathSeparator}${contract.id}_$name';
+    try {
+      final response = await _dio.download(
+        url,
+        path,
+        options: Options(headers: {'Accept': '*/*'}),
+      );
+      final type = response.headers.value('content-type') ?? '';
+      if (type.startsWith('text/html') &&
+          !name.toLowerCase().endsWith('.html')) {
+        await File(path).delete().catchError((_) => File(path));
+        throw ApiException('Your session expired. Please sign in again.');
+      }
+      return path;
     } on DioException catch (e) {
       throwApi(e);
     }

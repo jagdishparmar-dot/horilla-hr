@@ -1,3 +1,4 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../attendance/attendance_mapper.dart';
@@ -21,6 +22,67 @@ final profileBundleProvider = FutureProvider.autoDispose<ProfileBundle>((
 
 final payslipsProvider = FutureProvider.autoDispose<List<PayslipItem>>((ref) {
   return ref.watch(moreRepositoryProvider).fetchPayslips();
+});
+
+/// Saves a payslip file and returns the local path. Overridable in tests.
+final payslipDownloaderProvider = Provider<Future<String> Function(int id)>((
+  ref,
+) {
+  return ref.watch(moreRepositoryProvider).downloadPayslip;
+});
+
+final contractsProvider = FutureProvider.autoDispose<List<ContractItem>>((
+  ref,
+) async {
+  final home = await ref.watch(mobileHomeProvider.future);
+  final id = home.employeeId;
+  if (id == null) {
+    throw Exception('Your account is not linked to an employee record.');
+  }
+  return ref.watch(moreRepositoryProvider).fetchContracts(id);
+});
+
+final expenseClaimsProvider = FutureProvider.autoDispose<List<ExpenseClaim>>((
+  ref,
+) async {
+  final home = await ref.watch(mobileHomeProvider.future);
+  final id = home.employeeId;
+  if (id == null) {
+    throw Exception('Your account is not linked to an employee record.');
+  }
+  return ref.watch(moreRepositoryProvider).fetchClaims(id);
+});
+
+typedef ClaimFilePicker = Future<({String name, String path})?> Function();
+
+final claimFilePickerProvider = Provider<ClaimFilePicker>((ref) {
+  return () async {
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'Receipt',
+          extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'heic'],
+        ),
+      ],
+    );
+    if (file == null || file.path.isEmpty) return null;
+    return (name: file.name, path: file.path);
+  };
+});
+
+typedef ClaimFiler = Future<void> Function(ClaimDraft draft);
+
+final claimFilerProvider = Provider<ClaimFiler>((ref) {
+  return (draft) async {
+    final home = await ref.read(mobileHomeProvider.future);
+    final id = home.employeeId;
+    if (id == null) {
+      throw Exception('Your account is not linked to an employee record.');
+    }
+    await ref
+        .read(moreRepositoryProvider)
+        .fileClaim(employeeId: id, draft: draft);
+  };
 });
 
 final policiesProvider = FutureProvider.autoDispose<List<PolicyItem>>((ref) {
@@ -71,7 +133,9 @@ final activityFeedProvider = FutureProvider.autoDispose<List<ActivityEvent>>((
   final attendanceFuture = ref
       .read(attendanceRepositoryProvider)
       .fetchMyAttendance(from: from, to: to)
-      .then<List<ActivityEvent>>((payload) => _attendanceEvents(payload.records))
+      .then<List<ActivityEvent>>(
+        (payload) => _attendanceEvents(payload.records),
+      )
       .catchError((Object e) {
         attendanceError = e;
         return <ActivityEvent>[];
