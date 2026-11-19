@@ -1,4 +1,15 @@
 staticUrl = $("#statiUrl").attr("data-url");
+
+function syncAttendancePicker(selector, useCalendar) {
+    var el = document.querySelector(selector);
+    if (!el || !window.UiDatePicker) return;
+    if (useCalendar) {
+        el.setAttribute("data-ui-date", "");
+        UiDatePicker.enhance(el, window.uiDatePickerOptions || {});
+    } else {
+        UiDatePicker.destroy(el);
+    }
+}
 $(document).ready(function () {
     // initializing the department overtime chart.
     var departmentChartData = {
@@ -101,14 +112,18 @@ $(document).ready(function () {
         if (dataType === "date_range") {
             $("#department_month").prop("type", "date");
             $("#department_day_input").after(
-                '<input type="date" class="mb-2 float-end pointer oh-select ml-2" id="department_month2" style="width: 100px;color:#5e5c5c;"/>',
+                '<input type="text" data-ui-date autocomplete="off" class="mb-2 float-end pointer oh-select ml-2" id="department_month2" style="width: 100px;color:#5e5c5c;"/>',
             );
             $("#department_month").val(getFormattedDate());
             $("#department_month2").val(getFormattedDate());
+            syncAttendancePicker("#department_month", true);
+            syncAttendancePicker("#department_month2", true);
             changeDepartmentMonth();
         } else {
+            syncAttendancePicker("#department_month2", false);
             $("#department_month2").remove();
             if (dataType === "weekly") {
+                syncAttendancePicker("#department_month", false);
                 $("#department_month").prop("type", "week");
                 if (currentWeek < 10) {
                     $("#department_month").val(`${year}-W0${currentWeek}`);
@@ -119,8 +134,10 @@ $(document).ready(function () {
             } else if (dataType === "day") {
                 $("#department_month").prop("type", "date");
                 $("#department_month").val(getFormattedDate());
+                syncAttendancePicker("#department_month", true);
                 changeDepartmentMonth();
             } else {
+                syncAttendancePicker("#department_month", false);
                 $("#department_month").prop("type", "month");
                 $("#department_month").val(`${year}-${month}`);
                 changeDepartmentMonth();
@@ -363,14 +380,18 @@ function changeView(element) {
     if (dataType === "date_range") {
         $("#attendance_month").prop("type", "date");
         $("#day_input").after(
-            '<input type="date" class="oh-input w-40" id="attendance_month2" onchange="changeMonth(this)"/>',
+            '<input type="text" data-ui-date autocomplete="off" class="oh-input w-40" id="attendance_month2" onchange="changeMonth(this)"/>',
         );
         $("#attendance_month").val(getGlobalFormattedDate());
         $("#attendance_month2").val(getGlobalFormattedDate());
+        syncAttendancePicker("#attendance_month", true);
+        syncAttendancePicker("#attendance_month2", true);
         changeMonth();
     } else {
+        syncAttendancePicker("#attendance_month2", false);
         $("#attendance_month2").remove();
         if (dataType === "weekly") {
+            syncAttendancePicker("#attendance_month", false);
             $("#attendance_month").prop("type", "week");
             if (currentWeek < 10) {
                 $("#attendance_month").val(`${year}-W0${currentWeek}`);
@@ -381,8 +402,10 @@ function changeView(element) {
         } else if (dataType === "day") {
             $("#attendance_month").prop("type", "date");
             $("#attendance_month").val(getGlobalFormattedDate());
+            syncAttendancePicker("#attendance_month", true);
             changeMonth();
         } else {
+            syncAttendancePicker("#attendance_month", false);
             $("#attendance_month").prop("type", "month");
             $("#attendance_month").val(`${year}-${month}`);
             changeMonth();

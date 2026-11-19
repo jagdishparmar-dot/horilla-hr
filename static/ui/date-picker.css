@@ -1,0 +1,269 @@
+/* Reusable date picker. Enhance an input with UiDatePicker.enhance(). */
+
+.ui-date {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+    max-width: 100%;
+}
+
+.ui-date--fill {
+    display: flex;
+    width: 100%;
+}
+
+.ui-date--fill .ui-date__trigger {
+    width: 100%;
+    max-width: none;
+}
+
+input[data-ui-date]:not(.ui-date__native) {
+    box-sizing: border-box;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid rgba(128, 128, 128, 0.22);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+}
+
+.ui-date__native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.ui-date__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-width: 132px;
+    max-width: 220px;
+    height: 28px;
+    margin: 0;
+    padding: 0 8px 0 10px;
+    border: 1px solid rgba(128, 128, 128, 0.22);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ui-date__trigger:hover {
+    border-color: var(--primary-600, #e54f38);
+}
+
+.ui-date--open .ui-date__trigger,
+.ui-date__trigger:focus-visible {
+    border-color: var(--primary-600, #e54f38);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(229, 79, 56, 0.16);
+}
+
+.ui-date__trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.ui-date__value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-date__value--empty {
+    opacity: 0.45;
+}
+
+.ui-date__icon {
+    flex: 0 0 auto;
+    opacity: 0.55;
+}
+
+.ui-date--open .ui-date__icon {
+    color: var(--primary-600, #e54f38);
+    opacity: 1;
+}
+
+.ui-date__pop {
+    --ui-date-accent: var(--primary-600, #e54f38);
+    --ui-date-bg: #ffffff;
+    --ui-date-text: #1f2937;
+    --ui-date-muted: rgba(31, 41, 55, 0.48);
+    --ui-date-line: rgba(128, 128, 128, 0.18);
+    --ui-date-hover: rgba(229, 79, 56, 0.1);
+    position: fixed;
+    z-index: 10050;
+    box-sizing: border-box;
+    width: 280px;
+    padding: 12px;
+    border: 1px solid var(--ui-date-line);
+    border-radius: 12px;
+    background: var(--ui-date-bg);
+    color: var(--ui-date-text);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14);
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.dark .ui-date__pop {
+    --ui-date-bg: #161616;
+    --ui-date-text: #e5e7eb;
+    --ui-date-muted: rgba(229, 231, 235, 0.48);
+    --ui-date-line: rgba(255, 255, 255, 0.1);
+    --ui-date-hover: rgba(229, 79, 56, 0.18);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.ui-date__head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.ui-date__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-date__nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.ui-date__nav:hover,
+.ui-date__nav:focus-visible {
+    background: var(--ui-date-hover);
+    outline: none;
+}
+
+.ui-date__week,
+.ui-date__grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.ui-date__week {
+    margin-bottom: 4px;
+}
+
+.ui-date__dow {
+    height: 24px;
+    overflow: hidden;
+    color: var(--ui-date-muted);
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    line-height: 24px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.ui-date__day {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ui-date__day:hover:not(:disabled),
+.ui-date__day:focus-visible {
+    background: var(--ui-date-hover);
+    outline: none;
+}
+
+.ui-date__day--out {
+    color: var(--ui-date-muted);
+    font-weight: 500;
+}
+
+.ui-date__day--today:not(.ui-date__day--selected) {
+    box-shadow: inset 0 0 0 1.5px var(--ui-date-accent);
+}
+
+.ui-date__day--selected,
+.ui-date__day--selected:hover {
+    background: var(--ui-date-accent);
+    color: #fff;
+}
+
+.ui-date__day:disabled {
+    cursor: not-allowed;
+    opacity: 0.28;
+}
+
+.ui-date__foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--ui-date-line);
+}
+
+.ui-date__foot button {
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ui-date-accent);
+    font: inherit;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ui-date__foot button:hover:not(:disabled),
+.ui-date__foot button:focus-visible {
+    background: var(--ui-date-hover);
+    outline: none;
+}
+
+.ui-date__foot button:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}

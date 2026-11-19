@@ -68,12 +68,12 @@
       <div style="padding:.85rem 1rem;display:flex;gap:1rem;align-items:flex-end;flex-wrap:wrap;">
         <div>
           <label class="oh-label" for="from_date">{% trans "From" %}</label>
-          <input type="date" name="from_date" id="from_date" class="oh-input"
+          <input type="text" data-ui-date autocomplete="off" name="from_date" id="from_date" class="oh-input"
                  value="{{ period_start|date:'Y-m-d' }}">
         </div>
         <div>
           <label class="oh-label" for="to_date">{% trans "To" %}</label>
-          <input type="date" name="to_date" id="to_date" class="oh-input"
+          <input type="text" data-ui-date autocomplete="off" name="to_date" id="to_date" class="oh-input"
                  value="{{ period_end|date:'Y-m-d' }}">
         </div>
         <div>

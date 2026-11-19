@@ -87,7 +87,7 @@
                             <div class="oh-label__info">
                                 <label class="oh-label" style="font-weight:bold;" for="notice_period_starts"><b>{% trans "Notice period start"|escapejs %}</b></label>
                             </div>
-                            <input type="date" name="notice_period_starts"
+                            <input type="text" data-ui-date autocomplete="off" name="notice_period_starts"
                                 class="oh-input w-100 form-control"
                                 value="${notice_starts.val()}"
                                 onchange="
@@ -101,7 +101,7 @@
                             <div class="oh-label__info">
                                 <label class="oh-label" style="font-weight:bold;" for="notice_period_ends"><b>{% trans "Notice period end"|escapejs %}</b></label>
                             </div>
-                            <input type="date"
+                            <input type="text" data-ui-date autocomplete="off"
                                 name="notice_period_ends"
                                 id="noticeEndDate"
                                 class="oh-input w-100 form-control"
@@ -121,7 +121,12 @@
             confirmButtonColor: '#008000',
             cancelButtonColor: '#d33',
             confirmButtonText: i18nMessages.confirm,
-            cancelButtonText: "{% trans 'Close'|escapejs %}"
+            cancelButtonText: "{% trans 'Close'|escapejs %}",
+            didOpen: function () {
+                if (!window.UiDatePicker) return;
+                var popup = typeof Swal.getPopup === 'function' ? Swal.getPopup() : document.querySelector('.swal2-popup');
+                if (popup) UiDatePicker.enhanceAll(popup, window.uiDatePickerOptions || {});
+            }
             }).then((result) => {
                 if (result.isConfirmed) {
                     // Access the selected value from the select box

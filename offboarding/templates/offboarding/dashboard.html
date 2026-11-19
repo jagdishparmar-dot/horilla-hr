@@ -2,6 +2,7 @@
 {% load static i18n %}
 
 {% block content %}
+    {% include "components/ui_date_picker_assets.html" %}
     <script src="https://cdn.jsdelivr.net/npm/apexcharts@7.8.0/dist/apexcharts.min.js"></script>
     <style>
         :root {
@@ -626,19 +627,6 @@
             gap: 6px;
             font-size: 12px;
         }
-        .ob-period-picker input[type='date'] {
-            padding: 5px 8px;
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 6px;
-            outline: none;
-            background: transparent;
-            color: inherit;
-            font-size: 12px;
-            transition: border-color 0.15s;
-        }
-        .ob-period-picker input[type='date']:focus {
-            border-color: var(--ob-indigo);
-        }
         .ob-period-picker__sep {
             font-size: 11px;
             opacity: 0.4;
@@ -667,10 +655,6 @@
             background: var(--ob-indigo);
             color: #fff;
         }
-        .dark .ob-period-picker input[type='date'] {
-            color-scheme: dark;
-        }
-
         /* Auto-refresh */
         .ob-refresh {
             display: flex;
@@ -773,9 +757,9 @@
                     <button class="ob-period-preset" data-preset="this_month">{% trans "This Month" %}</button>
                     <button class="ob-period-preset" data-preset="last_month">{% trans "Last Month" %}</button>
                     <button class="ob-period-preset" data-preset="this_year">{% trans "This Year" %}</button>
-                    <input type="date" id="ob-from-date" title="{% trans 'From' %}">
+                    <input type="text" id="ob-from-date" data-ui-date autocomplete="off" title="{% trans 'From' %}" placeholder="{% trans 'From' %}">
                     <span class="ob-period-picker__sep">&rarr;</span>
-                    <input type="date" id="ob-to-date" title="{% trans 'To' %}">
+                    <input type="text" id="ob-to-date" data-ui-date autocomplete="off" title="{% trans 'To' %}" placeholder="{% trans 'To' %}">
                 </div>
                 <button class="oh-btn oh-btn--secondary" id="ob-open-customize" style="display: flex; align-items: center; gap: 5px; font-size: 13px" title="{% trans 'Customize' %}">
                     ⚙ {% trans "Customize" %}
@@ -991,6 +975,21 @@
             const PERIOD_KEY = 'ob_period_v2';
             const fromInput = document.getElementById('ob-from-date');
             const toInput = document.getElementById('ob-to-date');
+            if (window.UiDatePicker) {
+                const weekStart = {{ first_day_of_week|default:1 }};
+                UiDatePicker.enhance(fromInput, {
+                    firstDay: weekStart,
+                    placeholder: '{% trans "From"|escapejs %}',
+                    todayLabel: '{% trans "Today"|escapejs %}',
+                    clearLabel: '{% trans "Clear"|escapejs %}',
+                });
+                UiDatePicker.enhance(toInput, {
+                    firstDay: weekStart,
+                    placeholder: '{% trans "To"|escapejs %}',
+                    todayLabel: '{% trans "Today"|escapejs %}',
+                    clearLabel: '{% trans "Clear"|escapejs %}',
+                });
+            }
             // Local-time YYYY-MM-DD (toISOString() would shift the day for non-UTC zones).
             function ymdLocal(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
             function getFirstOfMonth() { const t = new Date(); return ymdLocal(new Date(t.getFullYear(), t.getMonth(), 1)); }

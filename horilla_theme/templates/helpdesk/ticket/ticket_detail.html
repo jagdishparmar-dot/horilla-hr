@@ -120,7 +120,7 @@
                                 >
                                     {% csrf_token %}
                                     <input
-                                        type="date"
+                                        type="text" data-ui-date autocomplete="off"
                                         name="deadline"
                                         class="oh-input"
                                         value="{{ ticket.deadline|date:'Y-m-d' }}"

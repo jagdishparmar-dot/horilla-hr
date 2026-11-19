@@ -2,6 +2,7 @@
 {% load static i18n %}
 
 {% block content %}
+{% include "components/ui_date_picker_assets.html" %}
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@7.8.0/dist/apexcharts.min.js"></script>
 <style>
     :root { --on-indigo: var(--primary-600, #E54F38); --on-green: #22c55e; --on-amber: #f59e0b; --on-red: #ef4444; --on-blue: #3b82f6; --on-purple: #a855f7; }
@@ -105,15 +106,11 @@
 
     /* Period Picker */
     .on-period-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
-    .on-period-picker input[type="date"] { padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.2); font-size: 12px; background: transparent; color: inherit; outline: none; transition: border-color 0.15s; }
-    .on-period-picker input[type="date"]:focus { border-color: var(--on-indigo); }
     .on-period-picker__sep { opacity: 0.4; font-size: 11px; }
     .on-period-preset { padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.15); font-size: 11px; cursor: pointer; background: none; color: inherit; transition: all 0.15s; }
     .on-period-preset:hover { border-color: var(--on-indigo); color: var(--on-indigo); }
     .on-period-preset--active { background: var(--on-indigo); color: #fff; border-color: var(--on-indigo); }
     .on-period-preset--active:hover { background: var(--on-indigo); color: #fff; border-color: var(--on-indigo); }
-    .dark .on-period-picker input[type="date"] { color-scheme: dark; }
-
     /* Auto-refresh */
     .on-refresh { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: 0.5; }
     .on-refresh__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--on-green); flex-shrink: 0; }
@@ -149,9 +146,9 @@
                 <button class="on-period-preset" data-preset="this_month">{% trans "This Month" %}</button>
                 <button class="on-period-preset" data-preset="last_month">{% trans "Last Month" %}</button>
                 <button class="on-period-preset" data-preset="this_year">{% trans "This Year" %}</button>
-                <input type="date" id="on-from-date" title="{% trans 'From' %}">
+                <input type="text" id="on-from-date" data-ui-date autocomplete="off" title="{% trans 'From' %}" placeholder="{% trans 'From' %}">
                 <span class="on-period-picker__sep">&rarr;</span>
-                <input type="date" id="on-to-date" title="{% trans 'To' %}">
+                <input type="text" id="on-to-date" data-ui-date autocomplete="off" title="{% trans 'To' %}" placeholder="{% trans 'To' %}">
             </div>
             <button class="oh-btn oh-btn--secondary" id="on-open-customize" style="display: flex; align-items: center; gap: 5px; font-size: 13px" title="{% trans 'Customize' %}">⚙ {% trans "Customize" %}</button>
         </div>
@@ -233,6 +230,21 @@
     const PERIOD_KEY = 'on_period_v2';
     const fromInput = document.getElementById('on-from-date');
     const toInput = document.getElementById('on-to-date');
+    if (window.UiDatePicker) {
+        const weekStart = {{ first_day_of_week|default:1 }};
+        UiDatePicker.enhance(fromInput, {
+            firstDay: weekStart,
+            placeholder: '{% trans "From"|escapejs %}',
+            todayLabel: '{% trans "Today"|escapejs %}',
+            clearLabel: '{% trans "Clear"|escapejs %}',
+        });
+        UiDatePicker.enhance(toInput, {
+            firstDay: weekStart,
+            placeholder: '{% trans "To"|escapejs %}',
+            todayLabel: '{% trans "Today"|escapejs %}',
+            clearLabel: '{% trans "Clear"|escapejs %}',
+        });
+    }
     // Local-time YYYY-MM-DD (toISOString() shifts the day outside UTC).
     function ymdLocal(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
     function getWeekBounds(today) {

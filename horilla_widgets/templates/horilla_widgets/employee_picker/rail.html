@@ -67,11 +67,11 @@
             <div class="ep-fields ep-fields--dates">
                 <div class="ep-field">
                     <label for="ep-{{ section_id }}-joined_from">{% trans "From" %}</label>
-                    <input type="date" id="ep-{{ section_id }}-joined_from" form="ep-detached" data-filter="joined_from" data-label="{% trans 'Joined from' %}" class="ep-input">
+                    <input type="text" data-ui-date autocomplete="off" id="ep-{{ section_id }}-joined_from" form="ep-detached" data-filter="joined_from" data-label="{% trans 'Joined from' %}" class="ep-input">
                 </div>
                 <div class="ep-field">
                     <label for="ep-{{ section_id }}-joined_till">{% trans "Till" %}</label>
-                    <input type="date" id="ep-{{ section_id }}-joined_till" form="ep-detached" data-filter="joined_till" data-label="{% trans 'Joined till' %}" class="ep-input">
+                    <input type="text" data-ui-date autocomplete="off" id="ep-{{ section_id }}-joined_till" form="ep-detached" data-filter="joined_till" data-label="{% trans 'Joined till' %}" class="ep-input">
                 </div>
             </div>
         </details>

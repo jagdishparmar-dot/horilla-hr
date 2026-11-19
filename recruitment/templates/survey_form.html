@@ -112,7 +112,7 @@
 
             {% elif question.type == "date" %}
                 <input
-                    type="date"
+                    type="text" data-ui-date autocomplete="off"
                     name="date_{{question.question}}"
                     id="id_{{question.id}}"
                     {% if question.is_mandatory %}required{% endif %}

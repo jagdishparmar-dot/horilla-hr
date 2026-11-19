@@ -40,13 +40,13 @@
                 <div class="col-12 col-md-6 mb-3">
                     <div class="oh-input-wrapper">
                         <label class="oh-label oh-label--mandatory">{% trans "From Date" %}</label>
-                        <input type="date" name="from_date" class="oh-input w-100" required>
+                        <input type="text" data-ui-date autocomplete="off" name="from_date" class="oh-input w-100" required>
                     </div>
                 </div>
                 <div class="col-12 col-md-6 mb-3">
                     <div class="oh-input-wrapper">
                         <label class="oh-label">{% trans "To Date" %}</label>
-                        <input type="date" name="to_date" class="oh-input w-100">
+                        <input type="text" data-ui-date autocomplete="off" name="to_date" class="oh-input w-100">
                         <small
                             class="text-muted"
                             style="font-size: 11px"

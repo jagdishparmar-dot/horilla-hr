@@ -344,6 +344,10 @@ _TEMPLATE_LOADERS = [
     ("django.template.loaders.filesystem.Loader", [BASE_DIR / "templates"]),
 ]
 
+# Theme copies of django/forms/widgets/date.html and datetime.html supply
+# the shared calendar. The default renderer would ignore those copies.
+FORM_RENDERER = "horilla.forms_renderer.HorillaFormRenderer"
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",

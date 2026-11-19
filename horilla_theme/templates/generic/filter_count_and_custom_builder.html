@@ -46,7 +46,7 @@
         // these regardless of the hidden attribute, since that's a
         // separate boolean attribute from `type`.
         $form.find('input[type="text"], input[type="email"]')
-            .not('#modernFilterFieldSearch, .oh-custom-filter-value, [hidden]')
+            .not('#modernFilterFieldSearch, .oh-custom-filter-value, [hidden], [data-ui-date]')
             .each(function () {
                 if ($(this).val()) count++;
             });
@@ -121,7 +121,7 @@
         $(this).closest('form').find('#applyFilter').click();
     });
     var modernFilterTextDebounce = null;
-    $(document).on('input', '.oh-filter-modern .oh-input-group input[type="text"], .oh-filter-modern .oh-input-group input[type="email"]', function () {
+    $(document).on('input', '.oh-filter-modern .oh-input-group input[type="text"]:not([data-ui-date]), .oh-filter-modern .oh-input-group input[type="email"]', function () {
         var $form = $(this).closest('form');
         updateFilterCountBadge();
         clearTimeout(modernFilterTextDebounce);
@@ -342,6 +342,10 @@
         input.className = 'oh-input oh-custom-filter-value';
         input.placeholder = placeholder;
         input.disabled = !!disabled;
+        if (inputType === 'date') {
+            input.setAttribute('data-ui-date', '');
+            input.autocomplete = 'off';
+        }
         return input;
     }
 
@@ -375,5 +379,8 @@
         // exclusion just for clarity.
         if (prefillValue && !(config && config.ajax)) valueField.value = prefillValue;
         valueWrap.appendChild(valueField);
+        if (valueField.matches && valueField.matches('[data-ui-date]') && window.UiDatePicker && window.uiDatePickerOptions) {
+            UiDatePicker.enhance(valueField, window.uiDatePickerOptions);
+        }
     }
 </script>

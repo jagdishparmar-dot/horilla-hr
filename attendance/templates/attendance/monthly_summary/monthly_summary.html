@@ -296,9 +296,9 @@
               <div class="oh-input-group">
                 <label class="oh-label">{% trans "Date Range" %}</label>
                 <div style="display:flex;gap:8px;">
-                  <input type="date" name="from_date" id="ms-from-date" value="{{ from_date }}"
+                  <input type="text" data-ui-date autocomplete="off" name="from_date" id="ms-from-date" value="{{ from_date }}"
                          title="{% trans 'From' %}" class="oh-input w-100">
-                  <input type="date" name="to_date" id="ms-to-date" value="{{ to_date }}"
+                  <input type="text" data-ui-date autocomplete="off" name="to_date" id="ms-to-date" value="{{ to_date }}"
                          title="{% trans 'To' %}" class="oh-input w-100">
                 </div>
               </div>

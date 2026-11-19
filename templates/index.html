@@ -54,6 +54,7 @@
     <!-- Bootstrap JS -->
     {% block styles %}
     {% endblock styles %}
+    {% include "components/ui_date_picker_assets.html" %}
 </head>
 
 
@@ -236,6 +237,16 @@
         document.body.addEventListener('htmx:configRequest', (event) => {
             event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
         })
+    </script>
+    <script>
+        if (window.UiDatePicker) {
+            window.uiDatePickerOptions = { firstDay: {{ first_day_of_week }} };
+            UiDatePicker.enhanceAll(document, window.uiDatePickerOptions);
+            document.body.addEventListener('htmx:afterSwap', function (event) {
+                var target = event.detail && event.detail.target;
+                if (target) UiDatePicker.enhanceAll(target, window.uiDatePickerOptions);
+            });
+        }
     </script>
     <!-- this is the master js  -->
     <script src="{% static '/index/index.js' %}?v=40"></script>

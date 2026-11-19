@@ -529,11 +529,11 @@ reloadSelectedCount($('.count_msAttendance'),'selectedInstances');">
       <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
         <div style="flex:1 1 160px;">
           <label class="oh-label">{% trans "From" %}</label>
-          <input type="date" id="ms-bulk-from" value="{% now 'Y-m-d' %}" class="oh-input w-100">
+          <input type="text" data-ui-date autocomplete="off" id="ms-bulk-from" value="{% now 'Y-m-d' %}" class="oh-input w-100">
         </div>
         <div style="flex:1 1 160px;">
           <label class="oh-label">{% trans "To" %}</label>
-          <input type="date" id="ms-bulk-to" value="{% now 'Y-m-d' %}" class="oh-input w-100">
+          <input type="text" data-ui-date autocomplete="off" id="ms-bulk-to" value="{% now 'Y-m-d' %}" class="oh-input w-100">
         </div>
       </div>
 

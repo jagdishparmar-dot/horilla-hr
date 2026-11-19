@@ -77,12 +77,12 @@ function rosterAskDownload() {
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;">' +
         '<div>' +
           '<label style="font-size:12px;font-weight:600;color:#4a5173;display:block;margin-bottom:4px;">{% trans "Start Date"|escapejs %}</label>' +
-          '<input type="date" id="swal_start" value="' + _rosterDefaultStart + '"' +
+          '<input type="text" data-ui-date autocomplete="off" id="swal_start" value="' + _rosterDefaultStart + '"' +
             ' style="width:100%;height:38px;padding:6px 10px;border:1px solid #d6dae8;border-radius:6px;font-size:13px;color:#333;outline:none;box-sizing:border-box;">' +
         '</div>' +
         '<div>' +
           '<label style="font-size:12px;font-weight:600;color:#4a5173;display:block;margin-bottom:4px;">{% trans "End Date"|escapejs %}</label>' +
-          '<input type="date" id="swal_end" value="' + _rosterDefaultEnd + '"' +
+          '<input type="text" data-ui-date autocomplete="off" id="swal_end" value="' + _rosterDefaultEnd + '"' +
             ' style="width:100%;height:38px;padding:6px 10px;border:1px solid #d6dae8;border-radius:6px;font-size:13px;color:#333;outline:none;box-sizing:border-box;">' +
         '</div>' +
       '</div>',
@@ -92,6 +92,11 @@ function rosterAskDownload() {
     cancelButtonText: '{% trans "Cancel"|escapejs %}',
     confirmButtonColor: '#008000',
     cancelButtonColor: '#6c757d',
+    didOpen: function () {
+      if (!window.UiDatePicker) return;
+      var popup = typeof Swal.getPopup === 'function' ? Swal.getPopup() : document.querySelector('.swal2-popup');
+      if (popup) UiDatePicker.enhanceAll(popup, window.uiDatePickerOptions || {});
+    },
     preConfirm: function () {
       var start = document.getElementById('swal_start').value;
       var end   = document.getElementById('swal_end').value;

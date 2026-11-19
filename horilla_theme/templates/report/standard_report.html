@@ -263,11 +263,11 @@
                     </div>
                     <div class="sr-field sr-field--dates" id="sr-custom-dates" hidden>
                         <label class="oh-label" for="sr-from">{% trans "From" %}</label>
-                        <input class="oh-input w-100" type="date" id="sr-from">
+                        <input class="oh-input w-100" type="text" data-ui-date autocomplete="off" id="sr-from">
                     </div>
                     <div class="sr-field sr-field--dates" id="sr-custom-dates-to" hidden>
                         <label class="oh-label" for="sr-to">{% trans "To" %}</label>
-                        <input class="oh-input w-100" type="date" id="sr-to">
+                        <input class="oh-input w-100" type="text" data-ui-date autocomplete="off" id="sr-to">
                     </div>
                     {% for field in filter_schema.primary %}
                     <div class="sr-field">

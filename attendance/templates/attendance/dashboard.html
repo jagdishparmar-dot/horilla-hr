@@ -2,6 +2,7 @@
 {% load static i18n %}
 
 {% block content %}
+    {% include "components/ui_date_picker_assets.html" %}
     <script src="https://cdn.jsdelivr.net/npm/apexcharts@7.8.0/dist/apexcharts.min.js"></script>
     {% include "components/legend_prefs.html" %}
     <style>
@@ -576,19 +577,6 @@
             gap: 6px;
             font-size: 12px;
         }
-        .am-period-picker input[type="date"] {
-            padding: 5px 8px;
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 6px;
-            outline: none;
-            background: transparent;
-            color: inherit;
-            font-size: 12px;
-            transition: border-color 0.15s;
-        }
-        .am-period-picker input[type="date"]:focus {
-            border-color: var(--am-indigo);
-        }
         .am-period-picker__sep {
             font-size: 11px;
             opacity: 0.4;
@@ -617,10 +605,6 @@
             background: var(--am-indigo);
             color: #fff;
         }
-        .dark .am-period-picker input[type="date"] {
-            color-scheme: dark;
-        }
-
         /* ── Customize panel (slide-out) ── */
         .am-customize-overlay {
             z-index: 1050;
@@ -1144,13 +1128,9 @@
                     <button class="am-period-preset" data-preset="this_year">
                         {% trans "This Year" %}
                     </button>
-                    <input
-                        type="date"
-                        id="am-from-date"
-                        title="{% trans 'From' %}"
-                    />
+                    <input type="text" id="am-from-date" data-ui-date autocomplete="off" title="{% trans 'From' %}" placeholder="{% trans 'From' %}">
                     <span class="am-period-picker__sep">&rarr;</span>
-                    <input type="date" id="am-to-date" title="{% trans 'To' %}" />
+                    <input type="text" id="am-to-date" data-ui-date autocomplete="off" title="{% trans 'To' %}" placeholder="{% trans 'To' %}">
                 </div>
                 <button
                     class="oh-btn oh-btn--secondary"
@@ -1883,6 +1863,21 @@
             const AM_PERIOD_KEY = "am_dashboard_period_v1";
             const amFromInput = document.getElementById("am-from-date");
             const amToInput = document.getElementById("am-to-date");
+            if (window.UiDatePicker) {
+                const weekStart = {{ first_day_of_week|default:1 }};
+                UiDatePicker.enhance(amFromInput, {
+                    firstDay: weekStart,
+                    placeholder: '{% trans "From"|escapejs %}',
+                    todayLabel: '{% trans "Today"|escapejs %}',
+                    clearLabel: '{% trans "Clear"|escapejs %}',
+                });
+                UiDatePicker.enhance(amToInput, {
+                    firstDay: weekStart,
+                    placeholder: '{% trans "To"|escapejs %}',
+                    todayLabel: '{% trans "Today"|escapejs %}',
+                    clearLabel: '{% trans "Clear"|escapejs %}',
+                });
+            }
             const _pad2 = (n) => String(n).padStart(2, "0");
             const _ymd = (d) =>
                 d.getFullYear() +

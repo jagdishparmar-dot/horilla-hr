@@ -110,9 +110,9 @@
             // Define the select box options
             var selectOptions = ``;
           var dateFields = '<label style="display:block;" for="notice_period_starts">{% trans "Start Date:"|escapejs %}</label>' +
-            `<input style="display:block;" onchange="$('#${target.siblings("input[name=notice_period_starts]").first().attr("id")}').val(this.value)" class="oh-input" type="date" id="notice_period_starts" name="notice_period_starts">` +
+            `<input style="display:block;" onchange="$('#${target.siblings("input[name=notice_period_starts]").first().attr("id")}').val(this.value)" class="oh-input" type="text" data-ui-date autocomplete="off" id="notice_period_starts" name="notice_period_starts">` +
             '<label style="display:block;" for="notice_period_ends">{% trans "End Date:"|escapejs %}</label>' +
-            `<input style="display:block;" onchange="$('#${target.siblings("input[name=notice_period_ends]").first().attr("id")}').val(this.value)" class="oh-input" type="date" id="notice_period_ends" name="notice_period_ends">`;
+            `<input style="display:block;" onchange="$('#${target.siblings("input[name=notice_period_ends]").first().attr("id")}').val(this.value)" class="oh-input" type="text" data-ui-date autocomplete="off" id="notice_period_ends" name="notice_period_ends">`;
 
           var plannedToLeaveOn = '{% now "Y-m-d" %}';
           var initialNoticeEnd = computeNoticeEnd(plannedToLeaveOn);
@@ -134,13 +134,13 @@
           <div class="oh-label__info" for="notice_period_starts">
             <label class="oh-label" style="font-weight:bold;" for="notice_period_starts"><b>{% trans "Notice period start"|escapejs %}</b></label>
           </div>
-            <input type="date" onchange="$('#${target.siblings("input[name=notice_period_starts]").first().attr("id")}').val(this.value); var __end = computeNoticeEnd(this.value); document.getElementById('notice_period_ends').value = __end; $('#${target.siblings("input[name=notice_period_ends]").first().attr("id")}').val(__end);" name="notice_period_starts" value="${plannedToLeaveOn}"  class="oh-input w-100 form-control" required id="notice_period_starts">
+            <input type="text" data-ui-date autocomplete="off" onchange="$('#${target.siblings("input[name=notice_period_starts]").first().attr("id")}').val(this.value); var __end = computeNoticeEnd(this.value); document.getElementById('notice_period_ends').value = __end; $('#${target.siblings("input[name=notice_period_ends]").first().attr("id")}').val(__end);" name="notice_period_starts" value="${plannedToLeaveOn}"  class="oh-input w-100 form-control" required id="notice_period_starts">
         </div>
         <div class="col-6 col-md-6">
           <div class="oh-label__info" for="notice_period_ends">
             <label class="oh-label" style="font-weight:bold;" for="notice_period_ends"><b>{% trans "Notice period end"|escapejs %}</b></label>
           </div>
-            <input type="date" onchange="$('#${target.siblings("input[name=notice_period_ends]").first().attr("id")}').val(this.value);" name="notice_period_ends" value="${initialNoticeEnd}" class="oh-input w-100 form-control" required id="notice_period_ends">
+            <input type="text" data-ui-date autocomplete="off" onchange="$('#${target.siblings("input[name=notice_period_ends]").first().attr("id")}').val(this.value);" name="notice_period_ends" value="${initialNoticeEnd}" class="oh-input w-100 form-control" required id="notice_period_ends">
         </div>
       </div>
       ` + "</div>" }
@@ -155,6 +155,11 @@
       cancelButtonColor: '#6c757d',
       confirmButtonText: i18nMessages.confirm,
       cancelButtonText: "{% trans 'Close'|escapejs %}",
+      didOpen: function () {
+        if (!window.UiDatePicker) return;
+        var popup = typeof Swal.getPopup === 'function' ? Swal.getPopup() : document.querySelector('.swal2-popup');
+        if (popup) UiDatePicker.enhanceAll(popup, window.uiDatePickerOptions || {});
+      },
     }).then((result) => {
       if (result.isConfirmed) {
         if (approve) {

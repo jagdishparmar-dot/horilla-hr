@@ -50,7 +50,7 @@
                                 <div class="oh-input-group">
                                     <label class="oh-label">{% trans "Start Date" %}</label>
                                     <input
-                                        type="date"
+                                        type="text" data-ui-date autocomplete="off"
                                         name="start_date"
                                         class="oh-input w-100"
                                         value="{{ request.GET.start_date }}"
@@ -61,7 +61,7 @@
                                 <div class="oh-input-group">
                                     <label class="oh-label">{% trans "End Date" %}</label>
                                     <input
-                                        type="date"
+                                        type="text" data-ui-date autocomplete="off"
                                         name="end_date"
                                         class="oh-input w-100"
                                         value="{{ request.GET.end_date }}"

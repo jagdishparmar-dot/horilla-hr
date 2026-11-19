@@ -2,6 +2,7 @@
 {% load static i18n %}
 
 {% block content %}
+    {% include "components/ui_date_picker_assets.html" %}
     <script src="https://cdn.jsdelivr.net/npm/apexcharts@7.8.0/dist/apexcharts.min.js"></script>
     {% include "components/legend_prefs.html" %}
     <style>
@@ -1634,19 +1635,6 @@
             gap: 6px;
             font-size: 12px;
         }
-        .md-period-picker input[type='date'] {
-            padding: 5px 8px;
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 6px;
-            outline: none;
-            background: transparent;
-            color: inherit;
-            font-size: 12px;
-            transition: border-color 0.15s;
-        }
-        .md-period-picker input[type='date']:focus {
-            border-color: var(--md-indigo);
-        }
         .md-period-picker__sep {
             font-size: 11px;
             opacity: 0.4;
@@ -1675,10 +1663,6 @@
             background: var(--md-indigo);
             color: #fff;
         }
-        .dark .md-period-picker input[type='date'] {
-            color-scheme: dark;
-        }
-
         /* Auto-refresh */
         .md-refresh {
             display: flex;
@@ -1880,9 +1864,9 @@
                     <button class="md-period-preset" data-preset="this_month">{% trans "This Month" %}</button>
                     <button class="md-period-preset" data-preset="last_month">{% trans "Last Month" %}</button>
                     <button class="md-period-preset" data-preset="this_year">{% trans "This Year" %}</button>
-                    <input type="date" id="md-from-date" title="{% trans 'Custom range start' %}">
+                    <input type="text" id="md-from-date" data-ui-date autocomplete="off" title="{% trans 'Custom range start' %}" placeholder="{% trans 'From' %}">
                     <span class="md-period-picker__sep">→</span>
-                    <input type="date" id="md-to-date" title="{% trans 'Custom range end' %}">
+                    <input type="text" id="md-to-date" data-ui-date autocomplete="off" title="{% trans 'Custom range end' %}" placeholder="{% trans 'To' %}">
                 </div>
                 {% if request.user.employee_get %}
                     <a
@@ -2394,6 +2378,21 @@
             const PERIOD_KEY = 'md_period_v2';
             const fromInput = document.getElementById('md-from-date');
             const toInput = document.getElementById('md-to-date');
+            if (window.UiDatePicker) {
+                const weekStart = {{ first_day_of_week|default:1 }};
+                UiDatePicker.enhance(fromInput, {
+                    firstDay: weekStart,
+                    placeholder: '{% trans "From"|escapejs %}',
+                    todayLabel: '{% trans "Today"|escapejs %}',
+                    clearLabel: '{% trans "Clear"|escapejs %}',
+                });
+                UiDatePicker.enhance(toInput, {
+                    firstDay: weekStart,
+                    placeholder: '{% trans "To"|escapejs %}',
+                    todayLabel: '{% trans "Today"|escapejs %}',
+                    clearLabel: '{% trans "Clear"|escapejs %}',
+                });
+            }
 
             function ymdLocal(d) {
                 const y = d.getFullYear();

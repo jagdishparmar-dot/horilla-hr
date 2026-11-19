@@ -286,6 +286,7 @@
         {% block styles %}
             <!-- Page-specific styles (optional) -->
         {% endblock %}
+        {% include "components/ui_date_picker_assets.html" %}
     </head>
 
     <body class="bg-[{{theme_obj.primary_50}}] font-[Inter,_sans-serif] overflow-hidden {% if request.session.theme == 'dark' %}dark{% endif %}">
@@ -398,6 +399,16 @@
         </div>
         {% include "generic/components.html" %}
         {% include "horilla_theme/components/footer_scripts.html" %}
+        <script>
+            if (window.UiDatePicker) {
+                window.uiDatePickerOptions = { firstDay: {{ first_day_of_week }} };
+                UiDatePicker.enhanceAll(document, window.uiDatePickerOptions);
+                document.body.addEventListener('htmx:afterSwap', function (event) {
+                    var target = event.detail && event.detail.target;
+                    if (target) UiDatePicker.enhanceAll(target, window.uiDatePickerOptions);
+                });
+            }
+        </script>
         <script>
             document.body.addEventListener("showMessages", function () {
                 var b = document.getElementById("reloadMessagesButton");

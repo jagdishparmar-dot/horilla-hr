@@ -2,6 +2,7 @@
 {% load static i18n %}
 
 {% block content %}
+{% include "components/ui_date_picker_assets.html" %}
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@7.8.0/dist/apexcharts.min.js"></script>
 <style>
     :root {
@@ -46,17 +47,6 @@
     .pr-period-picker {
         display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px;
     }
-    .pr-period-picker input[type="date"] {
-        padding: 5px 8px;
-        border: 1px solid rgba(128,128,128,0.2);
-        border-radius: 6px;
-        outline: none;
-        background: transparent;
-        color: inherit;
-        font-size: 12px;
-        transition: border-color 0.15s;
-    }
-    .pr-period-picker input[type="date"]:focus { border-color: var(--primary-600, #E54F38); }
     .pr-period-picker__sep { opacity: 0.4; font-size: 11px; }
     .pr-period-preset {
         padding: 4px 10px;
@@ -103,8 +93,6 @@
     .pr-cust-item__toggle--on::after { transform: translateX(16px); }
     @media (max-width: 1024px) { .pr-customize-panel { width: 320px; right: -340px; } }
     @media (max-width: 640px) { .pr-customize-panel { width: 100%; right: -100%; } }
-    .dark .pr-period-picker input[type="date"] { color-scheme: dark; }
-
     /* KPI grid — sizing/spacing ported from the Payroll dashboard's pd-kpi-* */
     .pr-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
     .pr-kpi-card { border-radius: 12px; padding: 16px; background: #ffffff; border: 1px solid rgba(128,128,128,0.12); transition: all 0.2s; text-decoration: none; color: inherit; display: block; }
@@ -239,9 +227,9 @@
                 <button class="pr-period-preset" data-preset="month" onclick="prSetPreset('month',this)">{% trans "This Month" %}</button>
                 <button class="pr-period-preset" data-preset="last_month" onclick="prSetPreset('last_month',this)">{% trans "Last Month" %}</button>
                 <button class="pr-period-preset" data-preset="year" onclick="prSetPreset('year',this)">{% trans "This Year" %}</button>
-                <input type="date" id="pr-from-date" title="{% trans 'From' %}">
+                <input type="text" id="pr-from-date" data-ui-date autocomplete="off" title="{% trans 'From' %}" placeholder="{% trans 'From' %}">
                 <span class="pr-period-picker__sep">&rarr;</span>
-                <input type="date" id="pr-to-date" title="{% trans 'To' %}">
+                <input type="text" id="pr-to-date" data-ui-date autocomplete="off" title="{% trans 'To' %}" placeholder="{% trans 'To' %}">
             </div>
             <button class="oh-btn oh-btn--secondary" id="pr-open-customize" style="display: flex; align-items: center; gap: 5px; font-size: 13px" title="{% trans 'Customize' %}">
                 ⚙ {% trans "Customize" %}
@@ -844,6 +832,22 @@
         prLoadTop();
         prLoadContributors();
         prLoadDeadlines();
+    }
+
+    if (window.UiDatePicker) {
+        const weekStart = {{ first_day_of_week|default:1 }};
+        UiDatePicker.enhance(document.getElementById("pr-from-date"), {
+            firstDay: weekStart,
+            placeholder: '{% trans "From"|escapejs %}',
+            todayLabel: '{% trans "Today"|escapejs %}',
+            clearLabel: '{% trans "Clear"|escapejs %}',
+        });
+        UiDatePicker.enhance(document.getElementById("pr-to-date"), {
+            firstDay: weekStart,
+            placeholder: '{% trans "To"|escapejs %}',
+            todayLabel: '{% trans "Today"|escapejs %}',
+            clearLabel: '{% trans "Clear"|escapejs %}',
+        });
     }
 
     document.getElementById("pr-from-date").addEventListener("change", function() {

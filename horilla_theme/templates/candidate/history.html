@@ -93,7 +93,7 @@
             <div>
                 <label class="text-xs font-medium text-dark-100 block mb-1">{% trans "From" %}</label>
                 <input
-                    type="date"
+                    type="text" data-ui-date autocomplete="off"
                     name="date_from"
                     value="{{ date_from|date:'Y-m-d' }}"
                     class="oh-input"
@@ -107,7 +107,7 @@
             <div>
                 <label class="text-xs font-medium text-dark-100 block mb-1">{% trans "To" %}</label>
                 <input
-                    type="date"
+                    type="text" data-ui-date autocomplete="off"
                     name="date_to"
                     value="{{ date_to|date:'Y-m-d' }}"
                     class="oh-input"

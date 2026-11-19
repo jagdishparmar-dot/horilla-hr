@@ -3683,7 +3683,7 @@ def get_keyresult_data(request):
             )
             end_date = (start_date + relativedelta(days=key_result.duration)).date()
             return HttpResponse(
-                f'<input type="date" name="end_date" value="{end_date}" class="oh-input w-100 form-control" placeholder="End Date" id="id_end_date">'
+                f'<input type="text" data-ui-date autocomplete="off" name="end_date" value="{end_date}" class="oh-input w-100 form-control" placeholder="End Date" id="id_end_date">'
             )
     else:
         if request.GET.get("data-update") == "target_value":
@@ -3692,7 +3692,7 @@ def get_keyresult_data(request):
             )
         if request.GET.get("data-update") == "end_date":
             return HttpResponse(
-                f'<input type="date" name="end_date" value="" class="oh-input w-100 form-control" placeholder="End Date" id="id_end_date">'
+                f'<input type="text" data-ui-date autocomplete="off" name="end_date" value="" class="oh-input w-100 form-control" placeholder="End Date" id="id_end_date">'
             )
     return HttpResponse("")
 

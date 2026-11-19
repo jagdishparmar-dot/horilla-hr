@@ -38,13 +38,13 @@
 									<div class='oh-label__info'>
 										<label class='oh-label' style='font-weight:bold;' for='startOnboardingJoiningDate{{instance.pk}}'><b>{% trans 'Date of Joining'|escapejs %}</b></label>
 									</div>
-									<input type='date' id='startOnboardingJoiningDate{{instance.pk}}' class='oh-input w-100 form-control' value='{{ instance.joining_date|date:"Y-m-d" }}' required>
+									<input type='text' data-ui-date autocomplete='off' id='startOnboardingJoiningDate{{instance.pk}}' class='oh-input w-100 form-control' value='{{ instance.joining_date|date:"Y-m-d" }}' required>
 								</div>
 								<div class='col-12 col-md-6'>
 									<div class='oh-label__info'>
 										<label class='oh-label' style='font-weight:bold;' for='startOnboardingProbationEnd{{instance.pk}}'><b>{% trans 'Probation End Date'|escapejs %}</b></label>
 									</div>
-									<input type='date' id='startOnboardingProbationEnd{{instance.pk}}' class='oh-input w-100 form-control' value='{{ instance.probation_end|date:"Y-m-d" }}'>
+									<input type='text' data-ui-date autocomplete='off' id='startOnboardingProbationEnd{{instance.pk}}' class='oh-input w-100 form-control' value='{{ instance.probation_end|date:"Y-m-d" }}'>
 								</div>
 							</div>`,
 						icon: 'question',
@@ -53,6 +53,11 @@
 						cancelButtonColor: '#6c757d',
 						confirmButtonText: `{% trans 'Confirm'|escapejs %}`,
 						cancelButtonText: `{% trans 'Cancel'|escapejs %}`,
+						didOpen: function () {
+							if (!window.UiDatePicker) return;
+							var popup = typeof Swal.getPopup === 'function' ? Swal.getPopup() : document.querySelector('.swal2-popup');
+							if (popup) UiDatePicker.enhanceAll(popup, window.uiDatePickerOptions || {});
+						},
 						preConfirm: () => {
 							var value = document.getElementById('startOnboardingJoiningDate{{instance.pk}}').value;
 							if (!value) {
