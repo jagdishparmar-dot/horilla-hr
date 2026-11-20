@@ -175,11 +175,11 @@ make logs
 | `DEBUG` | `1` | Set to `0` for production |
 | `SECRET_KEY` | `dev-secret-key...` | **Change for production** — generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
 | `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated hostnames. With multitenant on, `.<platform-domain>` and the dashboard host are added |
-| `CSRF_TRUSTED_ORIGINS` | `http://localhost:8000` | Full URLs for CSRF validation. With multitenant on, `https://*.<platform-domain>` is added. Cookies stay host-only |
+| `CSRF_TRUSTED_ORIGINS` | `http://localhost:8000` | Full URLs for CSRF validation. With multitenant on, the apex (`https://<platform-domain>`) and `https://*.<platform-domain>` are added. Cookies stay host-only |
 | `DATABASE_URL` | `postgres://...@db:5432/...` | Control database only. Web and scheduler share it. Tenant URLs are not environment variables. Production refuses to start when this is empty |
 | `DB_INIT_PASSWORD` | `dev-init-password...` | Initial database setup password — **change for production** |
 | `REDIS_URL` | `redis://:...@redis:6379/0` | Redis connection string (includes `REDIS_PASSWORD`) |
-| `HORILLA_PLATFORM_DOMAIN` | `localhost` | Parent domain for tenant hosts `<slug>.<domain>`. Local tenants use `<slug>.localhost` |
+| `HORILLA_PLATFORM_DOMAIN` | `localhost` | Parent domain. The bare host is the public marketing site (`/` features, pricing, and workspace requests). `www.<domain>` redirects to it. Tenant hosts are `<slug>.<domain>`. A non-empty `HORILLA_LEGACY_HOST_REDIRECT` still sends the bare host away |
 | `HORILLA_DASHBOARD_HOST` | `manage.<platform-domain>` | Operator dashboard host. Not a customer tenant |
 | `HORILLA_MULTITENANT` | `false` | When `true`, startup requires `TENANT_DB_FERNET_KEY` |
 | `TENANT_DB_FERNET_KEY` | unset | Fernet key for tenant database passwords. Required only when multitenant is on. Do not commit a real value |
@@ -326,7 +326,7 @@ Milestone 1 needs one certificate that covers the dashboard host and every tenan
 
 A customer's own hostname is not on that certificate. Custom-domain certificates are milestone 2, with the dashboard screen in P4-07.
 
-Nginx already forwards the client `Host` unchanged and accepts `manage.<domain>` and `*.<domain>` on port 80. Add a `443` listener only after the certificate files exist:
+The bare domain is the public marketing site. `www.<domain>` redirects to it. A non-empty `HORILLA_LEGACY_HOST_REDIRECT` still sends that bare host away. Nginx already forwards the client `Host` unchanged and accepts the bare domain, `manage.<domain>`, and `*.<domain>` on port 80. The wildcard certificate does not cover the bare domain, so add that name when you issue TLS. Add a `443` listener only after the certificate files exist:
 
 ```nginx
 server {

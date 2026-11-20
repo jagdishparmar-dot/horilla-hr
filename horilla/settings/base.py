@@ -104,6 +104,7 @@ INSTALLED_APPS = [
     # Control plane. Models arrive in a later phase; P0 only registers the
     # slug gate and the tenant-password key check.
     "control.apps.ControlConfig",
+    "marketing.apps.MarketingConfig",
 ]
 
 # ========================================
@@ -397,6 +398,20 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.template.context_processors.csrf",
                 "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+    # Public marketing pages. Same reason as the control engine: the default
+    # loaders and context processors query tenant tables.
+    {
+        "NAME": "marketing",
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "marketing" / "templates"],
+        "APP_DIRS": False,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.template.context_processors.csrf",
             ],
         },
     },

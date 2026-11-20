@@ -1,0 +1,21 @@
+{% extends "marketing/base.html" %}
+{% load marketing_ui %}
+{% block title %}Sign in · ClockMe{% endblock %}
+
+{% block content %}
+<section class="section section--paper">
+  <div class="container auth-wrap">
+    <span class="eyebrow">Sign in</span>
+    <h1 class="display page-title" style="margin-top: 0.9rem">Find your workspace.</h1>
+    <p style="margin: 1rem 0 2rem; color: var(--muted); font-size: var(--fs-md)">Enter the name at the start of your sign-in address. For <span class="mono">acme.{{ platform_domain }}</span> that is <span class="mono">acme</span>.</p>
+
+    <form class="form-card" method="post" action="{% url 'marketing-sign-in' %}" novalidate>
+      {% csrf_token %}
+      {% if missing %}<p class="notice" role="alert">{{ not_found }}</p>{% endif %}
+      {% include "marketing/partials/field.html" with field=form.slug suffix=platform_domain %}
+      <button class="btn btn-primary btn-block" type="submit">Continue {% icon "arrow" %}</button>
+      <p class="form-fine">No workspace yet? <a href="{% url 'marketing-request' %}" style="color: var(--coral-text); font-weight: 600">Request one</a>.</p>
+    </form>
+  </div>
+</section>
+{% endblock %}

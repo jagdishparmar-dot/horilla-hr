@@ -34,6 +34,16 @@
           {% endif %}
         </a>
 
+        <a href="{% url 'control-requests' %}" class="{% control_nav_active request 'requests' %}">
+          <span class="control-nav-label">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2" y="3.2" width="12" height="9.6" rx="1.6" stroke="currentColor" stroke-width="1.35"/><path d="M2.4 4.2 8 8.2l5.6-4" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/></svg>
+            <span>Requests</span>
+          </span>
+          {% if nav_request_count is not None %}
+            <span class="control-nav-count">{{ nav_request_count }}</span>
+          {% endif %}
+        </a>
+
         <a href="{% url 'control-plans' %}" class="{% control_nav_active request 'plans' %}">
           <span class="control-nav-label">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.2 13.8 5.3 8 8.4 2.2 5.3 8 2.2Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="m2.2 8.2 5.8 3.1 5.8-3.1M2.2 11.1 8 14.2l5.8-3.1" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>

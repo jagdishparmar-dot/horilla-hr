@@ -65,7 +65,17 @@ from control.setup_access import (
     stage_setup_password,
 )
 from control.catalog import UNASSIGNED, sellable_plans
-from control.models import Addon, Domain, Invoice, Operator, OperatorAudit, Plan, ProvisionJob, Tenant
+from control.models import (
+    Addon,
+    Domain,
+    Invoice,
+    Operator,
+    OperatorAudit,
+    Plan,
+    ProvisionJob,
+    Tenant,
+    WorkspaceRequest,
+)
 from control.pricing import lock_subscription, quote, quote_tenant
 from control.naming import TenantSlugError
 from control.provisioning import (
@@ -114,6 +124,10 @@ def render_control(request, template, context=None, status=200):
     if operator is not None and "nav_billing_count" not in data:
         data["nav_billing_count"] = Invoice.objects.filter(
             status__in=(Invoice.Status.OPEN, Invoice.Status.PAST_DUE)
+        ).count()
+    if operator is not None and "nav_request_count" not in data:
+        data["nav_request_count"] = WorkspaceRequest.objects.filter(
+            status=WorkspaceRequest.Status.NEW
         ).count()
     if "provisioner_notice" not in data:
         try:
@@ -1367,3 +1381,49 @@ def operator_password(request):
         "control/password.html",
         {"form": form},
     )
+
+
+@operator_required
+def workspace_requests(request):
+    selected = request.GET.get("status", "")
+    allowed = {choice.value for choice in WorkspaceRequest.Status}
+    rows = WorkspaceRequest.objects.select_related("plan", "reviewed_by")
+    if selected in allowed:
+        rows = rows.filter(status=selected)
+    return render_control(
+        request,
+        "control/requests.html",
+        {
+            "rows": rows,
+            "status": selected if selected in allowed else "",
+            "statuses": WorkspaceRequest.Status,
+        },
+    )
+
+
+def _set_request_status(request, pk, status):
+    row = get_object_or_404(WorkspaceRequest, pk=pk)
+    row.status = status
+    row.reviewed_at = timezone.now()
+    row.reviewed_by = request.operator
+    row.save(update_fields=["status", "reviewed_at", "reviewed_by"])
+    record_operator_action(
+        operator=request.operator,
+        action=OperatorAudit.Action.REQUEST_UPDATE,
+        slug=row.requested_slug,
+        detail=f"{row.pk} {status}",
+    )
+    messages.success(request, "Request updated.")
+    return redirect("control-requests")
+
+
+@operator_required
+@require_POST
+def workspace_request_reviewed(request, pk):
+    return _set_request_status(request, pk, WorkspaceRequest.Status.REVIEWED)
+
+
+@operator_required
+@require_POST
+def workspace_request_dismissed(request, pk):
+    return _set_request_status(request, pk, WorkspaceRequest.Status.DISMISSED)

@@ -33,6 +33,8 @@ class TenantMiddleware:
                 scope_token = activate_cache_scope("control")
             elif getattr(request, "tenant", None) is not None:
                 scope_token = activate_cache_scope(request.tenant.slug)
+            elif getattr(request, "marketing_site", False):
+                scope_token = activate_cache_scope("marketing")
             if early is not None:
                 return early
             return self.get_response(request)
@@ -45,6 +47,7 @@ class TenantMiddleware:
     def _bind(self, request):
         request.tenant = None
         request.control_plane = False
+        request.marketing_site = False
         host = request_hostname(request)
         # The container healthcheck calls localhost. That name is not a tenant
         # and not the dashboard host, so the probe would stay 404 with the
@@ -56,6 +59,9 @@ class TenantMiddleware:
         legacy = _legacy_redirect(request, host)
         if legacy is not None:
             return legacy, None, None
+        public = _public_site(request, host)
+        if public is not None:
+            return public
         dashboard = (settings.HORILLA_DASHBOARD_HOST or "").lower()
         if host == dashboard:
             request.control_plane = True
@@ -83,6 +89,33 @@ class TenantMiddleware:
         request.tenant = tenant
         request.urlconf = "horilla.urls"
         return None, token, alias
+
+
+def _public_site(request, host: str):
+    """Serve the marketing site on the apex. Redirect www to that host.
+
+    Returns None when this host is neither. A legacy redirect, when set,
+    runs first and still sends the apex away.
+    """
+    domain = (getattr(settings, "HORILLA_PLATFORM_DOMAIN", "") or "").strip().lower().rstrip(".")
+    if not domain:
+        return None
+    if host == f"www.{domain}":
+        return _redirect_host(request, domain), None, None
+    if host != domain:
+        return None
+    request.tenant = None
+    request.control_plane = False
+    request.marketing_site = True
+    request.urlconf = "marketing.urls"
+    return None, None, None
+
+
+def _redirect_host(request, host: str):
+    scheme = "https" if request.is_secure() else "http"
+    _, port = split_domain_port(request.get_host())
+    netloc = host if not port else f"{host}:{port}"
+    return HttpResponseRedirect(f"{scheme}://{netloc}{request.get_full_path()}")
 
 
 def _legacy_redirect(request, host: str):

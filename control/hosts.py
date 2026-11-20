@@ -25,13 +25,23 @@ def platform_host_patterns(platform_domain: str, dashboard_host: str) -> list[st
 
 
 def platform_csrf_origins(platform_domain: str) -> list[str]:
-    """Wildcard origins for the platform domain. Host-only cookies stay in place."""
+    """Origins for the platform domain, including the bare marketing host.
+
+    A wildcard origin does not match the apex. The public request form posts
+    there. Host-only cookies stay in place.
+    """
     domain = (platform_domain or "").strip().lower().rstrip(".")
     if not domain:
         return []
-    origins = [f"https://*.{domain}", f"http://*.{domain}"]
+    origins = [
+        f"https://*.{domain}",
+        f"http://*.{domain}",
+        f"https://{domain}",
+        f"http://{domain}",
+    ]
     if domain == "localhost":
         origins.append("http://*.localhost:8000")
+        origins.append("http://localhost:8000")
     return origins
 
 

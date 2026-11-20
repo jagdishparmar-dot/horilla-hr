@@ -20,6 +20,17 @@ urlpatterns = [
     path("control/login/", views.login, name="control-login"),
     path("control/logout/", views.logout, name="control-logout"),
     path("control/", views.tenant_list, name="control-home"),
+    path("control/requests/", views.workspace_requests, name="control-requests"),
+    path(
+        "control/requests/<int:pk>/reviewed/",
+        views.workspace_request_reviewed,
+        name="control-request-reviewed",
+    ),
+    path(
+        "control/requests/<int:pk>/dismissed/",
+        views.workspace_request_dismissed,
+        name="control-request-dismissed",
+    ),
     path("control/plans/", views.plans, name="control-plans"),
     path("control/plans/new/", views.plan_create, name="control-plan-create"),
     path("control/plans/<slug:code>/edit/", views.plan_edit, name="control-plan-edit"),

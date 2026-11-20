@@ -1,0 +1,26 @@
+{% load marketing_ui %}
+<section class="section cta" aria-labelledby="cta-title">
+  <div class="container cta__grid">
+    <div>
+      <span class="eyebrow eyebrow--light">Get started</span>
+      <h2 class="section-title" id="cta-title" style="margin-top: 0.9rem">Give your HR team its Mondays back.</h2>
+      <p class="lede">Request a workspace and we will set it up for you. Nothing goes live until our team has reviewed your request.</p>
+      <div class="hero__actions">
+        <a class="btn btn-primary" href="{% url 'marketing-request' %}">Request a workspace {% icon "arrow" %}</a>
+        <a class="btn btn-ghost" href="{% url 'marketing-pricing' %}">See pricing</a>
+      </div>
+    </div>
+    <div class="cta__find">
+      <h3>Already have a workspace?</h3>
+      <p>Enter its name and we will take you to your sign-in page.</p>
+      <form method="post" action="{% url 'marketing-sign-in' %}">
+        {% csrf_token %}
+        <label class="sr-only" for="cta-slug">Workspace name</label>
+        <div class="field">
+          <input id="cta-slug" type="text" name="slug" maxlength="31" placeholder="your_company" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+        </div>
+        <button class="btn btn-outline btn-block" type="submit">Find my workspace</button>
+      </form>
+    </div>
+  </div>
+</section>

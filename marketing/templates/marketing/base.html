@@ -1,0 +1,90 @@
+{% load static marketing_ui %}<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ClockMe: HR, attendance and payroll in one workspace{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}ClockMe brings attendance, payroll, leave, recruitment, onboarding, performance, assets and helpdesk into one HR workspace of your own.{% endblock %}">
+  <meta name="theme-color" content="#080d19">
+  <link rel="icon" href="{% static 'favicons/favicon.ico' %}">
+  <script>document.documentElement.className = "js";</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="{% static 'marketing/site.css' %}">
+</head>
+<body>
+  {% with current=request.resolver_match.url_name %}
+  <header class="site-header">
+    <div class="container site-header__row">
+      <a class="brand" href="{% url 'marketing-home' %}" aria-label="ClockMe home">
+        <img class="brand__mark" src="{% static 'images/ui/auth-logo.png' %}" alt="" width="36" height="36">
+        <span class="brand__name">ClockMe</span>
+      </a>
+      <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="site-nav">
+        <span class="sr-only">Menu</span>{% icon "menu" 22 %}
+      </button>
+      <nav class="site-nav" id="site-nav" data-nav aria-label="Main">
+        <a href="{% url 'marketing-features' %}"{% if current == 'marketing-features' %} aria-current="page"{% endif %}>Features</a>
+        <a href="{% url 'marketing-pricing' %}"{% if current == 'marketing-pricing' %} aria-current="page"{% endif %}>Pricing</a>
+        <a href="{% url 'marketing-home' %}#how-it-works">How it works</a>
+        <a href="{% url 'marketing-home' %}#faq">FAQ</a>
+        <div class="site-nav__actions">
+          <a href="{% url 'marketing-sign-in' %}"{% if current == 'marketing-sign-in' %} aria-current="page"{% endif %}>Sign in</a>
+          <a class="btn btn-primary btn-sm" href="{% url 'marketing-request' %}">Request a workspace</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  {% endwith %}
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer__grid">
+        <div class="footer__about">
+          <a class="brand" href="{% url 'marketing-home' %}">
+            <img class="brand__mark" src="{% static 'images/ui/auth-logo.png' %}" alt="" width="36" height="36">
+            <span class="brand__name">ClockMe</span>
+          </a>
+          <p>HR, attendance and payroll in one workspace.</p>
+        </div>
+        <div class="footer__col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="{% url 'marketing-features' %}">Features</a></li>
+            <li><a href="{% url 'marketing-pricing' %}">Pricing</a></li>
+            <li><a href="{% url 'marketing-home' %}#how-it-works">How it works</a></li>
+            <li><a href="{% url 'marketing-home' %}#mobile-app">Mobile app</a></li>
+            <li><a href="{% url 'marketing-home' %}#faq">FAQ</a></li>
+          </ul>
+        </div>
+        <div class="footer__col">
+          <h4>Modules</h4>
+          <ul>
+            <li><a href="{% url 'marketing-features' %}#attendance">Attendance</a></li>
+            <li><a href="{% url 'marketing-features' %}#payroll">Payroll</a></li>
+            <li><a href="{% url 'marketing-features' %}#leave">Leave</a></li>
+            <li><a href="{% url 'marketing-features' %}#performance">Performance</a></li>
+          </ul>
+        </div>
+        <div class="footer__col">
+          <h4>Account</h4>
+          <ul>
+            <li><a href="{% url 'marketing-sign-in' %}">Sign in</a></li>
+            <li><a href="{% url 'marketing-request' %}">Request a workspace</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer__base">
+        <span>&copy; {% now "Y" %} ClockMe. Workspaces live at <span class="mono">{{ platform_domain }}</span>.</span>
+        <span>Prices are exclusive of GST.</span>
+      </div>
+    </div>
+  </footer>
+  <script src="{% static 'marketing/site.js' %}" defer></script>
+</body>
+</html>

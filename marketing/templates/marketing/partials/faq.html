@@ -1,0 +1,9 @@
+{% load marketing_ui %}
+<div class="faq">
+  {% for item in faqs %}
+    <details>
+      <summary>{{ item.q }}{% icon "plus" %}</summary>
+      <p>{{ item.a }}</p>
+    </details>
+  {% endfor %}
+</div>

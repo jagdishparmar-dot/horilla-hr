@@ -23,7 +23,7 @@ class TenantSlugTests(SimpleTestCase):
         self.assertEqual(tenant_role_name("acme"), "tenant_acme")
 
     def test_rejects_shape_and_reserved_names(self):
-        for slug in ("", "ab", "Acme-Co", "1acme", "has space", "postgres", "public"):
+        for slug in ("", "ab", "Acme-Co", "1acme", "has space", "postgres", "public", "manage", "www"):
             with self.assertRaises(TenantSlugError):
                 validate_tenant_slug(slug)
 

@@ -29,6 +29,7 @@ ACTION_CATEGORIES = {
     OperatorAudit.Action.OPERATOR_LOGIN_FAILED: OperatorAudit.Category.SECURITY,
     OperatorAudit.Action.OPERATOR_PASSWORD_CHANGE: OperatorAudit.Category.SECURITY,
     OperatorAudit.Action.SETUP_PASSWORD_RESET: OperatorAudit.Category.SECURITY,
+    OperatorAudit.Action.REQUEST_UPDATE: OperatorAudit.Category.PROVISIONING,
 }
 
 _HIDDEN_DETAIL = re.compile(

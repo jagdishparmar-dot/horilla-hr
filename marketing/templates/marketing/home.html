@@ -1,0 +1,369 @@
+{% extends "marketing/base.html" %}
+{% load static marketing_ui %}
+
+{% block content %}
+{# ---------------------------------- Hero ---------------------------------- #}
+<section class="hero">
+  <div class="container hero__grid">
+    <div>
+      <span class="eyebrow eyebrow--light">HR, attendance and payroll</span>
+      <h1 class="display hero__title">Give your HR team its <span class="accent">Mondays back.</span></h1>
+      <p class="hero__lede">ClockMe pulls attendance, leave, payroll, hiring and performance into one workspace, so nobody reconciles five spreadsheets to find out who worked last week.</p>
+      <div class="hero__actions">
+        <a class="btn btn-primary" href="{% url 'marketing-request' %}">Request a workspace {% icon "arrow" %}</a>
+        <a class="btn btn-ghost" href="{% url 'marketing-features' %}">Explore features</a>
+      </div>
+      <ul class="hero__proof">
+        <li>{% icon "check" %}Attendance flows straight into payroll</li>
+        <li>{% icon "check" %}Set up for you by our team</li>
+        <li>{% icon "check" %}Hosted for you. No servers to run</li>
+      </ul>
+    </div>
+
+    <div class="hero__visual">
+      <div class="app" role="img" aria-label="Illustration of the ClockMe attendance dashboard">
+        <div class="app__bar"><i></i><i></i><i></i><span class="app__url">acme.{{ platform_domain }}</span></div>
+        <div class="app__body">
+          <div class="app__side">
+            <span class="is-on">{% icon "dashboard" 15 %}Dashboard</span>
+            <span>{% icon "employees" 15 %}Employees</span>
+            <span>{% icon "clock" 15 %}Attendance</span>
+            <span>{% icon "calendar" 15 %}Leave</span>
+            <span>{% icon "payroll" 15 %}Payroll</span>
+            <span>{% icon "target" 15 %}Performance</span>
+          </div>
+          <div class="app__main">
+            <div class="m-head"><div><b>Good morning, Priya</b><small>Today at a glance</small></div><span class="chip chip--ok">Payroll on track</span></div>
+            <div class="m-kpis">
+              <div class="m-kpi"><small>Present</small><b>214</b><span class="chip chip--ok">on time</span></div>
+              <div class="m-kpi"><small>On leave</small><b>12</b><span class="chip chip--info">approved</span></div>
+              <div class="m-kpi"><small>Late</small><b>9</b><span class="chip chip--warn">review</span></div>
+            </div>
+            <div class="m-card">
+              <h4>Check-ins this week</h4>
+              <div class="m-bars" aria-hidden="true">
+                <span style="--h: 62%"></span><span style="--h: 78%"></span><span style="--h: 70%"></span><span class="is-hi" style="--h: 94%"></span><span style="--h: 84%"></span><span style="--h: 30%"></span><span style="--h: 22%"></span>
+              </div>
+              <div class="m-days" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+            </div>
+            <div class="m-card">
+              <h4>Waiting for you</h4>
+              <div class="m-row"><span class="m-av">AK</span><span class="grow"><b>Leave request</b><span class="m-sub">Aarav K. · 2 days</span></span><span class="chip chip--warn">Pending</span></div>
+              <div class="m-row"><span class="m-av m-av--coral">MR</span><span class="grow"><b>Attendance fix</b><span class="m-sub">Meera R. · Tuesday</span></span><span class="chip chip--warn">Pending</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span class="float-chip float-chip--a">{% icon "check" %}Payroll reads live attendance</span>
+      <span class="float-chip float-chip--b">{% icon "zap" %}Approvals in one tap</span>
+      <p class="hero__caption">Illustration with sample data.</p>
+    </div>
+  </div>
+</section>
+
+{# ------------------------------- Facts strip ------------------------------ #}
+<section class="strip" aria-label="At a glance">
+  <div class="container strip__grid">
+    <div class="strip__item"><div class="strip__value">9</div><div class="strip__label">HR modules in one workspace</div></div>
+    <div class="strip__item"><div class="strip__value">1</div><div class="strip__label">Employee record behind every module</div></div>
+    <div class="strip__item"><div class="strip__value">3</div><div class="strip__label">Billing cycles to choose from</div></div>
+    <div class="strip__item"><div class="strip__value">0</div><div class="strip__label">Servers for your team to run</div></div>
+  </div>
+</section>
+
+{# ------------------------------- The problem ------------------------------ #}
+<section class="section section--dark" id="problem">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow eyebrow--light">Why it exists</span>
+      <h2 class="section-title">HR runs on spreadsheets until it cannot.</h2>
+      <p>Most HR teams do not have a people problem. They have a tool problem: five systems, none of which talk to each other.</p>
+    </div>
+    <div class="card-grid card-grid--3">
+      {% for item in problems %}
+        <article class="problem-card">
+          <span class="problem-card__no">0{{ forloop.counter }}</span>
+          <h3 class="card-title">{{ item.title }}</h3>
+          <p>{{ item.body }}</p>
+        </article>
+      {% endfor %}
+    </div>
+    <div class="callout">
+      <div class="callout__figure">1<small>workspace</small></div>
+      <p>ClockMe replaces the patchwork. Attendance, leave, payroll, hiring and reviews share one employee record, so a change made once is true everywhere.</p>
+    </div>
+  </div>
+</section>
+
+{# ------------------------------- Bento: hire to retire -------------------- #}
+<section class="section section--paper" id="platform">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Hire to retire</span>
+      <h2 class="section-title">One platform for the whole employee journey.</h2>
+      <p>From the first job post to the final payslip, every step reads from the same record.</p>
+    </div>
+    <div class="bento">
+      {% for item in bento %}
+        <article class="bento__item bento__item--{{ item.size }}">
+          <span class="icon-chip">{% icon item.icon %}</span>
+          <h3 class="card-title">{{ item.title }}</h3>
+          <p>{{ item.body }}</p>
+        </article>
+      {% endfor %}
+      <article class="bento__item bento__item--full">
+        <div>
+          <h3 class="card-title" style="color: #fff">Nine modules. One employee record.</h3>
+          <p>Switch on what you need today. The rest is already there when you grow into it.</p>
+        </div>
+        <ul class="module-chips">
+          {% for module in modules %}<li>{{ module.name }}</li>{% endfor %}
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+{# ------------------------------- Product tour ----------------------------- #}
+<section class="section section--navy" id="tour">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow eyebrow--light">Inside the product</span>
+      <h2 class="section-title">See how the work gets done.</h2>
+      <p>Four of the screens your team will live in. Pick one.</p>
+    </div>
+
+    <div class="tour">
+      <input class="tour__input" type="radio" name="tour" id="tour-payroll" checked>
+      <input class="tour__input" type="radio" name="tour" id="tour-employee">
+      <input class="tour__input" type="radio" name="tour" id="tour-performance">
+      <input class="tour__input" type="radio" name="tour" id="tour-helpdesk">
+
+      <div class="tour__tabs" role="group" aria-label="Product tour">
+        {% for item in tour %}<label class="tour__tab" for="tour-{{ item.key }}">{{ item.label }}</label>{% endfor %}
+      </div>
+
+      <div class="tour__panels">
+        {% for item in tour %}
+          <div class="tour__panel" id="panel-{{ item.key }}">
+            <div class="tour__copy">
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.body }}</p>
+              <ul>{% for point in item.points %}<li>{% icon "check" %}<span>{{ point }}</span></li>{% endfor %}</ul>
+            </div>
+
+            <div class="app" role="img" aria-label="Illustration: {{ item.label }}">
+              <div class="app__bar"><i></i><i></i><i></i><span class="app__url">acme.{{ platform_domain }}/{{ item.key }}</span></div>
+              <div class="app__pad">
+                {% if item.key == "payroll" %}
+                  <div class="m-head"><div><b>November payroll</b><small>Review and release</small></div><span class="chip chip--info">Ready to approve</span></div>
+                  <div class="m-card">
+                    <table class="m-table">
+                      <thead><tr><th>Employee</th><th class="num">Overtime</th><th class="num">Deductions</th><th class="num">Net</th></tr></thead>
+                      <tbody>
+                        <tr><td>Aarav Kapoor</td><td class="num">4.5 h</td><td class="num">1,820</td><td class="num">52,400</td></tr>
+                        <tr><td>Meera Rao</td><td class="num">0 h</td><td class="num">1,640</td><td class="num">47,150</td></tr>
+                        <tr><td>Sana Iqbal</td><td class="num">8 h</td><td class="num">2,110</td><td class="num">61,780</td></tr>
+                        <tr><td>Dev Malhotra</td><td class="num">2 h</td><td class="num">1,500</td><td class="num">44,920</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="m-kpis">
+                    <div class="m-kpi"><small>Attendance sync</small><b>Done</b></div>
+                    <div class="m-kpi"><small>Leave applied</small><b>Done</b></div>
+                    <div class="m-kpi"><small>Payslips</small><b>Draft</b></div>
+                  </div>
+                {% elif item.key == "employee" %}
+                  <div class="m-head"><div><b>My space</b><small>Meera Rao · Design</small></div><span class="chip chip--ok">Checked in 09:02</span></div>
+                  <div class="rings">
+                    <div class="ring-card"><div class="ring" style="--p: 70"><span>14</span></div><small>Casual leave left</small></div>
+                    <div class="ring-card"><div class="ring" style="--p: 45"><span>6</span></div><small>Sick leave left</small></div>
+                    <div class="ring-card"><div class="ring" style="--p: 90"><span>2</span></div><small>Comp-off</small></div>
+                  </div>
+                  <div class="m-card">
+                    <h4>Documents and payslips</h4>
+                    <div class="m-row"><span class="grow"><b>Payslip · October</b></span><span class="chip chip--ok">Download</span></div>
+                    <div class="m-row"><span class="grow"><b>Offer letter</b></span><span class="chip chip--ok">Download</span></div>
+                    <div class="m-row"><span class="grow"><b>Laptop handover form</b></span><span class="chip chip--warn">Sign</span></div>
+                  </div>
+                {% elif item.key == "performance" %}
+                  <div class="m-head"><div><b>Q4 objectives</b><small>Review cycle closes in 3 weeks</small></div><span class="chip chip--info">In progress</span></div>
+                  <div class="m-card"><b>Launch the new onboarding flow</b><div class="m-prog"><i style="--w: 78%"></i></div><small class="m-sub">78% complete</small></div>
+                  <div class="m-card"><b>Cut time to hire</b><div class="m-prog"><i style="--w: 52%"></i></div><small class="m-sub">52% complete</small></div>
+                  <div class="m-card"><b>Roll out peer feedback</b><div class="m-prog m-prog--mint"><i style="--w: 100%"></i></div><small class="m-sub">Complete</small></div>
+                {% else %}
+                  <div class="m-head"><div><b>HR requests</b><small>4 open</small></div><span class="chip chip--ok">1 resolved today</span></div>
+                  <div class="m-card">
+                    <div class="m-row"><span class="m-av m-av--coral">SI</span><span class="grow"><b>Tax declaration form</b><span class="m-sub">Sana I. · Payroll</span></span><span class="chip chip--bad">High</span></div>
+                    <div class="m-row"><span class="m-av">DM</span><span class="grow"><b>Update bank details</b><span class="m-sub">Dev M. · Employees</span></span><span class="chip chip--warn">Medium</span></div>
+                    <div class="m-row"><span class="m-av m-av--mint">AK</span><span class="grow"><b>Seating request</b><span class="m-sub">Aarav K. · Assets</span></span><span class="chip chip--ok">Resolved</span></div>
+                    <div class="m-row"><span class="m-av m-av--coral">MR</span><span class="grow"><b>Leave balance question</b><span class="m-sub">Meera R. · Leave</span></span><span class="chip chip--info">Open</span></div>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <p class="tour-caption">Illustrations with sample data, not real customer screens.</p>
+    </div>
+  </div>
+</section>
+
+{# ------------------------------- Modules ---------------------------------- #}
+<section class="section section--paper" id="modules">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Modules</span>
+      <h2 class="section-title">Everything HR touches, in one place.</h2>
+      <p>Every module is part of every plan. Open any of them for the detail.</p>
+    </div>
+    <div class="card-grid card-grid--3">
+      {% for module in modules %}
+        <a class="module-card" href="{% url 'marketing-features' %}#{{ module.key }}">
+          <span class="icon-chip">{% icon module.icon %}</span>
+          <h3 class="card-title">{{ module.name }}</h3>
+          <p>{{ module.summary }}</p>
+        </a>
+      {% endfor %}
+    </div>
+    <p style="margin-top: 2rem"><a class="link-arrow" href="{% url 'marketing-features' %}">See every feature {% icon "arrow" %}</a></p>
+  </div>
+</section>
+
+{# ------------------------------- Automation ------------------------------- #}
+<section class="section section--deep" id="automation">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Automation</span>
+      <h2 class="section-title">Set the policy once. Let it run.</h2>
+      <p>The repetitive parts of HR should not need a person every time.</p>
+    </div>
+    <div class="card-grid card-grid--2">
+      {% for item in automations %}
+        <article class="auto-card">
+          <span class="icon-chip">{% icon item.icon %}</span>
+          <div>
+            <h3 class="card-title">{{ item.title }}</h3>
+            <p>{{ item.body }}</p>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ------------------------------- Mobile app ------------------------------- #}
+<section class="section section--navy" id="mobile-app" aria-labelledby="mobile-title">
+  <div class="container mobile">
+    <div class="mobile__copy">
+      <span class="eyebrow eyebrow--light">Mobile app</span>
+      <h2 class="section-title" id="mobile-title">ClockMe in your pocket.</h2>
+      <p class="mobile__lede">The Android and iOS apps are on their way. Check in, request leave and approve from wherever your team works.</p>
+      <ul class="check-list check-list--light">
+        {% for point in mobile_points %}<li>{% icon "check" %}<span>{{ point }}</span></li>{% endfor %}
+      </ul>
+      <ul class="store-badges" aria-label="Store availability">
+        <li class="store-badge">
+          {% icon "phone" 26 %}
+          <span class="store-badge__text"><small>Android</small><b>Google Play</b></span>
+          <span class="store-badge__soon">Coming soon</span>
+        </li>
+        <li class="store-badge">
+          {% icon "phone" 26 %}
+          <span class="store-badge__text"><small>iPhone and iPad</small><b>App Store</b></span>
+          <span class="store-badge__soon">Coming soon</span>
+        </li>
+      </ul>
+    </div>
+    <figure class="mobile__media">
+      <img src="{% static 'marketing/app-feature.png' %}" width="1024" height="500" loading="lazy" alt="ClockMe, employee attendance, mobile app">
+      <figcaption>The ClockMe app. Store links will appear here at launch.</figcaption>
+    </figure>
+  </div>
+</section>
+
+{# ------------------------------- Outcomes --------------------------------- #}
+<section class="section section--white" id="outcomes">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">What changes</span>
+      <h2 class="section-title">What teams get when HR stops being manual.</h2>
+    </div>
+    <div class="card-grid card-grid--3">
+      {% for item in outcomes %}
+        <article class="outcome">
+          <span class="icon-chip">{% icon item.icon %}</span>
+          <div>
+            <h3 class="card-title">{{ item.title }}</h3>
+            <p>{{ item.body }}</p>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ------------------------------- Segments --------------------------------- #}
+<section class="section section--paper" id="teams">
+  <div class="container">
+    <div class="section-head section-head--center">
+      <span class="eyebrow">Built for your size</span>
+      <h2 class="section-title">From the first ten people to several entities.</h2>
+    </div>
+    <div class="card-grid card-grid--3">
+      {% for item in segments %}
+        <article class="segment">
+          <span class="segment__range">{{ item.range }}</span>
+          <h3 class="card-title">{{ item.name }}</h3>
+          <p>{{ item.body }}</p>
+          <ul class="check-list">{% for point in item.points %}<li>{% icon "check" %}<span>{{ point }}</span></li>{% endfor %}</ul>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ------------------------------- How it works ----------------------------- #}
+<section class="section section--white" id="how-it-works">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">How it works</span>
+      <h2 class="section-title">From request to first payslip.</h2>
+      <p>No implementation project. We handle the setup and you handle your people.</p>
+    </div>
+    <ol class="steps">
+      {% for step in steps %}
+        <li class="step"><h3 class="card-title">{{ step.title }}</h3><p>{{ step.body }}</p></li>
+      {% endfor %}
+    </ol>
+    <p class="steps-note">{% icon "shield" %}<span>Requests are reviewed by a person. Submitting the form does not create a workspace on its own.</span></p>
+  </div>
+</section>
+
+{# ------------------------------- Pricing ---------------------------------- #}
+<section class="section section--paper" id="pricing">
+  <div class="container">
+    <div class="section-head section-head--center">
+      <span class="eyebrow">Pricing</span>
+      <h2 class="section-title">Simple, per-seat pricing.</h2>
+      <p>Every plan includes all nine modules. You pay for seats and billing cycle. Amounts are exclusive of GST.</p>
+    </div>
+    {% include "marketing/partials/plans.html" %}
+    <p style="margin-top: 1.8rem; text-align: center"><a class="link-arrow" href="{% url 'marketing-pricing' %}">Compare plans and add-ons {% icon "arrow" %}</a></p>
+  </div>
+</section>
+
+{# ------------------------------- FAQ -------------------------------------- #}
+<section class="section section--deep" id="faq">
+  <div class="container">
+    <div class="section-head section-head--center">
+      <span class="eyebrow">Questions</span>
+      <h2 class="section-title">The things people ask first.</h2>
+    </div>
+    {% include "marketing/partials/faq.html" %}
+  </div>
+</section>
+
+{% include "marketing/partials/cta.html" %}
+{% endblock %}

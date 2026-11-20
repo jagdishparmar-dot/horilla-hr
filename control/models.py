@@ -386,6 +386,7 @@ class OperatorAudit(models.Model):
         INVOICE_PAST_DUE = "invoice_past_due", "Invoice past due"
         CATALOG_UPDATE = "catalog_update", "Catalog update"
         SETUP_PASSWORD_RESET = "setup_password_reset", "Setup password reset"
+        REQUEST_UPDATE = "request_update", "Request update"
 
     class Category(models.TextChoices):
         PROVISIONING = "provisioning", "Provisioning"
@@ -460,3 +461,48 @@ class Invoice(models.Model):
 
     def __str__(self) -> str:
         return f"{self.pk} {self.tenant.slug} {self.status}"
+
+
+class WorkspaceRequest(models.Model):
+    """A public request for a workspace. Operators provision it by hand."""
+
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        REVIEWED = "reviewed", "Reviewed"
+        DISMISSED = "dismissed", "Dismissed"
+
+    company_name = models.CharField(max_length=120)
+    contact_name = models.CharField(max_length=120)
+    email = models.EmailField()
+    phone = models.CharField(max_length=32, blank=True)
+    requested_slug = models.CharField(max_length=31)
+    plan = models.ForeignKey(
+        Plan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="workspace_requests",
+    )
+    seat_count = models.PositiveIntegerField(null=True, blank=True)
+    message = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.NEW,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        Operator,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_requests",
+    )
+
+    class Meta:
+        verbose_name = "workspace request"
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self) -> str:
+        return f"{self.company_name} ({self.requested_slug})"

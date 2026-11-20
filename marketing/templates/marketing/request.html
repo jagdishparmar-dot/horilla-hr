@@ -1,0 +1,40 @@
+{% extends "marketing/base.html" %}
+{% load marketing_ui %}
+{% block title %}Request a workspace · ClockMe{% endblock %}
+
+{% block content %}
+<section class="section section--paper">
+  <div class="container form-layout">
+    <div>
+      <span class="eyebrow">Request a workspace</span>
+      <h1 class="display page-title" style="margin-top: 0.9rem">Tell us about your team.</h1>
+      <p style="margin-top: 1rem; color: var(--muted); font-size: var(--fs-md)">A person on our team reviews every request and sets up your workspace. Sending this form does not create one on its own.</p>
+      <h2 class="sr-only">What happens next</h2>
+      <ol class="aside-steps">
+        {% for step in steps %}
+          <li><h3>{{ step.title }}</h3><p>{{ step.body }}</p></li>
+        {% endfor %}
+      </ol>
+    </div>
+
+    <form class="form-card" method="post" action="{% url 'marketing-request' %}" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="form-errors" role="alert">{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
+      {% endif %}
+      <div class="form-grid">
+        {% include "marketing/partials/field.html" with field=form.company_name %}
+        {% include "marketing/partials/field.html" with field=form.contact_name %}
+        {% include "marketing/partials/field.html" with field=form.email %}
+        {% include "marketing/partials/field.html" with field=form.phone %}
+        {% include "marketing/partials/field.html" with field=form.slug suffix=platform_domain wide=1 %}
+        {% include "marketing/partials/field.html" with field=form.plan %}
+        {% include "marketing/partials/field.html" with field=form.seat_count %}
+        {% include "marketing/partials/field.html" with field=form.message wide=1 %}
+      </div>
+      <button class="btn btn-primary" type="submit">Send request {% icon "arrow" %}</button>
+      <p class="form-fine">We use these details only to review your request and get in touch. Prices are exclusive of GST.</p>
+    </form>
+  </div>
+</section>
+{% endblock %}

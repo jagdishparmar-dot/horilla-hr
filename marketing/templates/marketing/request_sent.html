@@ -1,0 +1,19 @@
+{% extends "marketing/base.html" %}
+{% load marketing_ui %}
+{% block title %}Request received · ClockMe{% endblock %}
+
+{% block content %}
+<section class="section section--paper">
+  <div class="container">
+    <div class="sent">
+      <span class="sent__mark">{% icon "check" %}</span>
+      <h1 class="display page-title">Request received.</h1>
+      <p style="color: var(--muted); font-size: var(--fs-md)">Thank you. Our team will review it and get in touch at the email you gave us. Your workspace is not live until then.</p>
+      <div class="hero__actions" style="justify-content: center">
+        <a class="btn btn-primary" href="{% url 'marketing-home' %}">Back to the home page</a>
+        <a class="btn btn-outline" href="{% url 'marketing-features' %}">Explore features</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

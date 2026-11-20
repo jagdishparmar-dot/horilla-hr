@@ -20,6 +20,9 @@ RESERVED_SLUGS = frozenset(
         "horilla_control",
         "default",
         "public",
+        # Hosts the platform already uses. A tenant slug would steal them.
+        "manage",
+        "www",
     }
 )
 

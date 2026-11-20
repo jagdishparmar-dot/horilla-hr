@@ -1,0 +1,42 @@
+{% load marketing_ui %}
+<div class="cycle">
+  <input class="cycle__input" type="radio" name="cycle" id="cycle-monthly">
+  <input class="cycle__input" type="radio" name="cycle" id="cycle-semiannual">
+  <input class="cycle__input" type="radio" name="cycle" id="cycle-annual" checked>
+
+  <div class="cycle__switch" role="group" aria-label="Billing cycle">
+    <label class="cycle__label" for="cycle-monthly">Monthly</label>
+    <label class="cycle__label" for="cycle-semiannual">Every 6 months</label>
+    <label class="cycle__label" for="cycle-annual">Annual{% if annual_saving %} <span class="cycle__badge">Save {{ annual_saving }}%</span>{% endif %}</label>
+  </div>
+
+  <div class="plan-grid">
+    {% for plan in plans %}
+      <article class="plan">
+        <div>
+          <h3 class="plan__name">{{ plan.name }}</h3>
+          {% if plan.description and plan.description != plan.name %}<p class="plan__desc">{{ plan.description }}</p>{% endif %}
+        </div>
+
+        {% for cycle in plan.cycles %}
+          <div class="price" data-cycle="{{ cycle.key }}">
+            <span class="price__amount">{{ cycle.per_month }}</span><span class="price__unit">per seat / month</span>
+            <p class="price__note">{{ cycle.note }}{% if cycle.key == "annual" and plan.annual_saving %}<span class="price__save">Save {{ plan.annual_saving }}%</span>{% endif %}</p>
+          </div>
+        {% endfor %}
+
+        <ul class="plan__facts">
+          {% if plan.seat_cap %}<li>{% icon "check" %}<span>Up to {{ plan.seat_cap }} employees</span></li>{% endif %}
+          {% if plan.storage_gb_per_seat %}<li>{% icon "check" %}<span>{{ plan.storage_gb_per_seat }} GB storage per seat</span></li>{% endif %}
+          {% if plan.trial_days %}<li>{% icon "check" %}<span>{{ plan.trial_days }}-day trial</span></li>{% endif %}
+          <li>{% icon "check" %}<span>All nine HR modules</span></li>
+          {% if plan.has_setup_fee %}<li>{% icon "check" %}<span>One-time setup fee {{ plan.setup_fee }}</span></li>{% endif %}
+        </ul>
+
+        <a class="btn btn-outline" href="{% url 'marketing-request' %}?plan={{ plan.code|urlencode }}">Request {{ plan.name }}</a>
+      </article>
+    {% empty %}
+      <p>Plans are being finalised. <a href="{% url 'marketing-request' %}">Request a workspace</a> and we will get back to you with current pricing.</p>
+    {% endfor %}
+  </div>
+</div>

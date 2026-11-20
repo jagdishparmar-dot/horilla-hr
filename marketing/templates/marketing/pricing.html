@@ -1,0 +1,84 @@
+{% extends "marketing/base.html" %}
+{% load marketing_ui %}
+{% block title %}Pricing · ClockMe{% endblock %}
+{% block meta_description %}Per-seat ClockMe pricing with monthly, six-monthly and annual billing. All nine HR modules in every plan. Prices exclusive of GST.{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <div class="container">
+    <span class="eyebrow eyebrow--light">Pricing</span>
+    <h1 class="display page-title">Pay per seat. Every module included.</h1>
+    <p class="lede">Plans differ by team size and storage, not by features. Choose a billing cycle to see what each seat costs per month. Amounts are in rupees and exclusive of GST.</p>
+  </div>
+</section>
+
+<section class="section section--paper">
+  <div class="container">
+    {% include "marketing/partials/plans.html" %}
+  </div>
+</section>
+
+{% if plans %}
+<section class="section section--white">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Compare</span>
+      <h2 class="section-title">Billing cycles side by side.</h2>
+      <p>Per seat, exclusive of GST. A longer cycle is billed in one payment up front.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th scope="col">Billing cycle</th>
+            {% for plan in plans %}<th scope="col">{{ plan.name }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Monthly</th>{% for plan in plans %}<td>{{ plan.monthly }}</td>{% endfor %}</tr>
+          <tr><th scope="row">Every 6 months</th>{% for plan in plans %}<td>{{ plan.semiannual }}</td>{% endfor %}</tr>
+          <tr><th scope="row">Annual</th>{% for plan in plans %}<td>{{ plan.annual }}</td>{% endfor %}</tr>
+          <tr><th scope="row">Employee cap</th>{% for plan in plans %}<td>{% if plan.seat_cap %}{{ plan.seat_cap }}{% else %}Custom{% endif %}</td>{% endfor %}</tr>
+          <tr><th scope="row">Storage per seat</th>{% for plan in plans %}<td>{% if plan.storage_gb_per_seat %}{{ plan.storage_gb_per_seat }} GB{% else %}Included{% endif %}</td>{% endfor %}</tr>
+          <tr><th scope="row">Trial</th>{% for plan in plans %}<td>{% if plan.trial_days %}{{ plan.trial_days }} days{% else %}None{% endif %}</td>{% endfor %}</tr>
+          <tr><th scope="row">One-time setup fee</th>{% for plan in plans %}<td>{% if plan.has_setup_fee %}{{ plan.setup_fee }}{% else %}None{% endif %}</td>{% endfor %}</tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if addons %}
+<section class="section section--deep">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Add-ons</span>
+      <h2 class="section-title">Add what you need, when you need it.</h2>
+      <p>Optional extras on top of any plan. Monthly prices, exclusive of GST.</p>
+    </div>
+    <div class="card-grid card-grid--3">
+      {% for addon in addons %}
+        <article class="addon">
+          <h3 class="card-title">{{ addon.name }}</h3>
+          {% if addon.description %}<p>{{ addon.description }}</p>{% endif %}
+          <div class="addon__price">{{ addon.monthly }} <small>{% if addon.per_seat %}per seat / month{% else %}per month{% endif %}</small></div>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="section section--paper" id="faq">
+  <div class="container">
+    <div class="section-head section-head--center">
+      <span class="eyebrow">Pricing questions</span>
+      <h2 class="section-title">Before you ask.</h2>
+    </div>
+    {% include "marketing/partials/faq.html" %}
+  </div>
+</section>
+
+{% include "marketing/partials/cta.html" %}
+{% endblock %}

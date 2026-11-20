@@ -114,6 +114,9 @@ def control_nav_active(request, section: str) -> str:
     elif section == "plans":
         if name == "control-plans" or name.startswith("control-plan"):
             return active
+    elif section == "requests":
+        if name == "control-requests" or name.startswith("control-request"):
+            return active
     elif section == "billing":
         if name == "control-billing" or name.startswith("control-billing"):
             return active

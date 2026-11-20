@@ -1,0 +1,61 @@
+{% extends "marketing/base.html" %}
+{% load marketing_ui %}
+{% block title %}Features · ClockMe{% endblock %}
+{% block meta_description %}Attendance, payroll, leave, recruitment, onboarding, performance, assets, employees and helpdesk: every ClockMe module in detail.{% endblock %}
+
+{% block content %}
+<section class="page-head">
+  <div class="container">
+    <span class="eyebrow eyebrow--light">Features</span>
+    <h1 class="display page-title">Nine modules that share one employee record.</h1>
+    <p class="lede">Every module is included in every plan. Update a person once and attendance, payroll and leave all agree.</p>
+  </div>
+</section>
+
+<section class="section section--paper">
+  <div class="container">
+    <ul class="card-grid card-grid--3" aria-label="Jump to a module" style="margin-bottom: clamp(2.5rem, 5vw, 4rem)">
+      {% for module in modules %}
+        <li><a class="module-card" href="#{{ module.key }}">
+          <span class="icon-chip">{% icon module.icon %}</span>
+          <h2 class="card-title">{{ module.name }}</h2>
+          <p>{{ module.summary }}</p>
+        </a></li>
+      {% endfor %}
+    </ul>
+
+    {% for module in modules %}
+      <article class="feature-row" id="{{ module.key }}">
+        <div class="feature-row__head">
+          <span class="icon-chip">{% icon module.icon %}</span>
+          <h2 class="section-title">{{ module.name }}</h2>
+          <p>{{ module.detail }}</p>
+        </div>
+        <ul class="check-list">
+          {% for point in module.points %}<li>{% icon "check" %}<span>{{ point }}</span></li>{% endfor %}
+        </ul>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section section--dark">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow eyebrow--light">Across the platform</span>
+      <h2 class="section-title">The parts every module relies on.</h2>
+    </div>
+    <div class="card-grid card-grid--3">
+      {% for item in platform %}
+        <article class="problem-card">
+          <span class="icon-chip icon-chip--dark">{% icon item.icon %}</span>
+          <h3 class="card-title">{{ item.title }}</h3>
+          <p>{{ item.body }}</p>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{% include "marketing/partials/cta.html" %}
+{% endblock %}
