@@ -772,12 +772,16 @@ def audit(request):
 @require_http_methods(["GET", "POST"])
 def tenant_create(request):
     initial = None
+    source = _source_request(request)
+    notices = []
     if request.method == "GET":
         code = (request.GET.get("plan") or "").strip().lower()
         if code and code != UNASSIGNED:
             chosen = Plan.objects.filter(code=code, is_active=True).first()
             if chosen is not None:
                 initial = {"plan": chosen.code, "seats": chosen.seat_cap or 25}
+        if source is not None:
+            initial, notices = _initial_from_request(source)
     form = TenantCreateForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         try:
@@ -809,13 +813,67 @@ def tenant_create(request):
         except (ProvisionError, TenantSlugError) as exc:
             form.add_error(None, str(exc))
         else:
+            if source is not None and source.status == WorkspaceRequest.Status.NEW:
+                _mark_request(request, source, WorkspaceRequest.Status.REVIEWED, "provisioned")
             messages.success(request, f"Queued provisioning for {job.tenant.slug}.")
             return redirect("control-tenant-detail", slug=job.tenant.slug)
     return render_control(
         request,
         "control/tenant_form.html",
-        {"form": form, "platform_domain": settings.HORILLA_PLATFORM_DOMAIN},
+        {
+            "form": form,
+            "platform_domain": settings.HORILLA_PLATFORM_DOMAIN,
+            "source_request": source,
+            "request_notices": notices,
+        },
     )
+
+
+def _source_request(request):
+    """The workspace request this form was opened from, if any.
+
+    GET carries it in ``?request=<id>``; the form posts it back as a hidden
+    field. A missing or malformed id just means a blank form.
+    """
+    raw = request.GET.get("request") if request.method == "GET" else request.POST.get("from_request")
+    try:
+        pk = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return WorkspaceRequest.objects.select_related("plan").filter(pk=pk).first()
+
+
+def _initial_from_request(row):
+    """Form defaults taken from a public request, plus notes for the operator."""
+    notices = []
+    initial = {
+        "name": row.company_name,
+        "slug": row.requested_slug,
+        "admin_name": row.contact_name,
+        "admin_email": row.email,
+    }
+    plan = None
+    if row.plan_id:
+        plan = sellable_plans().filter(pk=row.plan_id, is_active=True).first()
+        if plan is None:
+            notices.append("The plan they picked is no longer sold. Choose one below.")
+    if plan is not None:
+        initial["plan"] = plan.code
+    cap = plan.seat_cap if plan is not None else None
+    seats = row.seat_count
+    if seats and cap and seats > cap:
+        notices.append(
+            f"They asked for {seats} employees but {plan.name} allows up to {cap}. "
+            "Pick a larger plan or keep the cap."
+        )
+        seats = cap
+    if seats:
+        initial["seats"] = seats
+    elif plan is not None:
+        initial["seats"] = cap or 25
+    if Tenant.objects.filter(slug=row.requested_slug).exists():
+        notices.append("A tenant with the requested address already exists. Choose another slug.")
+    return initial, notices
 
 
 def _format_bytes(size) -> str:
@@ -1390,6 +1448,14 @@ def workspace_requests(request):
     rows = WorkspaceRequest.objects.select_related("plan", "reviewed_by")
     if selected in allowed:
         rows = rows.filter(status=selected)
+    rows = list(rows)
+    existing = set(
+        Tenant.objects.filter(slug__in={row.requested_slug for row in rows}).values_list(
+            "slug", flat=True
+        )
+    )
+    for row in rows:
+        row.tenant_exists = row.requested_slug in existing
     return render_control(
         request,
         "control/requests.html",
@@ -1401,8 +1467,7 @@ def workspace_requests(request):
     )
 
 
-def _set_request_status(request, pk, status):
-    row = get_object_or_404(WorkspaceRequest, pk=pk)
+def _mark_request(request, row, status, detail=""):
     row.status = status
     row.reviewed_at = timezone.now()
     row.reviewed_by = request.operator
@@ -1411,8 +1476,13 @@ def _set_request_status(request, pk, status):
         operator=request.operator,
         action=OperatorAudit.Action.REQUEST_UPDATE,
         slug=row.requested_slug,
-        detail=f"{row.pk} {status}",
+        detail=f"{row.pk} {detail or status}",
     )
+
+
+def _set_request_status(request, pk, status):
+    row = get_object_or_404(WorkspaceRequest, pk=pk)
+    _mark_request(request, row, status)
     messages.success(request, "Request updated.")
     return redirect("control-requests")
 

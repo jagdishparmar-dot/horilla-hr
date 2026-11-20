@@ -40,7 +40,11 @@
           <p class="control-help mt-3">{{ row.get_status_display }} by {{ row.reviewed_by.email }}</p>
         {% endif %}
         <div class="mt-4 flex flex-wrap gap-2">
-          <a class="control-btn-primary no-underline" href="{% url 'control-tenant-create' %}">Provision tenant</a>
+          {% if row.tenant_exists %}
+            <a class="control-btn-primary no-underline" href="{% url 'control-tenant-detail' row.requested_slug %}">Open tenant</a>
+          {% elif row.status != "dismissed" %}
+            <a class="control-btn-primary no-underline" href="{% url 'control-tenant-create' %}?request={{ row.pk }}">Provision tenant</a>
+          {% endif %}
           <form method="post" action="{% url 'control-request-reviewed' row.pk %}">
             {% csrf_token %}
             <button class="control-btn-ghost" type="submit">Mark reviewed</button>

@@ -274,6 +274,84 @@ class MarketingSiteTests(TestCase):
         self.assertContains(health, "clockme")
         self.assertEqual(ready.status_code, 404)
 
+    def _operator_client(self):
+        ops = Client(HTTP_HOST="manage.localhost")
+        ops.post("/control/login/", {"email": "ops@example.com", "password": "correct-horse"})
+        return ops
+
+    def test_provision_form_is_prefilled_from_a_request_and_resolves_it(self):
+        plan = Plan.objects.get(code="starter")
+        self.public.post("/request/", _payload(plan=str(plan.pk), seat_count="20"))
+        row = WorkspaceRequest.objects.get(requested_slug="northwind")
+        ops = self._operator_client()
+
+        listing = ops.get("/control/requests/")
+        self.assertContains(listing, f"/control/tenants/new/?request={row.pk}")
+
+        form = ops.get(f"/control/tenants/new/?request={row.pk}")
+        self.assertEqual(form.status_code, 200)
+        initial = form.context["form"].initial
+        self.assertEqual(initial["name"], "Northwind")
+        self.assertEqual(initial["slug"], "northwind")
+        self.assertEqual(initial["admin_name"], "Ada Lovelace")
+        self.assertEqual(initial["admin_email"], "ada@northwind.test")
+        self.assertEqual(initial["plan"], "starter")
+        self.assertEqual(initial["seats"], 20)
+        self.assertContains(form, 'value="Northwind"')
+        self.assertContains(form, f'name="from_request" value="{row.pk}"')
+        self.assertContains(form, "Please set up a workspace.")
+
+        # The operator changes the company name and seat count before queueing.
+        queued = ops.post(
+            "/control/tenants/new/",
+            {
+                "from_request": str(row.pk),
+                "name": "Northwind Traders",
+                "slug": "northwind",
+                "admin_name": "Ada Lovelace",
+                "admin_email": "ada@northwind.test",
+                "plan": "starter",
+                "cadence": "monthly",
+                "seats": "35",
+            },
+        )
+        self.assertEqual(queued.status_code, 302)
+        self.assertEqual(queued["Location"], "/control/tenants/northwind/")
+        tenant = Tenant.objects.get(slug="northwind")
+        self.assertEqual(tenant.name, "Northwind Traders")
+        row.refresh_from_db()
+        self.assertEqual(row.status, WorkspaceRequest.Status.REVIEWED)
+        self.assertEqual(row.reviewed_by, self.operator)
+        audit = OperatorAudit.objects.get(action=OperatorAudit.Action.REQUEST_UPDATE)
+        self.assertEqual(audit.detail, f"{row.pk} provisioned")
+
+        again = ops.get("/control/requests/")
+        self.assertContains(again, "Open tenant")
+        self.assertNotContains(again, f"/control/tenants/new/?request={row.pk}")
+
+    def test_provision_form_flags_a_request_that_does_not_fit(self):
+        row = WorkspaceRequest.objects.create(
+            company_name="Big Co",
+            contact_name="Bo",
+            email="bo@big.test",
+            requested_slug="acme",
+            plan=Plan.objects.get(code="starter"),
+            seat_count=100000,
+        )
+        ops = self._operator_client()
+        form = ops.get(f"/control/tenants/new/?request={row.pk}")
+        self.assertEqual(form.status_code, 200)
+        self.assertContains(form, "allows up to")
+        self.assertContains(form, "already exists")
+        self.assertLessEqual(form.context["form"].initial["seats"], 100000)
+
+    def test_provision_form_ignores_a_bad_request_id(self):
+        ops = self._operator_client()
+        for value in ("abc", "999999", ""):
+            form = ops.get(f"/control/tenants/new/?request={value}")
+            self.assertEqual(form.status_code, 200, value)
+            self.assertNotContains(form, 'name="from_request"')
+
     def test_operator_can_review_a_request_and_anonymous_cannot(self):
         self.public.post("/request/", _payload())
         row = WorkspaceRequest.objects.get(requested_slug="northwind")

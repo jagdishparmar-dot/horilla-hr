@@ -454,5 +454,53 @@
       "also_sent_to": [],
       "template_attachments": []
     }
+  },
+  {
+    "model": "horilla_automations.mailautomation",
+    "pk": 20,
+    "fields": {
+      "created_at": "2026-11-19T15:30:00.000Z",
+      "created_by": null,
+      "modified_by": null,
+      "is_active": true,
+      "title": "Review Attendance Request - {{instance.employee_id}}",
+      "method_title": "review_attendance_request_-_{{instance.employee_id}}",
+      "model": "attendance.models.Attendance",
+      "mail_to": "['employee_id__employee_work_info__reporting_manager_id__get_email']",
+      "mail_details": "employee_id__employee_work_info__reporting_manager_id__pk",
+      "mail_detail_choice": "",
+      "trigger": "on_create",
+      "mail_template": 22,
+      "delivery_channel": "email",
+      "condition_html": "<form id=\"multipleConditionForm\">\r\n      <table id=\"multipleConditionTable\">\r\n        <tbody><tr>\r\n          <th>Code</th>\r\n          <th>Field</th>\r\n          <th>Condition</th>\r\n          <th>Value</th>\r\n          <th>Logic</th>\r\n          <th>\r\n          Action \r\n          <span title=\"Reload\" onclick=\"$('[name=model]').change()\">\r\n            <ion-icon name=\"refresh-circle\"></ion-icon>\r\n          </span>\r\n          </th>\r\n        </tr>\r\n      </tbody></table>\r\n    </form>\r\n    <script>\r\n    $(\"#multipleConditionTable\").closest(\"[contenteditable=true]\").removeAttr(\"contenteditable\");\r\n    </script>",
+      "condition_querystring": "automation_multiple_condition=automation_multiple_is_validate_request&condition=%3D%3D&automation_multiple_condition=on&logic=and",
+      "condition": "<form id=\"multipleConditionForm\">\r\n      <table id=\"multipleConditionTable\">\r\n        <tbody><tr>\r\n          <th>Code</th>\r\n          <th>Field</th>\r\n          <th>Condition</th>\r\n          <th>Value</th>\r\n          <th>Logic</th>\r\n          <th>\r\n          Action \r\n          <span title=\"Reload\" onclick=\"$('[name=model]').change()\">\r\n            <ion-icon name=\"refresh-circle\"></ion-icon>\r\n          </span>\r\n          </th>\r\n        </tr>\r\n      </tbody></table>\r\n    </form>\r\n    <script>\r\n    $(\"#multipleConditionTable\").closest(\"[contenteditable=true]\").removeAttr(\"contenteditable\");\r\n    </script>",
+      "also_sent_to": [],
+      "template_attachments": []
+    }
+  },
+  {
+    "model": "horilla_automations.mailautomation",
+    "pk": 21,
+    "fields": {
+      "created_at": "2026-11-19T15:30:00.000Z",
+      "created_by": null,
+      "modified_by": null,
+      "is_active": true,
+      "title": "Review Attendance Update Request - {{instance.employee_id}}",
+      "method_title": "review_attendance_update_request_-_{{instance.employee_id}}",
+      "model": "attendance.models.Attendance",
+      "mail_to": "['employee_id__employee_work_info__reporting_manager_id__get_email']",
+      "mail_details": "employee_id__employee_work_info__reporting_manager_id__pk",
+      "mail_detail_choice": "",
+      "trigger": "on_update",
+      "mail_template": 22,
+      "delivery_channel": "email",
+      "condition_html": "<form id=\"multipleConditionForm\">\r\n      <table id=\"multipleConditionTable\">\r\n        <tbody><tr>\r\n          <th>Code</th>\r\n          <th>Field</th>\r\n          <th>Condition</th>\r\n          <th>Value</th>\r\n          <th>Logic</th>\r\n          <th>\r\n          Action \r\n          <span title=\"Reload\" onclick=\"$('[name=model]').change()\">\r\n            <ion-icon name=\"refresh-circle\"></ion-icon>\r\n          </span>\r\n          </th>\r\n        </tr>\r\n      </tbody></table>\r\n    </form>\r\n    <script>\r\n    $(\"#multipleConditionTable\").closest(\"[contenteditable=true]\").removeAttr(\"contenteditable\");\r\n    </script>",
+      "condition_querystring": "automation_multiple_condition=automation_multiple_is_validate_request&condition=%3D%3D&automation_multiple_condition=on&logic=and",
+      "condition": "<form id=\"multipleConditionForm\">\r\n      <table id=\"multipleConditionTable\">\r\n        <tbody><tr>\r\n          <th>Code</th>\r\n          <th>Field</th>\r\n          <th>Condition</th>\r\n          <th>Value</th>\r\n          <th>Logic</th>\r\n          <th>\r\n          Action \r\n          <span title=\"Reload\" onclick=\"$('[name=model]').change()\">\r\n            <ion-icon name=\"refresh-circle\"></ion-icon>\r\n          </span>\r\n          </th>\r\n        </tr>\r\n      </tbody></table>\r\n    </form>\r\n    <script>\r\n    $(\"#multipleConditionTable\").closest(\"[contenteditable=true]\").removeAttr(\"contenteditable\");\r\n    </script>",
+      "also_sent_to": [],
+      "template_attachments": []
+    }
   }
 ]
