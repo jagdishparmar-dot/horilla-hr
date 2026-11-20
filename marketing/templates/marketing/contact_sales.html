@@ -1,0 +1,40 @@
+{% extends "marketing/base.html" %}
+{% load marketing_ui %}
+{% block title %}Talk to Sales · ClockMe{% endblock %}
+{% block meta_description %}Talk to the ClockMe sales team about a plan sized for your headcount.{% endblock %}
+
+{% block content %}
+<section class="section section--paper">
+  <div class="container form-layout">
+    <div>
+      <span class="eyebrow">Talk to Sales</span>
+      <h1 class="display page-title" style="margin-top: 0.9rem">Let us size a plan for your team.</h1>
+      <p style="margin-top: 1rem; color: var(--muted); font-size: var(--fs-md)">Some plans are quoted rather than listed, because the right price depends on your headcount and setup. Tell us a little about your team and someone from sales will reply by email.</p>
+      <h2 class="sr-only">What happens next</h2>
+      <ol class="aside-steps">
+        <li><h3>You send the form</h3><p>It goes straight to our sales team. Sending it does not create a workspace or commit you to anything.</p></li>
+        <li><h3>We get in touch</h3><p>A person reads your note and replies at the email you gave us with a quote.</p></li>
+        <li><h3>We set you up</h3><p>Once you agree, we create your workspace and walk your admin through the first sign-in.</p></li>
+      </ol>
+    </div>
+
+    <form class="form-card" method="post" action="{% url 'marketing-contact-sales' %}" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="form-errors" role="alert">{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
+      {% endif %}
+      <div class="form-grid">
+        {% include "marketing/partials/field.html" with field=form.contact_name %}
+        {% include "marketing/partials/field.html" with field=form.company_name %}
+        {% include "marketing/partials/field.html" with field=form.email %}
+        {% include "marketing/partials/field.html" with field=form.phone %}
+        {% include "marketing/partials/field.html" with field=form.plan %}
+        {% include "marketing/partials/field.html" with field=form.seat_count %}
+        {% include "marketing/partials/field.html" with field=form.message wide=1 %}
+      </div>
+      <button class="btn btn-primary" type="submit">Contact sales {% icon "arrow" %}</button>
+      <p class="form-fine">We use these details only to reply to your enquiry. Prices are exclusive of GST.</p>
+    </form>
+  </div>
+</section>
+{% endblock %}

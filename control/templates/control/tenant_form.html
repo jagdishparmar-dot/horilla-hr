@@ -38,7 +38,7 @@
         <fieldset class="mb-6">
           <legend class="control-section-title mb-3">Subscription</legend>
           {% for field in form %}
-            {% if field.name == "plan" or field.name == "cadence" or field.name == "seats" %}
+            {% if field.name == "plan" or field.name == "seats" %}
               <div class="mb-4">
                 <label for="{{ field.id_for_label }}" class="control-label">{{ field.label }} <span aria-hidden="true">*</span></label>
                 {{ field }}
@@ -47,6 +47,13 @@
               </div>
             {% endif %}
           {% endfor %}
+          <p class="control-help mb-4">Billed monthly, per active employee.</p>
+          <fieldset class="control-checks mb-4">
+            <legend class="control-label">{{ form.addons.label }}</legend>
+            {{ form.addons }}
+            {% if form.addons.help_text %}<p class="control-help">{{ form.addons.help_text }}</p>{% endif %}
+            {% if form.addons.errors %}<p class="control-error">{{ form.addons.errors|join:", " }}</p>{% endif %}
+          </fieldset>
           <label class="mt-2 flex items-center gap-2 text-sm">
             {{ form.start_as_trial }}
             <span>{{ form.start_as_trial.label }}</span>
@@ -78,7 +85,7 @@
           <div><dt class="control-muted">Contact</dt><dd>{{ source_request.contact_name }} · {{ source_request.email }}</dd></div>
           {% if source_request.phone %}<div><dt class="control-muted">Phone</dt><dd>{{ source_request.phone }}</dd></div>{% endif %}
           <div><dt class="control-muted">Asked for</dt><dd>{% if source_request.plan %}{{ source_request.plan.name }}{% else %}No plan preference{% endif %}{% if source_request.seat_count %} · {{ source_request.seat_count }} employees{% endif %}</dd></div>
-          <div><dt class="control-muted">Address</dt><dd class="control-mono">{{ source_request.requested_slug }}</dd></div>
+          {% if source_request.requested_slug %}<div><dt class="control-muted">Address</dt><dd class="control-mono">{{ source_request.requested_slug }}</dd></div>{% endif %}
           {% if source_request.message %}<div><dt class="control-muted">Message</dt><dd>{{ source_request.message }}</dd></div>{% endif %}
         </dl>
       {% endif %}

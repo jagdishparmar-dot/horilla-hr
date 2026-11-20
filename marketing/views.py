@@ -7,23 +7,17 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.views.decorators.http import require_http_methods
 
-from control.catalog import CYCLE_MONTHS, UNASSIGNED, format_inr, sellable_plans
+from control.catalog import UNASSIGNED, format_inr, sellable_plans
 from control.models import Addon, Domain, Plan, Tenant, WorkspaceRequest
 from control.naming import TenantSlugError, validate_tenant_slug
 from control.pricing import catalog_addon_unit, catalog_plan_unit
 from horilla.client_ip import client_ip
 from marketing import content
-from marketing.forms import WorkspaceLookupForm, WorkspaceRequestForm
+from marketing.forms import SalesInquiryForm, WorkspaceLookupForm, WorkspaceRequestForm
 
 REQUEST_LIMIT = 5
 REQUEST_WINDOW = 60 * 60
 NOT_FOUND = "We could not find that workspace."
-
-CYCLE_LABELS = {
-    "monthly": "Monthly",
-    "semiannual": "Every 6 months",
-    "annual": "Annual",
-}
 
 
 def render_marketing(request, template, context=None, status=200):
@@ -42,13 +36,12 @@ def render_marketing(request, template, context=None, status=200):
 
 
 def home(request):
-    plans = _public_plans()[:3]
+    plans = _public_plans()
     return render_marketing(
         request,
         "marketing/home.html",
         {
             "plans": plans,
-            "annual_saving": max((plan["annual_saving"] for plan in plans), default=0),
             "modules": content.MODULES,
             "problems": content.PROBLEMS,
             "bento": content.BENTO,
@@ -80,7 +73,6 @@ def pricing(request):
             "plans": plans,
             "addons": _public_addons(),
             "faqs": content.faqs_for("pricing"),
-            "annual_saving": max((plan["annual_saving"] for plan in plans), default=0),
         },
     )
 
@@ -132,6 +124,33 @@ def request_sent(request):
     return render_marketing(request, "marketing/request_sent.html")
 
 
+@require_http_methods(["GET", "POST"])
+def contact_sales(request):
+    """Enquiry form for plans that show no price. Saved for operators; nothing is provisioned."""
+    if request.method == "POST" and _request_is_limited(request):
+        form = SalesInquiryForm(request.POST)
+        form.add_error(None, "Too many requests. Try again later.")
+    else:
+        form = SalesInquiryForm(request.POST or None, initial=_initial_request(request))
+        if request.method == "POST" and form.is_valid():
+            WorkspaceRequest.objects.create(
+                kind=WorkspaceRequest.Kind.SALES,
+                company_name=form.cleaned_data["company_name"],
+                contact_name=form.cleaned_data["contact_name"],
+                email=form.cleaned_data["email"],
+                phone=form.cleaned_data["phone"],
+                plan=form.cleaned_data["plan"],
+                seat_count=form.cleaned_data["seat_count"],
+                message=form.cleaned_data["message"],
+            )
+            return redirect("marketing-contact-sales-sent")
+    return render_marketing(request, "marketing/contact_sales.html", {"form": form})
+
+
+def contact_sales_sent(request):
+    return render_marketing(request, "marketing/contact_sales_sent.html")
+
+
 def _initial_request(request):
     """Preselect the plan named in ``?plan=<code>``. Anything else is ignored."""
     code = (request.GET.get("plan") or "").strip().lower()
@@ -141,64 +160,37 @@ def _initial_request(request):
     return {"plan": plan.pk} if plan else {}
 
 
-def _per_month(unit: int, months: int) -> int:
-    """Whole rupees per month for a term price, rounded half up."""
-    return (int(unit) + months // 2) // months
-
-
-def _cycle_note(key: str, billed: str) -> str:
-    if key == "monthly":
-        return "Billed monthly"
-    if key == "semiannual":
-        return f"{billed} per seat, billed every 6 months"
-    return f"{billed} per seat, billed yearly"
-
-
 def _public_plans():
+    """Plans for the pricing pages.
+
+    A Talk to Sales plan carries no price at all, so a template cannot leak
+    one by accident. Its setup fee stays off the page for the same reason.
+    """
     plans = (
         Plan.objects.filter(status=Plan.Status.ACTIVE, is_active=True)
         .exclude(code=UNASSIGNED)
+        .prefetch_related("features", "included_addons")
         .order_by("sort_order", "code")
     )
     rows = []
     for plan in plans:
-        monthly_unit = catalog_plan_unit(plan, "monthly")
-        cycles = []
-        units = {}
-        for key, months in CYCLE_MONTHS.items():
-            unit = catalog_plan_unit(plan, key)
-            units[key] = unit
-            billed = format_inr(unit)
-            cycles.append(
-                {
-                    "key": key,
-                    "label": CYCLE_LABELS[key],
-                    "months": months,
-                    "per_month": format_inr(_per_month(unit, months)),
-                    "billed": billed,
-                    "note": _cycle_note(key, billed),
-                }
-            )
-        full_year = monthly_unit * 12
-        saving = 0
-        if full_year and units["annual"] < full_year:
-            saving = round(100 * (full_year - units["annual"]) / full_year)
+        sales = plan.contact_sales
+        setup_fee = int(plan.setup_fee_rupees or 0)
         rows.append(
             {
                 "name": plan.name,
                 "code": plan.code,
                 "description": plan.description,
-                "monthly": format_inr(monthly_unit),
-                "semiannual": format_inr(units["semiannual"]),
-                "annual": format_inr(units["annual"]),
-                "cycles": cycles,
-                "annual_per_month": cycles[-1]["per_month"],
-                "annual_saving": saving,
+                "contact_sales": sales,
+                "price": None if sales else format_inr(catalog_plan_unit(plan, "monthly")),
                 "seat_cap": plan.seat_cap,
-                "storage_gb_per_seat": plan.storage_gb_per_seat,
                 "trial_days": plan.trial_days,
-                "setup_fee": format_inr(plan.setup_fee_rupees),
-                "has_setup_fee": bool(plan.setup_fee_rupees),
+                "setup_fee": format_inr(setup_fee),
+                "has_setup_fee": bool(setup_fee) and not sales,
+                "features": [feature.text for feature in plan.features.all()],
+                "included_addons": [
+                    addon.name for addon in plan.included_addons.all() if addon.is_active
+                ],
             }
         )
     return rows

@@ -1,10 +1,11 @@
 from django import forms
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 from control.catalog import UNASSIGNED, sellable_plans
 from control.models import Addon, Operator, Plan, Tenant
-from control.pricing import addon_fits, required_addon_codes
+from control.pricing import addon_fits, bundled_addon_codes
 from control.naming import TenantSlugError, validate_tenant_slug
 
 INPUT_CLASS = "control-input"
@@ -89,17 +90,19 @@ class TenantCreateForm(forms.Form):
         empty_label=None,
         widget=PlanSelect(attrs={"class": INPUT_CLASS, "data-plan-select": "true"}),
     )
-    cadence = forms.ChoiceField(
-        label="Billing cadence",
-        choices=Tenant.Cadence.choices,
-        initial=Tenant.Cadence.MONTHLY,
-        widget=forms.Select(attrs={"class": INPUT_CLASS}),
-    )
     seats = forms.IntegerField(
-        label="Seats",
+        label="Active employees",
         min_value=1,
-        help_text="Stored as the seat limit. Storage limit is this count times the plan's GB per seat. A capped plan starts at its cap; Enterprise starts at 25.",
+        help_text="Stored as the seat limit and billed per active employee each month. A capped plan starts at its cap; an uncapped plan starts at 25.",
         widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "data-seat-input": "true", "min": "1"}),
+    )
+    addons = forms.ModelMultipleChoiceField(
+        label="Add-ons",
+        queryset=Addon.objects.none(),
+        to_field_name="code",
+        required=False,
+        help_text="Add-ons a plan includes, or requires, are added automatically.",
+        widget=forms.CheckboxSelectMultiple(attrs={"class": CHECKBOX_CLASS}),
     )
     module_employee_records = forms.BooleanField(
         label="Employee records",
@@ -130,6 +133,9 @@ class TenantCreateForm(forms.Form):
         super().__init__(*args, **kwargs)
         sellable = sellable_plans()
         self.fields["plan"].queryset = sellable
+        self.fields["addons"].queryset = Addon.objects.filter(is_active=True).order_by(
+            "sort_order", "name"
+        )
         if not self.is_bound:
             starter = sellable.filter(code="starter").first() or sellable.first()
             if starter is not None:
@@ -156,7 +162,36 @@ class TenantCreateForm(forms.Form):
         seats = cleaned.get("seats")
         if plan is not None and seats is not None and plan.seat_cap is not None and seats > plan.seat_cap:
             self.add_error("seats", f"{plan.name} allows up to {plan.seat_cap} seats.")
+        if plan is not None:
+            cleaned["addons"] = _with_bundled_addons(
+                self, plan, list(cleaned.get("addons") or [])
+            )
         return cleaned
+
+
+def _with_bundled_addons(form, plan, addons, current=()):
+    """Keep the add-ons that fit the plan, then add the ones it bundles or requires.
+
+    ``current`` holds codes a tenant already has, which stay even if the
+    catalog has since retired or narrowed them.
+    """
+    kept = []
+    for addon in addons:
+        already = addon.code in current
+        if not addon.is_active and not already:
+            form.add_error("addons", f"{addon.name} is not available.")
+            continue
+        if not already and not addon_fits(addon, plan):
+            form.add_error("addons", f"{addon.name} is not available on {plan.name}.")
+            continue
+        kept.append(addon)
+    have = {addon.code for addon in kept}
+    for code in bundled_addon_codes(plan):
+        if code not in have:
+            extra = Addon.objects.filter(code=code, is_active=True).first()
+            if extra is not None:
+                kept.append(extra)
+    return kept
 
 
 class QuoteForm(forms.Form):
@@ -167,14 +202,8 @@ class QuoteForm(forms.Form):
         empty_label=None,
         widget=forms.Select(attrs={"class": INPUT_CLASS}),
     )
-    cadence = forms.ChoiceField(
-        label="Cadence",
-        choices=Tenant.Cadence.choices,
-        initial=Tenant.Cadence.ANNUAL,
-        widget=forms.Select(attrs={"class": INPUT_CLASS}),
-    )
     seats = forms.IntegerField(
-        label="Seats",
+        label="Active employees",
         min_value=0,
         initial=10,
         widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
@@ -202,18 +231,7 @@ class QuoteForm(forms.Form):
         addons = cleaned.get("addons")
         if plan is None or addons is None:
             return cleaned
-        chosen = []
-        for addon in addons:
-            if not addon_fits(addon, plan):
-                self.add_error("addons", f"{addon.name} is not available on {plan.name}.")
-                continue
-            chosen.append(addon)
-        required = set(required_addon_codes(plan))
-        have = {addon.code for addon in chosen}
-        missing = required - have
-        if missing:
-            chosen.extend(list(Addon.objects.filter(code__in=missing, is_active=True)))
-        cleaned["addons"] = chosen
+        cleaned["addons"] = _with_bundled_addons(self, plan, list(addons))
         return cleaned
 
 
@@ -223,11 +241,6 @@ class SubscriptionForm(forms.Form):
         queryset=Plan.objects.none(),
         to_field_name="code",
         empty_label=None,
-        widget=forms.Select(attrs={"class": INPUT_CLASS}),
-    )
-    cadence = forms.ChoiceField(
-        label="Billing cadence",
-        choices=Tenant.Cadence.choices,
         widget=forms.Select(attrs={"class": INPUT_CLASS}),
     )
     addons = forms.ModelMultipleChoiceField(
@@ -260,7 +273,6 @@ class SubscriptionForm(forms.Form):
                     sellable_plans() | Plan.objects.filter(pk=tenant.plan_fk_id)
                 ).distinct().order_by("sort_order", "code")
                 self.fields["plan"].initial = tenant.plan_fk.code
-            self.fields["cadence"].initial = tenant.cadence
             self.fields["addons"].initial = list(
                 tenant.addons.values_list("code", flat=True)
             )
@@ -280,23 +292,7 @@ class SubscriptionForm(forms.Form):
             self.add_error("plan", "That plan is not available.")
         addons = list(cleaned.get("addons") or [])
         current = set(self.tenant.addons.values_list("code", flat=True))
-        kept = []
-        for addon in addons:
-            already = addon.code in current
-            if not addon.is_active and not already:
-                self.add_error("addons", f"{addon.name} is not available.")
-                continue
-            if not already and not addon_fits(addon, plan):
-                self.add_error("addons", f"{addon.name} is not available on {plan.name}.")
-                continue
-            kept.append(addon)
-        have = {addon.code for addon in kept}
-        for code in required_addon_codes(plan):
-            if code not in have:
-                extra = Addon.objects.filter(code=code, is_active=True).first()
-                if extra is not None:
-                    kept.append(extra)
-        cleaned["addons"] = kept
+        cleaned["addons"] = _with_bundled_addons(self, plan, addons, current)
         return cleaned
 
 
@@ -468,6 +464,10 @@ def _optional_cap(value):
     return int(value)
 
 
+MAX_PLAN_FEATURES = 20
+MAX_FEATURE_LENGTH = 160
+
+
 class PlanCatalogForm(forms.Form):
     code = forms.SlugField(
         label="Code",
@@ -490,32 +490,42 @@ class PlanCatalogForm(forms.Form):
         widget=forms.Select(attrs={"class": INPUT_CLASS}),
     )
     price_monthly = forms.IntegerField(
-        label="Monthly price per seat",
+        label="Price per active employee / month",
         min_value=0,
+        help_text="Whole rupees, exclusive of GST. Billed monthly.",
         widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
     )
-    price_semiannual = forms.IntegerField(
-        label="Semi-annual price per seat",
-        min_value=0,
-        widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
-    )
-    price_annual = forms.IntegerField(
-        label="Annual price per seat",
-        min_value=0,
-        widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
+    contact_sales = forms.BooleanField(
+        label="Talk to Sales instead of showing a price",
+        required=False,
+        help_text="The public site hides the price and offers a sales enquiry form. The price above is still used to quote and invoice.",
+        widget=forms.CheckboxInput(attrs={"class": CHECKBOX_CLASS}),
     )
     seat_cap = forms.IntegerField(
-        label="Seat cap",
+        label="Employee cap",
         required=False,
         min_value=0,
         help_text="Leave empty for no cap.",
         widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
     )
-    storage_gb_per_seat = forms.IntegerField(
-        label="Storage GB per seat",
+    features = forms.CharField(
+        label="Plan features",
         required=False,
-        min_value=0,
-        widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
+        help_text=f"One feature per line, shown in this order. Up to {MAX_PLAN_FEATURES} lines of {MAX_FEATURE_LENGTH} characters.",
+        widget=forms.Textarea(
+            attrs={
+                "class": INPUT_CLASS,
+                "rows": 6,
+                "placeholder": "Unlimited leave policies\nPayroll with statutory reports",
+            }
+        ),
+    )
+    included_addons = forms.ModelMultipleChoiceField(
+        label="Included add-ons",
+        queryset=Addon.objects.none(),
+        required=False,
+        help_text="Bundled with this plan at no extra charge. Other add-ons stay optional and are priced on their own.",
+        widget=forms.CheckboxSelectMultiple(attrs={"class": CHECKBOX_CLASS}),
     )
     trial_days = forms.IntegerField(
         label="Trial days",
@@ -540,18 +550,28 @@ class PlanCatalogForm(forms.Form):
     def __init__(self, *args, instance=None, **kwargs):
         self.instance = instance
         super().__init__(*args, **kwargs)
+        addon_rows = Addon.objects.filter(is_active=True)
+        if instance is not None and instance.pk:
+            # A bundled add-on that was since retired stays listed so a save does not drop it.
+            addon_rows = Addon.objects.filter(
+                Q(is_active=True) | Q(included_in_plans=instance)
+            ).distinct()
+        self.fields["included_addons"].queryset = addon_rows.order_by("sort_order", "name")
         if instance is not None:
             self.fields["code"].disabled = True
-            prices = {row.cadence: row.unit_rupees for row in instance.prices.all()}
             self.fields["code"].initial = instance.code
             self.fields["name"].initial = instance.name
             self.fields["description"].initial = instance.description
             self.fields["status"].initial = instance.status
-            self.fields["price_monthly"].initial = prices.get("monthly", instance.monthly_price)
-            self.fields["price_semiannual"].initial = prices.get("semiannual", instance.monthly_price * 6)
-            self.fields["price_annual"].initial = prices.get("annual", 0)
+            self.fields["price_monthly"].initial = instance.monthly_price
+            self.fields["contact_sales"].initial = instance.contact_sales
             self.fields["seat_cap"].initial = instance.seat_cap
-            self.fields["storage_gb_per_seat"].initial = instance.storage_gb_per_seat
+            self.fields["features"].initial = "\n".join(
+                instance.features.values_list("text", flat=True)
+            )
+            self.fields["included_addons"].initial = list(
+                instance.included_addons.values_list("pk", flat=True)
+            )
             self.fields["trial_days"].initial = instance.trial_days
             self.fields["setup_fee"].initial = instance.setup_fee_rupees
             self.fields["sort_order"].initial = instance.sort_order
@@ -567,8 +587,25 @@ class PlanCatalogForm(forms.Form):
             raise forms.ValidationError("A plan with this code already exists.")
         return code
 
+    def clean_features(self):
+        lines = []
+        for raw in (self.cleaned_data.get("features") or "").splitlines():
+            text = " ".join(raw.split())
+            if not text:
+                continue
+            if len(text) > MAX_FEATURE_LENGTH:
+                raise forms.ValidationError(
+                    f"Keep each feature under {MAX_FEATURE_LENGTH} characters: “{text[:40]}…”"
+                )
+            if text.lower() in {line.lower() for line in lines}:
+                continue
+            lines.append(text)
+        if len(lines) > MAX_PLAN_FEATURES:
+            raise forms.ValidationError(f"A plan can list up to {MAX_PLAN_FEATURES} features.")
+        return lines
+
     def save(self):
-        from control.models import PlanPrice
+        from control.models import PlanFeature, PlanPrice
 
         data = self.cleaned_data
         plan = self.instance or Plan(code=data["code"])
@@ -578,21 +615,24 @@ class PlanCatalogForm(forms.Form):
         plan.is_active = data["status"] == Plan.Status.ACTIVE
         plan.monthly_price = data["price_monthly"]
         plan.seat_cap = _optional_cap(data.get("seat_cap"))
-        plan.storage_gb_per_seat = _optional_cap(data.get("storage_gb_per_seat"))
+        plan.contact_sales = bool(data.get("contact_sales"))
         plan.trial_days = data["trial_days"]
         plan.setup_fee_rupees = data["setup_fee"]
         plan.sort_order = data["sort_order"]
         plan.save()
-        for cadence, amount in (
-            ("monthly", data["price_monthly"]),
-            ("semiannual", data["price_semiannual"]),
-            ("annual", data["price_annual"]),
-        ):
-            PlanPrice.objects.update_or_create(
-                plan=plan,
-                cadence=cadence,
-                defaults={"unit_rupees": amount},
-            )
+        PlanPrice.objects.update_or_create(
+            plan=plan,
+            cadence="monthly",
+            defaults={"unit_rupees": data["price_monthly"]},
+        )
+        plan.included_addons.set(data["included_addons"])
+        plan.features.all().delete()
+        PlanFeature.objects.bulk_create(
+            [
+                PlanFeature(plan=plan, text=text, sort_order=index)
+                for index, text in enumerate(data["features"])
+            ]
+        )
         return plan
 
 
@@ -619,7 +659,7 @@ class AddonCatalogForm(forms.Form):
         widget=forms.CheckboxInput(attrs={"class": CHECKBOX_CLASS}),
     )
     per_seat = forms.BooleanField(
-        label="Price is per seat",
+        label="Price is per active employee",
         required=False,
         widget=forms.CheckboxInput(attrs={"class": CHECKBOX_CLASS}),
     )
@@ -631,16 +671,7 @@ class AddonCatalogForm(forms.Form):
     price_monthly = forms.IntegerField(
         label="Monthly price",
         min_value=0,
-        widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
-    )
-    price_semiannual = forms.IntegerField(
-        label="Semi-annual price",
-        min_value=0,
-        widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
-    )
-    price_annual = forms.IntegerField(
-        label="Annual price",
-        min_value=0,
+        help_text="Whole rupees per month, exclusive of GST. A plan that includes this add-on does not pay it.",
         widget=forms.NumberInput(attrs={"class": INPUT_CLASS, "min": "0"}),
     )
     sort_order = forms.IntegerField(
@@ -665,16 +696,13 @@ class AddonCatalogForm(forms.Form):
         )
         if instance is not None:
             self.fields["code"].disabled = True
-            prices = {row.cadence: row.unit_rupees for row in instance.prices.all()}
             self.fields["code"].initial = instance.code
             self.fields["name"].initial = instance.name
             self.fields["description"].initial = instance.description
             self.fields["is_active"].initial = instance.is_active
             self.fields["per_seat"].initial = instance.per_seat
             self.fields["required_on_plan"].initial = instance.required
-            self.fields["price_monthly"].initial = prices.get("monthly", instance.amount)
-            self.fields["price_semiannual"].initial = prices.get("semiannual", instance.amount * 6)
-            self.fields["price_annual"].initial = prices.get("annual", 0)
+            self.fields["price_monthly"].initial = instance.amount
             self.fields["sort_order"].initial = instance.sort_order
             self.fields["compatible_plans"].initial = list(
                 instance.compatible_plans.values_list("pk", flat=True)
@@ -703,14 +731,9 @@ class AddonCatalogForm(forms.Form):
         addon.sort_order = data["sort_order"]
         addon.save()
         addon.compatible_plans.set(data["compatible_plans"])
-        for cadence, amount in (
-            ("monthly", data["price_monthly"]),
-            ("semiannual", data["price_semiannual"]),
-            ("annual", data["price_annual"]),
-        ):
-            AddonPrice.objects.update_or_create(
-                addon=addon,
-                cadence=cadence,
-                defaults={"unit_rupees": amount},
-            )
+        AddonPrice.objects.update_or_create(
+            addon=addon,
+            cadence="monthly",
+            defaults={"unit_rupees": data["price_monthly"]},
+        )
         return addon

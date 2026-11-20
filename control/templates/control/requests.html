@@ -4,7 +4,7 @@
 {% block content %}
   <div class="mb-6">
     <h1 class="control-title">Workspace requests</h1>
-    <p class="control-lede">People who asked for a workspace from the public site. Reviewing a row does not provision a tenant.</p>
+    <p class="control-lede">People who asked for a workspace, or to talk to sales, from the public site. Reviewing a row does not provision a tenant.</p>
   </div>
 
   <div class="control-tabs mb-4" role="tablist" aria-label="Filter requests by status">
@@ -22,16 +22,16 @@
     {% for row in rows %}
       <article class="control-card control-card-pad">
         <div class="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-          <h2 class="control-section-heading">{{ row.company_name }}</h2>
+          <h2 class="control-section-heading">{{ row.company_name }}{% if row.kind == "sales" %} <span class="control-pill control-pill-info ml-2">Talk to Sales</span>{% endif %}</h2>
           <span class="control-mono text-xs">{{ row.get_status_display }} · {{ row.created_at }}</span>
         </div>
         <dl class="grid gap-2 text-sm sm:grid-cols-2">
           <div><dt class="control-muted">Contact</dt><dd>{{ row.contact_name }}</dd></div>
           <div><dt class="control-muted">Email</dt><dd>{{ row.email }}</dd></div>
           <div><dt class="control-muted">Phone</dt><dd>{% if row.phone %}{{ row.phone }}{% else %}—{% endif %}</dd></div>
-          <div><dt class="control-muted">Workspace</dt><dd class="control-mono">{{ row.requested_slug }}</dd></div>
+          {% if row.requested_slug %}<div><dt class="control-muted">Workspace</dt><dd class="control-mono">{{ row.requested_slug }}</dd></div>{% endif %}
           <div><dt class="control-muted">Plan</dt><dd>{% if row.plan %}{{ row.plan.name }}{% else %}No preference{% endif %}</dd></div>
-          <div><dt class="control-muted">Seats</dt><dd>{% if row.seat_count %}{{ row.seat_count }}{% else %}—{% endif %}</dd></div>
+          <div><dt class="control-muted">Employees</dt><dd>{% if row.seat_count %}{{ row.seat_count }}{% else %}—{% endif %}</dd></div>
         </dl>
         {% if row.message %}
           <p class="mt-3">{{ row.message }}</p>

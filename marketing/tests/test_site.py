@@ -118,7 +118,16 @@ class MarketingSiteTests(TestCase):
         self.assertNotIn("apps.apple.com", body)
 
     def test_public_pages_never_link_to_the_operator_dashboard(self):
-        for path in ("/", "/features/", "/pricing/", "/sign-in/", "/request/", "/request/sent/"):
+        for path in (
+            "/",
+            "/features/",
+            "/pricing/",
+            "/sign-in/",
+            "/request/",
+            "/request/sent/",
+            "/contact-sales/",
+            "/contact-sales/sent/",
+        ):
             body = self.public.get(path).content.decode().lower()
             self.assertNotIn("operators", body, path)
             self.assertNotIn("manage.localhost", body, path)
@@ -139,15 +148,97 @@ class MarketingSiteTests(TestCase):
             self.assertContains(page, f'id="{module["key"]}"')
             self.assertContains(page, module["name"])
 
-    def test_pricing_shows_each_cycle_as_a_per_month_price(self):
+    def test_pricing_is_monthly_per_active_employee_with_no_storage(self):
+        for path in ("/", "/pricing/"):
+            page = self.public.get(path)
+            self.assertContains(page, "₹800", msg_prefix=path)
+            self.assertContains(page, "per active employee / month", msg_prefix=path)
+            self.assertContains(page, "?plan=starter", msg_prefix=path)
+            self.assertNotContains(page, "Unassigned", msg_prefix=path)
+            body = page.content.decode()
+            for gone in ("cycle-annual", "Every 6 months", "Semi-annual", "GB storage", "Storage per seat"):
+                self.assertNotIn(gone, body, f"{path}: {gone}")
+        # Starter's old annual price (₹640 a month) must not come back.
+        self.assertNotContains(self.public.get("/pricing/"), "₹640")
+
+    def test_a_talk_to_sales_plan_shows_no_price_and_links_to_the_sales_form(self):
+        enterprise = Plan.objects.get(code="enterprise")
+        self.assertTrue(enterprise.contact_sales)
+        self.assertEqual(enterprise.monthly_price, 2200)
+        for path in ("/", "/pricing/"):
+            page = self.public.get(path)
+            self.assertNotContains(page, "₹2,200", msg_prefix=path)
+            self.assertContains(page, "Custom pricing", msg_prefix=path)
+            self.assertContains(page, "/contact-sales/?plan=enterprise", msg_prefix=path)
+            self.assertNotContains(page, "?plan=enterprise\">Request", msg_prefix=path)
+        # The listed plans keep a price and the normal request link.
+        self.assertContains(self.public.get("/pricing/"), "₹1,400")
+
+    def test_a_talk_to_sales_plan_hides_its_setup_fee_too(self):
+        Plan.objects.filter(code="enterprise").update(setup_fee_rupees=50000)
         page = self.public.get("/pricing/")
-        for cycle in ("monthly", "semiannual", "annual"):
-            self.assertContains(page, f'id="cycle-{cycle}"')
-            self.assertContains(page, f'data-cycle="{cycle}"')
-        # Starter: 7,680 a year is 640 a month, 4,800 per half year is 800.
-        self.assertContains(page, "₹640")
-        self.assertContains(page, "?plan=starter")
-        self.assertNotContains(page, "Unassigned")
+        self.assertNotContains(page, "₹50,000")
+        self.assertContains(page, "Quoted by sales")
+
+    def test_plan_features_and_included_addons_appear_on_the_plan_card(self):
+        from control.models import Addon, PlanFeature
+
+        starter = Plan.objects.get(code="starter")
+        PlanFeature.objects.create(plan=starter, text="Unlimited leave policies", sort_order=0)
+        PlanFeature.objects.create(plan=starter, text="Payroll with statutory reports", sort_order=1)
+        starter.included_addons.add(Addon.objects.get(code="audit_vault"))
+        page = self.public.get("/pricing/")
+        self.assertContains(page, "Unlimited leave policies")
+        self.assertContains(page, "Payroll with statutory reports")
+        self.assertContains(page, "Dedicated Compliance Vault included")
+        body = page.content.decode()
+        self.assertLess(body.index("Unlimited leave policies"), body.index("Payroll with statutory reports"))
+
+    def test_the_sales_form_saves_an_enquiry_for_operators_and_provisions_nothing(self):
+        enterprise = Plan.objects.get(code="enterprise")
+        page = self.public.get("/contact-sales/?plan=enterprise")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Talk to Sales")
+        self.assertContains(page, f'<option value="{enterprise.pk}" selected>Enterprise</option>', html=True)
+        self.assertNotContains(page, 'name="slug"')
+        before = Tenant.objects.count()
+        sent = self.public.post(
+            "/contact-sales/",
+            {
+                "contact_name": "Grace Hopper",
+                "company_name": "Navy Labs",
+                "email": "grace@navy.test",
+                "phone": "",
+                "plan": str(enterprise.pk),
+                "seat_count": "1500",
+                "message": "We need a quote.",
+            },
+        )
+        self.assertRedirects(sent, "/contact-sales/sent/", fetch_redirect_response=False)
+        row = WorkspaceRequest.objects.get(email="grace@navy.test")
+        self.assertEqual(row.kind, WorkspaceRequest.Kind.SALES)
+        self.assertEqual(row.requested_slug, "")
+        self.assertEqual(row.plan, enterprise)
+        self.assertEqual(row.seat_count, 1500)
+        self.assertEqual(row.status, WorkspaceRequest.Status.NEW)
+        self.assertEqual(Tenant.objects.count(), before)
+        self.assertContains(self.public.get("/contact-sales/sent/"), "Sales will be in touch")
+
+    def test_the_sales_form_requires_a_name_company_and_email(self):
+        page = self.public.post("/contact-sales/", {"message": "hi"})
+        self.assertEqual(page.status_code, 200)
+        self.assertFalse(WorkspaceRequest.objects.exists())
+        for field in ("contact_name", "company_name", "email"):
+            self.assertContains(page, "This field is required", msg_prefix=field)
+
+    def test_the_sales_form_shares_the_request_rate_limit(self):
+        data = {"contact_name": "A", "company_name": "B", "email": "a@b.test"}
+        for _ in range(5):
+            self.assertEqual(self.public.post("/contact-sales/", data).status_code, 302)
+        limited = self.public.post("/contact-sales/", data)
+        self.assertEqual(limited.status_code, 200)
+        self.assertContains(limited, "Too many requests")
+        self.assertEqual(WorkspaceRequest.objects.filter(kind="sales").count(), 5)
 
     def test_request_form_preselects_a_plan_from_the_query(self):
         plan = Plan.objects.get(code="starter")
@@ -344,6 +435,35 @@ class MarketingSiteTests(TestCase):
         self.assertContains(form, "allows up to")
         self.assertContains(form, "already exists")
         self.assertLessEqual(form.context["form"].initial["seats"], 100000)
+
+    def test_a_sales_enquiry_is_flagged_for_operators_and_prefills_without_a_slug(self):
+        enterprise = Plan.objects.get(code="enterprise")
+        self.public.post(
+            "/contact-sales/",
+            {
+                "contact_name": "Grace Hopper",
+                "company_name": "Navy Labs",
+                "email": "grace@navy.test",
+                "plan": str(enterprise.pk),
+                "seat_count": "1500",
+            },
+        )
+        row = WorkspaceRequest.objects.get(kind="sales")
+        ops = self._operator_client()
+
+        listing = ops.get("/control/requests/")
+        self.assertContains(listing, "Talk to Sales")
+        self.assertContains(listing, "Navy Labs")
+        self.assertContains(listing, f"/control/tenants/new/?request={row.pk}")
+
+        form = ops.get(f"/control/tenants/new/?request={row.pk}")
+        self.assertEqual(form.status_code, 200)
+        initial = form.context["form"].initial
+        self.assertEqual(initial["name"], "Navy Labs")
+        self.assertEqual(initial["slug"], "")
+        self.assertEqual(initial["plan"], "enterprise")
+        self.assertEqual(initial["seats"], 1500)
+        self.assertContains(form, "Talk to Sales, so there is no workspace address yet")
 
     def test_provision_form_ignores_a_bad_request_id(self):
         ops = self._operator_client()

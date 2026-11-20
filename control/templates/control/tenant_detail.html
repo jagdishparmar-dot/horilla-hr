@@ -149,7 +149,7 @@
       <form method="post" action="{% url 'control-tenant-subscription' tenant.slug %}" class="control-card control-card-pad mt-6">
         {% csrf_token %}
         <h3 class="control-section-title">Subscription</h3>
-        <p class="control-help">A new plan, cadence, or add-on set records an open invoice. A seat-limit change does too when the tenant is active or past due. Storage and module saves do not.</p>
+        <p class="control-help">A new plan or add-on set records an open invoice, and moves the tenant to monthly billing per active employee. A seat-limit change does too when the tenant is active or past due. Storage and module saves do not.</p>
         <div class="mt-4 grid gap-4 sm:grid-cols-2">
           {% for field in subscription_form %}
             <label class="block text-sm">
@@ -189,6 +189,22 @@
             </div>
           {% endif %}
         </div>
+      </div>
+      <div class="mt-5">
+        <h4 class="control-label">Billable employees</h4>
+        <p class="control-help">Highest daily count of non-archived employees in the month, administrators included. Read once a day.</p>
+        <ul class="control-rows">
+          {% for row in billing_months %}
+            <li>
+              <span>{{ row.label|date:"F Y" }}{% if row.current %} <span class="control-muted">(so far)</span>{% endif %}</span>
+              {% if row.usage %}
+                <span class="control-mono">{{ row.usage.billable }}<span class="control-muted"> &middot; {{ row.usage.readings }} of {{ row.usage.days_in_month }} days read</span></span>
+              {% else %}
+                <span class="control-muted">No readings</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
       </div>
       <div class="mt-5 grid gap-4 sm:grid-cols-2">
         <div>

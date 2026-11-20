@@ -78,8 +78,10 @@ def enqueue_create(
 
     A setup password is stored encrypted on the tenant. The operator dashboard
     shows it, and Initialize Database accepts it. No Horilla user is created here.
-    ``seat_limit`` is copied from ``seats``. Storage is that count times the plan's GB per seat.
-    Module flags are stored only. They do not install or remove Horilla apps.
+    ``seat_limit`` is copied from ``seats``. Storage starts uncapped; an operator
+    can set a limit from the tenant page. Add-ons the plan bundles or requires
+    are always attached. Module flags are stored only. They do not install or
+    remove Horilla apps.
     """
     slug = validate_tenant_slug(slug)
     chosen = _resolve_plan(plan)
@@ -94,8 +96,14 @@ def enqueue_create(
         raise ProvisionError("Seat count must be at least 1.")
     if chosen.seat_cap is not None and seat_count > chosen.seat_cap:
         raise ProvisionError(f"{chosen.name} allows up to {chosen.seat_cap} seats.")
-    per_seat = chosen.storage_gb_per_seat or 0
+    from control.models import Addon
+    from control.pricing import bundled_addon_codes
+
     selected = list(addons or [])
+    have = {addon.code for addon in selected}
+    for extra in Addon.objects.filter(code__in=bundled_addon_codes(chosen)):
+        if extra.code not in have:
+            selected.append(extra)
     flags = modules or {}
     tenant = Tenant(
         name=name,
@@ -104,7 +112,6 @@ def enqueue_create(
         plan_fk=chosen,
         cadence=cadence,
         seat_limit=seat_count,
-        storage_limit_gb=seat_count * per_seat,
         module_employee_records=bool(flags.get("employee_records", True)),
         module_payroll_engine=bool(flags.get("payroll_engine", True)),
         module_performance_reviews=bool(flags.get("performance_reviews", True)),

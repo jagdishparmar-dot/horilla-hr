@@ -28,8 +28,11 @@ class CatalogAndQuoteTests(TestCase):
         starter = Plan.objects.get(code="starter")
         self.assertEqual(starter.monthly_price, 800)
         self.assertEqual(starter.seat_cap, 100)
-        self.assertEqual(starter.storage_gb_per_seat, 2)
-        self.assertIsNone(Plan.objects.get(code="enterprise").seat_cap)
+        self.assertFalse(hasattr(starter, "storage_gb_per_seat"))
+        enterprise = Plan.objects.get(code="enterprise")
+        self.assertIsNone(enterprise.seat_cap)
+        self.assertTrue(enterprise.contact_sales)
+        self.assertFalse(starter.contact_sales)
         self.assertTrue(Addon.objects.get(code="calibration_360").per_seat)
         self.assertFalse(Addon.objects.get(code="priority_sla").per_seat)
         self.assertEqual(Addon.objects.get(code="multi_state_tax").amount, 18000)
@@ -115,22 +118,20 @@ class PlansPageTests(TestCase):
         self.assertContains(page, "₹800")
         self.assertContains(page, "₹1,400")
         self.assertContains(page, "₹2,200")
-        self.assertContains(page, "₹11,200")
+        self.assertContains(page, "₹14,000")
+        self.assertContains(page, "per active employee / month")
         self.assertNotContains(page, ">Unassigned<")
-
-        annual = self.client.post(
-            "/control/plans/",
-            {"plan": "growth", "cadence": "annual", "seats": "10"},
-        )
-        self.assertEqual(annual.status_code, 200)
-        self.assertContains(annual, "₹11,200")
-        self.assertContains(annual, "₹1,34,400")
+        self.assertNotContains(page, "Semi-annual")
+        self.assertNotContains(page, "Storage")
+        self.assertNotContains(page, 'name="cadence"')
 
         monthly = self.client.post(
             "/control/plans/",
-            {"plan": "growth", "cadence": "monthly", "seats": "10"},
+            {"plan": "growth", "seats": "10"},
         )
+        self.assertEqual(monthly.status_code, 200)
         self.assertContains(monthly, "₹14,000")
+        self.assertContains(monthly, "₹1,68,000")
         self.assertNotContains(monthly, "₹11,200")
 
     def test_create_form_rejects_an_unknown_plan_and_stores_the_catalog_choice(self):
@@ -158,14 +159,13 @@ class PlansPageTests(TestCase):
                     "name": "Quoted Co",
                     "slug": "quotedco",
                     "plan": "growth",
-                    "cadence": "annual",
                     "seats": "10",
                 },
             )
         self.assertEqual(created.status_code, 302)
         tenant = Tenant.objects.get(slug="quotedco")
         self.assertEqual(tenant.plan_fk.code, "growth")
-        self.assertEqual(tenant.cadence, "annual")
+        self.assertEqual(tenant.cadence, "monthly")
         job = tenant.jobs.get()
         self.assertEqual(job.status, "queued")
         self.assertEqual(job.payload["seats"], 10)

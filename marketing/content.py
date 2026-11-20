@@ -298,7 +298,7 @@ SEGMENTS = (
         "body": "You need HR that works today, not a three-month implementation project. ClockMe is ready with sensible defaults.",
         "points": (
             "Up and running quickly",
-            "Priced per seat, so cost follows your headcount",
+            "Priced per active employee, so cost follows your headcount",
             "Employee self-service from day one",
             "Payroll, leave, and attendance in one place",
         ),
@@ -406,7 +406,7 @@ FAQS = (
     },
     {
         "q": "What does it cost?",
-        "a": "Plans are priced per employee seat per month, exclusive of GST, with monthly, six-monthly, and annual billing. The pricing page always shows the current rates.",
+        "a": "Plans are billed monthly, per active employee, exclusive of GST. The pricing page shows the current rates. Larger plans are quoted by our sales team, so use Talk to Sales on those.",
         "topics": ("home", "pricing"),
     },
     {

@@ -71,7 +71,7 @@ class QuotaTests(TestCase):
         tenant.save()
         return tenant
 
-    def test_create_copies_seat_limit_and_storage_from_the_plan(self):
+    def test_create_copies_the_seat_limit_and_leaves_storage_uncapped(self):
         job = enqueue_create(
             name="Growth Co",
             slug="growthco",
@@ -81,7 +81,7 @@ class QuotaTests(TestCase):
         )
         tenant = job.tenant
         self.assertEqual(tenant.seat_limit, 10)
-        self.assertEqual(tenant.storage_limit_gb, 50)
+        self.assertEqual(tenant.storage_limit_gb, 0)
         self.assertTrue(tenant.module_employee_records)
         self.assertFalse(tenant.module_payroll_engine)
         self.assertTrue(tenant.module_performance_reviews)
@@ -228,12 +228,16 @@ class QuotaTests(TestCase):
                 cursor.execute("SELECT to_regclass('public.employee_employee')")
                 if cursor.fetchone()[0] is None:
                     cursor.execute(
-                        "CREATE TABLE employee_employee (id integer PRIMARY KEY)"
+                        "CREATE TABLE employee_employee (id integer PRIMARY KEY, "
+                        "is_active boolean NOT NULL DEFAULT true)"
                     )
                     created_stub = True
-                cursor.execute("DELETE FROM employee_employee WHERE id IN (910001, 910002)")
                 cursor.execute(
-                    "INSERT INTO employee_employee (id) VALUES (910001), (910002)"
+                    "DELETE FROM employee_employee WHERE id IN (910001, 910002, 910003)"
+                )
+                cursor.execute(
+                    "INSERT INTO employee_employee (id, is_active) "
+                    "VALUES (910001, true), (910002, true), (910003, false)"
                 )
             good = self._tenant("quotaok", active_seats=0)
             other = self._tenant("quotabad", active_seats=5, seat_limit=30)
@@ -248,12 +252,18 @@ class QuotaTests(TestCase):
             other.refresh_from_db()
             self.assertEqual(good.active_seats, 2)
             self.assertIsNotNone(good.usage_updated_at)
+            day = good.usage_days.get()
+            self.assertEqual(day.active_employees, 2)
+            self.assertEqual(day.archived_employees, 1)
+            self.assertFalse(other.usage_days.exists())
             self.assertEqual(other.active_seats, 5)
             self.assertTrue(any(line.startswith("quotabad:") for line in errors))
             self.assertNotIn("db-secret", " ".join(errors))
         finally:
             with connections[alias].cursor() as cursor:
-                cursor.execute("DELETE FROM employee_employee WHERE id IN (910001, 910002)")
+                cursor.execute(
+                    "DELETE FROM employee_employee WHERE id IN (910001, 910002, 910003)"
+                )
                 if created_stub:
                     cursor.execute("DROP TABLE employee_employee")
             connections[alias].close()

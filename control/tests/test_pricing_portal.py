@@ -98,10 +98,7 @@ class CatalogPriceTests(TestCase):
                 "description": "Small teams",
                 "status": "active",
                 "price_monthly": "500",
-                "price_semiannual": "3000",
-                "price_annual": "5000",
                 "seat_cap": "20",
-                "storage_gb_per_seat": "1",
                 "trial_days": "7",
                 "setup_fee": "1000",
                 "sort_order": "4",
@@ -114,13 +111,14 @@ class CatalogPriceTests(TestCase):
         self.assertEqual(plan.setup_fee_rupees, 1000)
         self.assertTrue(plan.is_active)
         self.assertEqual(
-            PlanPrice.objects.get(plan=plan, cadence="annual").unit_rupees,
-            5000,
+            PlanPrice.objects.get(plan=plan, cadence="monthly").unit_rupees,
+            500,
         )
+        self.assertFalse(PlanPrice.objects.filter(plan=plan).exclude(cadence="monthly").exists())
         page = self.client.get("/control/plans/")
         self.assertContains(page, "Pilot")
-        priced = quote("pilot", "annual", 2, [])
-        self.assertEqual(priced.term, 10000)
+        priced = quote("pilot", "monthly", 2, [])
+        self.assertEqual(priced.term, 1000)
         self.assertEqual(priced.setup_fee, 1000)
         refused = self.client.post(
             "/control/plans/pilot/edit/",
@@ -129,8 +127,6 @@ class CatalogPriceTests(TestCase):
                 "description": "",
                 "status": "active",
                 "price_monthly": "-5",
-                "price_semiannual": "3000",
-                "price_annual": "5000",
                 "trial_days": "7",
                 "setup_fee": "0",
                 "sort_order": "4",

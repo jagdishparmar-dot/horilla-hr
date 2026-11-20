@@ -6,7 +6,7 @@
   <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="control-title">Subscription Plans &amp; Add-ons</h1>
-      <p class="control-lede">Each plan and add-on has its own monthly, semi-annual, and annual price. Amounts are whole rupees, exclusive of GST. A catalog edit does not change a tenant that already has a locked price.</p>
+      <p class="control-lede">Every plan bills monthly, per active employee. Amounts are whole rupees, exclusive of GST. A plan marked Talk to Sales shows no price on the public site. A catalog edit does not change a tenant that already has a locked price.</p>
     </div>
     {% if operator.is_staff %}
     <div class="flex flex-wrap gap-2">
@@ -23,30 +23,58 @@
           <h2 class="control-section-heading">{{ plan.name }}</h2>
           <span class="control-mono text-xs text-slate-500">{{ plan.active_tenants }} tenant{{ plan.active_tenants|pluralize }}</span>
         </div>
-        <p class="control-plan-price mt-4">{{ plan.monthly_price|inr }}</p>
-        <p class="control-help">per employee seat / month</p>
+        {% if plan.contact_sales %}
+          <p class="mt-2"><span class="control-pill control-pill-info">Talk to Sales</span></p>
+        {% endif %}
+        <p class="control-plan-price mt-4">{{ plan.monthly_unit|inr }}</p>
+        <p class="control-help">per active employee / month{% if plan.contact_sales %}. The public site shows Talk to Sales instead of this price.{% endif %}</p>
         <dl class="mt-4 space-y-2 text-sm">
-          <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">Semi-annual / seat</dt>
-            <dd class="control-mono">{{ plan.cycle.semiannual|default:0|inr }}</dd>
-          </div>
-          <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">Annual / seat</dt>
-            <dd class="control-mono">{{ plan.cycle.annual|default:0|inr }}</dd>
-          </div>
           <div class="flex items-center justify-between gap-3">
             <dt class="control-muted">Employee cap</dt>
             <dd class="control-mono">{% if plan.seat_cap %}{{ plan.seat_cap }}{% else %}None{% endif %}</dd>
           </div>
           <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">Storage</dt>
-            <dd class="control-mono">{% if plan.storage_gb_per_seat %}{{ plan.storage_gb_per_seat }} GB / seat{% else %}None{% endif %}</dd>
+            <dt class="control-muted">Trial</dt>
+            <dd class="control-mono">{% if plan.trial_days %}{{ plan.trial_days }} days{% else %}None{% endif %}</dd>
           </div>
+          {% if plan.setup_fee_rupees %}
+          <div class="flex items-center justify-between gap-3">
+            <dt class="control-muted">Setup fee</dt>
+            <dd class="control-mono">{{ plan.setup_fee_rupees|inr }}</dd>
+          </div>
+          {% endif %}
         </dl>
-        {% if operator.is_staff %}
-        <a href="{% url 'control-plan-edit' plan.code %}" class="control-btn-ghost mt-3 no-underline">Edit {{ plan.name }}</a>
-        {% endif %}
-        <a href="{% url 'control-tenant-create' %}?plan={{ plan.code }}" class="control-btn {% if plan.code == 'growth' %}control-btn-primary{% else %}control-btn-ghost{% endif %} mt-2 no-underline">Provision with {{ plan.name }}</a>
+
+        <div class="control-plan-section">
+          <h3 class="control-label">Features</h3>
+          {% with features=plan.features.all %}
+            {% if features %}
+              <ul class="control-bullets">
+                {% for feature in features %}<li>{{ feature.text }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              <p class="control-help">No features listed yet.</p>
+            {% endif %}
+          {% endwith %}
+        </div>
+
+        <div class="control-plan-section">
+          <h3 class="control-label">Included add-ons</h3>
+          {% if plan.bundled %}
+            <div class="mt-2 flex flex-wrap gap-2">
+              {% for addon in plan.bundled %}<span class="control-pill control-pill-neutral">{{ addon.name }}</span>{% endfor %}
+            </div>
+          {% else %}
+            <p class="control-help">None. Add-ons are priced separately.</p>
+          {% endif %}
+        </div>
+
+        <div class="mt-auto flex flex-col pt-4">
+          {% if operator.is_staff %}
+          <a href="{% url 'control-plan-edit' plan.code %}" class="control-btn-ghost no-underline">Edit {{ plan.name }}</a>
+          {% endif %}
+          <a href="{% url 'control-tenant-create' %}?plan={{ plan.code }}" class="control-btn {% if plan.code == 'growth' %}control-btn-primary{% else %}control-btn-ghost{% endif %} mt-2 no-underline">Provision with {{ plan.name }}</a>
+        </div>
       </article>
     {% endfor %}
   </section>
@@ -55,7 +83,7 @@
     <div class="control-card overflow-hidden">
       <div class="border-b border-slate-200 px-5 py-4">
         <h2 class="control-section-title">Add-ons</h2>
-        <p class="control-help">The price is the charge for one billing cycle. Per-seat add-ons multiply by the seat count.</p>
+        <p class="control-help">Priced per month. Per-employee add-ons multiply by the number of active employees. A plan that includes an add-on does not pay for it.</p>
       </div>
       <div class="control-table-wrap">
         <table class="control-table control-table-auto">
@@ -64,6 +92,7 @@
               <th scope="col">Add-on</th>
               <th scope="col">Price</th>
               <th scope="col">Basis</th>
+              <th scope="col">Included in</th>
               <th scope="col"></th>
             </tr>
           </thead>
@@ -71,8 +100,9 @@
             {% for addon in addons %}
               <tr>
                 <td>{{ addon.name }}</td>
-                <td class="control-mono">{{ addon.amount|inr }} / month</td>
-                <td class="control-muted">{% if addon.per_seat %}Per seat{% else %}Flat{% endif %}{% if addon.required %} · Mandatory{% endif %}</td>
+                <td class="control-mono">{{ addon.monthly_unit|inr }} / month</td>
+                <td class="control-muted">{% if addon.per_seat %}Per active employee{% else %}Flat{% endif %}{% if addon.required %} · Mandatory{% endif %}</td>
+                <td class="control-muted">{% for plan in addon.included_in %}{{ plan.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
                 <td>{% if operator.is_staff %}<a href="{% url 'control-addon-edit' addon.code %}">Edit</a>{% endif %}</td>
               </tr>
             {% endfor %}
@@ -94,11 +124,7 @@
           {{ form.plan }}
         </div>
         <div class="mb-4">
-          <label class="control-label" for="{{ form.cadence.id_for_label }}">Cadence</label>
-          {{ form.cadence }}
-        </div>
-        <div class="mb-4">
-          <label class="control-label" for="{{ form.seats.id_for_label }}">Seats</label>
+          <label class="control-label" for="{{ form.seats.id_for_label }}">{{ form.seats.label }}</label>
           {{ form.seats }}
         </div>
         <fieldset class="control-checks mb-4">
@@ -111,27 +137,19 @@
       {% if quote %}
         <dl class="mt-5 space-y-2 border-t border-slate-200 pt-4 text-sm" data-quote>
           <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">Seats, before discount</dt>
+            <dt class="control-muted">Plan, per month</dt>
             <dd class="control-mono">{{ quote.base_monthly|inr }}</dd>
           </div>
           <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">Cadence discount</dt>
-            <dd class="control-mono">{{ quote.discount|inr }}</dd>
-          </div>
-          <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">Add-ons</dt>
+            <dt class="control-muted">Add-ons, per month</dt>
             <dd class="control-mono">{{ quote.addon_monthly|inr }}</dd>
-          </div>
-          <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">This bill</dt>
-            <dd class="control-mono" data-quote-term>{{ quote.term|inr }}</dd>
           </div>
           <div class="flex items-center justify-between gap-3">
             <dt class="font-medium">Monthly total</dt>
             <dd class="control-mono text-base font-semibold" data-quote-monthly>{{ quote.total_monthly|inr }}</dd>
           </div>
           <div class="flex items-center justify-between gap-3">
-            <dt class="control-muted">Annual bill</dt>
+            <dt class="control-muted">Over twelve months</dt>
             <dd class="control-mono" data-quote-annual>{{ quote.annual|inr }}</dd>
           </div>
           {% if quote.setup_fee %}
@@ -157,7 +175,8 @@
             <th>Plan</th>
             <th>Status</th>
             <th>Order</th>
-            <th>Monthly</th>
+            <th>Per employee / month</th>
+            <th>Public site</th>
             <th></th>
           </tr>
         </thead>
@@ -168,6 +187,7 @@
               <td>{{ plan.get_status_display }}</td>
               <td class="control-mono">{{ plan.sort_order }}</td>
               <td class="control-mono">{{ plan.monthly_price|inr }}</td>
+              <td>{% if plan.contact_sales %}<span class="control-pill control-pill-info">Talk to Sales</span>{% else %}Shows price{% endif %}</td>
               <td><a href="{% url 'control-plan-edit' plan.code %}">Edit</a></td>
             </tr>
           {% endfor %}
@@ -183,7 +203,6 @@
       var form = document.getElementById("quote-form");
       if (!node || !form) return;
       var catalog = JSON.parse(node.textContent);
-      var months = {monthly: 1, semiannual: 6, annual: 12};
       function money(value) {
         var sign = value < 0 ? "-" : "";
         var digits = String(Math.abs(value));
@@ -201,28 +220,25 @@
         return sign + "₹" + grouped;
       }
       function paint() {
-        var plan = catalog.plans[form.plan.value];
-        var cadence = form.cadence.value;
+        var code = form.plan.value;
+        var plan = catalog.plans[code];
         var seats = Number(form.seats.value || 0);
-        var cycleMonths = months[cadence] || 1;
         if (!plan) return;
-        var addonTerm = 0;
+        var addonTotal = 0;
         form.querySelectorAll('input[name="addons"]').forEach(function (box) {
           var addon = catalog.addons[box.value];
-          var allowed = !addon || !addon.plans.length || addon.plans.indexOf(form.plan.value) !== -1;
+          var allowed = !addon || !addon.plans.length || addon.plans.indexOf(code) !== -1 || plan.included.indexOf(box.value) !== -1;
+          var bundled = plan.included.indexOf(box.value) !== -1;
           var label = box.closest("label") || box.parentElement;
           if (label) label.hidden = !allowed;
-          if (addon && addon.required && allowed) box.checked = true;
-          if (!box.checked || !allowed || !addon) return;
-          var unit = Number(addon[cadence] || 0);
-          addonTerm += addon.per_seat ? unit * seats : unit;
+          if (addon && allowed && (addon.required || bundled)) box.checked = true;
+          if (!box.checked || !allowed || !addon || bundled) return;
+          var unit = Number(addon.monthly || 0);
+          addonTotal += addon.per_seat ? unit * seats : unit;
         });
-        var term = seats * Number(plan[cadence] || 0) + addonTerm;
-        var monthly = Math.trunc(term / cycleMonths);
-        var termNode = document.querySelector("[data-quote-term]");
+        var monthly = seats * Number(plan.monthly || 0) + addonTotal;
         var monthNode = document.querySelector("[data-quote-monthly]");
         var yearNode = document.querySelector("[data-quote-annual]");
-        if (termNode) termNode.textContent = money(term);
         if (monthNode) monthNode.textContent = money(monthly);
         if (yearNode) yearNode.textContent = money(monthly * 12);
       }

@@ -48,10 +48,15 @@ class ProvisionerHeartbeat(models.Model):
 
 
 class Plan(models.Model):
-    """Sellable seat price. Amounts are whole rupees, exclusive of GST.
+    """Sellable price per active employee per month, in whole rupees, exclusive of GST.
 
-    ``monthly_price`` stays the per-seat monthly amount so existing readers
-    keep working. The price for each billing cycle lives on ``PlanPrice``.
+    ``monthly_price`` is that amount and ``PlanPrice`` keeps a monthly row in
+    step with it. Older semi-annual and annual rows stay for tenants that
+    already bill on them, but nothing new is sold that way.
+
+    ``contact_sales`` hides the price on the public site and sends visitors
+    to the sales form instead. The price is still used to quote and invoice.
+    ``included_addons`` are bundled at no charge on every subscription.
     """
 
     class Status(models.TextChoices):
@@ -64,9 +69,14 @@ class Plan(models.Model):
     description = models.TextField(blank=True)
     monthly_price = models.PositiveIntegerField()
     seat_cap = models.PositiveIntegerField(null=True, blank=True)
-    storage_gb_per_seat = models.PositiveIntegerField(null=True, blank=True)
     trial_days = models.PositiveIntegerField(default=14)
     setup_fee_rupees = models.PositiveIntegerField(default=0)
+    contact_sales = models.BooleanField(default=False)
+    included_addons = models.ManyToManyField(
+        "Addon",
+        blank=True,
+        related_name="included_in_plans",
+    )
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -81,6 +91,21 @@ class Plan(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class PlanFeature(models.Model):
+    """One line in a plan's feature list, shown to operators and on the public site."""
+
+    plan = models.ForeignKey(Plan, on_delete=models.CASCADE, related_name="features")
+    text = models.CharField(max_length=160)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "plan feature"
+        ordering = ["sort_order", "pk"]
+
+    def __str__(self) -> str:
+        return self.text
 
 
 class Addon(models.Model):
@@ -257,6 +282,34 @@ class TenantAddon(models.Model):
 
     def __str__(self) -> str:
         return f"{self.tenant_id}:{self.addon_id}"
+
+
+class TenantUsageDay(models.Model):
+    """One reading of a tenant's headcount, taken by the daily snapshot.
+
+    ``active_employees`` is the billable count: employee records that are not
+    archived. Billing reads these rows. Nothing in the tenant database records
+    when someone was archived, so a past month cannot be rebuilt later.
+    """
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="usage_days")
+    day = models.DateField()
+    active_employees = models.PositiveIntegerField()
+    archived_employees = models.PositiveIntegerField(default=0)
+    recorded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "tenant usage day"
+        ordering = ["-day"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "day"],
+                name="control_tenant_usage_day",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.tenant_id} {self.day} {self.active_employees}"
 
 
 class PlanPrice(models.Model):
@@ -464,18 +517,30 @@ class Invoice(models.Model):
 
 
 class WorkspaceRequest(models.Model):
-    """A public request for a workspace. Operators provision it by hand."""
+    """A public request for a workspace, or a "Talk to sales" enquiry.
+
+    Operators provision a workspace by hand. A sales enquiry has no slug yet.
+    """
 
     class Status(models.TextChoices):
         NEW = "new", "New"
         REVIEWED = "reviewed", "Reviewed"
         DISMISSED = "dismissed", "Dismissed"
 
+    class Kind(models.TextChoices):
+        WORKSPACE = "workspace", "Workspace request"
+        SALES = "sales", "Talk to sales"
+
+    kind = models.CharField(
+        max_length=16,
+        choices=Kind.choices,
+        default=Kind.WORKSPACE,
+    )
     company_name = models.CharField(max_length=120)
     contact_name = models.CharField(max_length=120)
     email = models.EmailField()
     phone = models.CharField(max_length=32, blank=True)
-    requested_slug = models.CharField(max_length=31)
+    requested_slug = models.CharField(max_length=31, blank=True)
     plan = models.ForeignKey(
         Plan,
         null=True,

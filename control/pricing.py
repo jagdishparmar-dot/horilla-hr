@@ -1,8 +1,9 @@
-"""Seat quotes in whole Indian rupees. Nothing here charges a customer.
+"""Quotes in whole Indian rupees. Nothing here charges a customer.
 
-One function prices a plan, its add-ons, and the selected billing cycle.
-Stored cycle prices win. When a cycle row is missing, the monthly unit is
-expanded with ``cycle_amounts`` so the locked annual discount still holds.
+Plans are sold per active employee per month. One function prices a plan and
+its add-ons; add-ons a plan bundles cost nothing. Subscriptions created before
+monthly-only billing may still carry a semi-annual or annual cycle. Stored
+cycle prices win for them, and a missing row is expanded with ``cycle_amounts``.
 """
 
 from dataclasses import dataclass
@@ -65,9 +66,14 @@ def catalog_addon_unit(addon, cadence) -> int:
 
 
 def addon_fits(addon, plan) -> bool:
-    """Active add-ons with no compatible plans fit every plan."""
+    """Active add-ons with no compatible plans fit every plan.
+
+    An add-on a plan bundles always fits that plan.
+    """
     if not addon.is_active:
         return False
+    if plan.pk and plan.included_addons.filter(pk=addon.pk).exists():
+        return True
     if not addon.compatible_plans.exists():
         return True
     return addon.compatible_plans.filter(pk=plan.pk).exists()
@@ -78,6 +84,26 @@ def required_addon_codes(plan) -> list[str]:
     for addon in Addon.objects.filter(is_active=True, required=True):
         if addon_fits(addon, plan):
             codes.append(addon.code)
+    return codes
+
+
+def included_addon_codes(plan) -> list[str]:
+    """Active add-ons the plan bundles at no charge."""
+    if not plan.pk:
+        return []
+    return list(
+        plan.included_addons.filter(is_active=True)
+        .order_by("sort_order", "name")
+        .values_list("code", flat=True)
+    )
+
+
+def bundled_addon_codes(plan) -> list[str]:
+    """Add-ons every subscription on this plan carries: mandatory plus bundled."""
+    codes = list(required_addon_codes(plan))
+    for code in included_addon_codes(plan):
+        if code not in codes:
+            codes.append(code)
     return codes
 
 
@@ -103,8 +129,11 @@ def quote(
     seat_count = max(0, int(seats or 0))
     gross_seats = seat_count * int(chosen.monthly_price)
     rows = _addon_rows(addon_ids)
+    bundled = set(included_addon_codes(chosen))
     gross_addons = 0
     for addon in rows:
+        if addon.code in bundled:
+            continue
         gross_addons += addon.amount * seat_count if addon.per_seat else addon.amount
     plan_unit = (
         int(locked_plan_unit)
@@ -115,6 +144,8 @@ def quote(
     seat_term = seat_count * plan_unit
     addon_term = 0
     for addon in rows:
+        if addon.code in bundled:
+            continue
         locked = locks.get(addon.code)
         unit = int(locked) if locked is not None else catalog_addon_unit(addon, cadence)
         addon_term += unit * seat_count if addon.per_seat else unit
@@ -162,6 +193,11 @@ def lock_subscription(tenant) -> None:
         return
     tenant.locked_plan_unit = catalog_plan_unit(tenant.plan_fk, tenant.cadence)
     tenant.save(update_fields=["locked_plan_unit"])
+    bundled = set(included_addon_codes(tenant.plan_fk))
     for link in tenant.subscription_addons.select_related("addon"):
-        link.locked_unit = catalog_addon_unit(link.addon, tenant.cadence)
+        link.locked_unit = (
+            0
+            if link.addon.code in bundled
+            else catalog_addon_unit(link.addon, tenant.cadence)
+        )
         link.save(update_fields=["locked_unit"])

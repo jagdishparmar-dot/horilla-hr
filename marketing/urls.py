@@ -21,5 +21,11 @@ urlpatterns = [
     path("sign-in/", views.sign_in, name="marketing-sign-in"),
     path("request/", views.request_workspace, name="marketing-request"),
     path("request/sent/", views.request_sent, name="marketing-request-sent"),
+    path("contact-sales/", views.contact_sales, name="marketing-contact-sales"),
+    path(
+        "contact-sales/sent/",
+        views.contact_sales_sent,
+        name="marketing-contact-sales-sent",
+    ),
     path("health/", health_check, name="marketing-health"),
 ]

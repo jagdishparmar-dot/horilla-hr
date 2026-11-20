@@ -144,19 +144,19 @@ class IssueInvoiceTests(TestCase):
         tenant = _tenant("subco")
         same = self.client.post(
             "/control/tenants/subco/subscription/",
-            {"plan": "starter", "cadence": "monthly"},
+            {"plan": "starter"},
         )
         self.assertEqual(same.status_code, 302)
         self.assertEqual(Invoice.objects.filter(tenant=tenant).count(), 0)
         changed = self.client.post(
             "/control/tenants/subco/subscription/",
-            {"plan": "growth", "cadence": "annual"},
+            {"plan": "growth"},
         )
         self.assertEqual(changed.status_code, 302)
         invoice = Invoice.objects.get(tenant=tenant)
         tenant.refresh_from_db()
         self.assertEqual(invoice.plan_code, "growth")
-        self.assertEqual(invoice.cadence, "annual")
+        self.assertEqual(invoice.cadence, "monthly")
         self.assertEqual(invoice.amount_rupees, invoice_amount(tenant))
         self.assertEqual(invoice.status, Invoice.Status.OPEN)
 

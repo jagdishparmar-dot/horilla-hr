@@ -5,7 +5,7 @@ for the slug in that URL. List pages stay on the control database.
 """
 
 import csv
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib import messages
@@ -76,7 +76,14 @@ from control.models import (
     Tenant,
     WorkspaceRequest,
 )
-from control.pricing import lock_subscription, quote, quote_tenant
+from control.metering import month_usage
+from control.pricing import (
+    catalog_addon_unit,
+    catalog_plan_unit,
+    lock_subscription,
+    quote,
+    quote_tenant,
+)
 from control.naming import TenantSlugError
 from control.provisioning import (
     ProvisionError,
@@ -383,17 +390,25 @@ def tenant_list(request):
 @operator_required
 @require_http_methods(["GET", "POST"])
 def plans(request):
-    sellable = list(sellable_plans().prefetch_related("prices"))
+    sellable = list(
+        sellable_plans().prefetch_related("prices", "features", "included_addons")
+    )
     for plan in sellable:
         plan.active_tenants = plan.tenants.exclude(status=Tenant.Status.DELETED).count()
-        plan.cycle = {row.cadence: row.unit_rupees for row in plan.prices.all()}
+        plan.monthly_unit = catalog_plan_unit(plan, Tenant.Cadence.MONTHLY)
+        plan.bundled = [addon for addon in plan.included_addons.all() if addon.is_active]
     addons = list(
         Addon.objects.filter(is_active=True)
         .prefetch_related("prices", "compatible_plans")
         .order_by("sort_order", "name")
     )
+    for addon in addons:
+        addon.monthly_unit = catalog_addon_unit(addon, Tenant.Cadence.MONTHLY)
+        addon.included_in = [
+            plan for plan in sellable if any(a.pk == addon.pk for a in plan.bundled)
+        ]
     managed_plans = list(
-        Plan.objects.exclude(code=UNASSIGNED).prefetch_related("prices").order_by("sort_order", "code")
+        Plan.objects.exclude(code=UNASSIGNED).order_by("sort_order", "code")
     )
     managed_addons = list(
         Addon.objects.prefetch_related("prices", "compatible_plans").order_by("sort_order", "name")
@@ -404,28 +419,25 @@ def plans(request):
         chosen = form.cleaned_data["plan"]
         quoted = quote(
             chosen,
-            form.cleaned_data["cadence"],
+            Tenant.Cadence.MONTHLY,
             form.cleaned_data["seats"],
             [addon.code for addon in form.cleaned_data["addons"]],
         )
     elif sellable and not form.is_bound:
         growth = next((plan for plan in sellable if plan.code == "growth"), sellable[0])
-        quoted = quote(growth, Tenant.Cadence.ANNUAL, 10, [])
+        quoted = quote(growth, Tenant.Cadence.MONTHLY, 10, [])
     catalog = {
         "plans": {
             plan.code: {
-                "monthly": plan.cycle.get("monthly", plan.monthly_price),
-                "semiannual": plan.cycle.get("semiannual", plan.monthly_price * 6),
-                "annual": plan.cycle.get("annual", 0),
+                "monthly": plan.monthly_unit,
                 "setup": plan.setup_fee_rupees,
+                "included": [addon.code for addon in plan.bundled],
             }
             for plan in sellable
         },
         "addons": {
             addon.code: {
-                "monthly": next((row.unit_rupees for row in addon.prices.all() if row.cadence == "monthly"), addon.amount),
-                "semiannual": next((row.unit_rupees for row in addon.prices.all() if row.cadence == "semiannual"), addon.amount * 6),
-                "annual": next((row.unit_rupees for row in addon.prices.all() if row.cadence == "annual"), 0),
+                "monthly": addon.monthly_unit,
                 "per_seat": addon.per_seat,
                 "plans": [plan.code for plan in addon.compatible_plans.all()],
                 "required": addon.required,
@@ -443,7 +455,6 @@ def plans(request):
             "managed_addons": managed_addons,
             "form": form,
             "quote": quoted,
-            "annual": Tenant.Cadence.ANNUAL,
             "catalog_json": catalog,
         },
     )
@@ -457,17 +468,25 @@ def _catalog_response(request, template, form, title):
     )
 
 
-def _cycle_prices(obj, monthly_attr: str) -> str:
-    # Query the price rows directly. A prefetched plan still holds the prices
-    # from before this save, and the audit must record the values just written.
+def _catalog_summary(obj, monthly_attr: str) -> str:
+    """One line for the audit: the monthly price plus what else the operator can set.
+
+    Rows are read fresh. A prefetched plan still holds its values from before
+    this save, and the audit must record what was just written.
+    """
     related = obj.prices
-    rows = related.model.objects.filter(**{related.field.name: obj})
-    prices = {row.cadence: row.unit_rupees for row in rows}
-    monthly = prices.get("monthly", getattr(obj, monthly_attr, 0) or 0)
-    return (
-        f"monthly {monthly}, semiannual {prices.get('semiannual', 0)}, "
-        f"annual {prices.get('annual', 0)}"
-    )
+    row = related.model.objects.filter(**{related.field.name: obj, "cadence": "monthly"}).first()
+    monthly = row.unit_rupees if row is not None else getattr(obj, monthly_attr, 0) or 0
+    parts = [f"monthly {monthly}"]
+    if isinstance(obj, Plan):
+        fresh = Plan.objects.get(pk=obj.pk)
+        if fresh.contact_sales:
+            parts.append("talk to sales")
+        parts.append(f"features {fresh.features.count()}")
+        bundled = sorted(fresh.included_addons.values_list("code", flat=True))
+        if bundled:
+            parts.append("includes " + " ".join(bundled))
+    return ", ".join(parts)
 
 
 def _audit_catalog(request, kind: str, code: str, before: str, after: str) -> None:
@@ -484,7 +503,7 @@ def plan_create(request):
     form = PlanCatalogForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         plan = form.save()
-        _audit_catalog(request, "plan", plan.code, "none", _cycle_prices(plan, "monthly_price"))
+        _audit_catalog(request, "plan", plan.code, "none", _catalog_summary(plan, "monthly_price"))
         messages.success(request, f"Saved plan {plan.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/plan_form.html", form, "New plan")
@@ -495,10 +514,10 @@ def plan_create(request):
 def plan_edit(request, code):
     plan = get_object_or_404(Plan.objects.exclude(code=UNASSIGNED).prefetch_related("prices"), code=code)
     form = PlanCatalogForm(request.POST or None, instance=plan)
-    before = _cycle_prices(plan, "monthly_price")
+    before = _catalog_summary(plan, "monthly_price")
     if request.method == "POST" and form.is_valid():
         saved = form.save()
-        _audit_catalog(request, "plan", saved.code, before, _cycle_prices(saved, "monthly_price"))
+        _audit_catalog(request, "plan", saved.code, before, _catalog_summary(saved, "monthly_price"))
         messages.success(request, f"Saved plan {plan.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/plan_form.html", form, plan.name)
@@ -508,7 +527,7 @@ def plan_edit(request, code):
 @require_POST
 def plan_delete(request, code):
     plan = get_object_or_404(Plan.objects.exclude(code=UNASSIGNED), code=code)
-    prices = _cycle_prices(plan, "monthly_price")
+    prices = _catalog_summary(plan, "monthly_price")
     if plan.tenants.exists():
         plan.status = Plan.Status.ARCHIVED
         plan.is_active = False
@@ -528,7 +547,7 @@ def addon_create(request):
     form = AddonCatalogForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         addon = form.save()
-        _audit_catalog(request, "add-on", addon.code, "none", _cycle_prices(addon, "amount"))
+        _audit_catalog(request, "add-on", addon.code, "none", _catalog_summary(addon, "amount"))
         messages.success(request, f"Saved add-on {addon.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/addon_form.html", form, "New add-on")
@@ -542,10 +561,10 @@ def addon_edit(request, code):
         code=code,
     )
     form = AddonCatalogForm(request.POST or None, instance=addon)
-    before = _cycle_prices(addon, "amount")
+    before = _catalog_summary(addon, "amount")
     if request.method == "POST" and form.is_valid():
         saved = form.save()
-        _audit_catalog(request, "add-on", saved.code, before, _cycle_prices(saved, "amount"))
+        _audit_catalog(request, "add-on", saved.code, before, _catalog_summary(saved, "amount"))
         messages.success(request, f"Saved add-on {addon.name}.")
         return redirect("control-plans")
     return _catalog_response(request, "control/addon_form.html", form, addon.name)
@@ -555,7 +574,7 @@ def addon_edit(request, code):
 @require_POST
 def addon_delete(request, code):
     addon = get_object_or_404(Addon, code=code)
-    prices = _cycle_prices(addon, "amount")
+    prices = _catalog_summary(addon, "amount")
     if addon.subscriptions.exists():
         addon.is_active = False
         addon.save(update_fields=["is_active"])
@@ -790,8 +809,9 @@ def tenant_create(request):
                     name=form.cleaned_data["name"],
                     slug=form.cleaned_data["slug"],
                     plan=form.cleaned_data["plan"],
-                    cadence=form.cleaned_data["cadence"],
+                    cadence=Tenant.Cadence.MONTHLY,
                     seats=form.cleaned_data["seats"],
+                    addons=form.cleaned_data["addons"],
                     modules={
                         "employee_records": form.cleaned_data["module_employee_records"],
                         "payroll_engine": form.cleaned_data["module_payroll_engine"],
@@ -871,7 +891,11 @@ def _initial_from_request(row):
         initial["seats"] = seats
     elif plan is not None:
         initial["seats"] = cap or 25
-    if Tenant.objects.filter(slug=row.requested_slug).exists():
+    if row.kind == WorkspaceRequest.Kind.SALES:
+        notices.append(
+            "This came through Talk to Sales, so there is no workspace address yet. Choose a slug."
+        )
+    elif Tenant.objects.filter(slug=row.requested_slug).exists():
         notices.append("A tenant with the requested address already exists. Choose another slug.")
     return initial, notices
 
@@ -910,6 +934,26 @@ def _job_steps(job):
     if not isinstance(raw, list):
         return []
     return [str(step) for step in raw if step]
+
+
+def _billing_months(tenant, count=3):
+    """Billable employees for this month and the ones before it, newest first."""
+    today = timezone.localdate()
+    year, month = today.year, today.month
+    rows = []
+    for _ in range(count):
+        usage = month_usage(tenant, year, month)
+        rows.append(
+            {
+                "label": date(year, month, 1),
+                "usage": usage,
+                "current": (year, month) == (today.year, today.month),
+            }
+        )
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    return rows
 
 
 def _detail_context(tenant, delete_error="", restore_error="", remove_error="", active_section="all"):
@@ -951,6 +995,7 @@ def _detail_context(tenant, delete_error="", restore_error="", remove_error="", 
         "active_section": section,
         "quota_form": TenantQuotaForm(tenant=tenant),
         "seat_pct": _usage_pct(tenant.active_seats, tenant.seat_limit),
+        "billing_months": _billing_months(tenant),
         "storage_pct": _usage_pct(tenant.used_storage_gb, tenant.storage_limit_gb),
         "suspend_form": SuspendForm(),
         "subscription_form": SubscriptionForm(tenant=tenant),
@@ -1150,7 +1195,7 @@ def tenant_subscription(request, slug):
         context["subscription_form"] = form
         return render_control(request, "control/tenant_detail.html", context, status=400)
     plan = form.cleaned_data["plan"]
-    cadence = form.cleaned_data["cadence"]
+    cadence = Tenant.Cadence.MONTHLY
     addons = list(form.cleaned_data["addons"])
     changed = subscription_changed(tenant, plan, cadence, [addon.code for addon in addons])
     with transaction.atomic():
@@ -1455,7 +1500,7 @@ def workspace_requests(request):
         )
     )
     for row in rows:
-        row.tenant_exists = row.requested_slug in existing
+        row.tenant_exists = bool(row.requested_slug) and row.requested_slug in existing
     return render_control(
         request,
         "control/requests.html",
